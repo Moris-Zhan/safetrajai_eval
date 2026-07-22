@@ -1,0 +1,80 @@
+class_names:
+  0: person
+  1: car
+  2: scooter
+  3: small_truck
+  4: bus
+  5: truck
+
+class_tracking_params:
+  car:
+    center_dist_weight: 0.4
+    fuse_score: true
+    match_thresh: 0.7
+    new_track_thresh: 0.25
+    norm_factor: 80.0
+    second_match_thresh: 0.6
+    unconfirmed_match_thresh: 0.9
+
+  bus:
+    center_dist_weight: 0.25
+    fuse_score: false
+    match_thresh: 0.7
+    norm_factor: 200.0
+    new_track_thresh: 0.15
+    second_match_thresh: 0.55
+    unconfirmed_match_thresh: 0.95
+
+  small_truck:
+    center_dist_weight: 0.2
+    fuse_score: true
+    match_thresh: 0.6
+    norm_factor: 100.0
+    new_track_thresh: 0.15
+    second_match_thresh: 0.45
+    unconfirmed_match_thresh: 0.9
+
+  truck:
+    center_dist_weight: 0.2
+    fuse_score: false
+    match_thresh: 0.6
+    norm_factor: 100.0
+    new_track_thresh: 0.15
+    second_match_thresh: 0.45
+    unconfirmed_match_thresh: 0.9
+
+  person:
+    center_dist_weight: 0.25
+    fuse_score: false
+    match_thresh: 0.9
+    new_track_thresh: 0.25
+    norm_factor: 150.0
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.85
+
+  scooter:
+    center_dist_weight: 0.25
+    fuse_score: true
+    match_thresh: 0.9
+    new_track_thresh: 0.1
+    norm_factor: 200.0
+    second_match_thresh: 0.4
+    unconfirmed_match_thresh: 0.8
+
+default_tracking_params:
+  match_thresh: 0.80
+  appearance_thresh: 0.35
+  new_track_thresh: 0.15
+  second_match_thresh: 0.5
+  unconfirmed_match_thresh: 0.7
+  use_reid: false
+
+class_conf_thresh:
+  person: 0.15
+  car: 0.15
+  scooter: 0.10
+  small_truck: 0.15
+  bus: 0.15
+  truck: 0.15
+
+default_conf_thresh: 0.15

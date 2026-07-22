@@ -1,0 +1,239 @@
+"""
+Class-specific tracking parameter configuration (loaded from YAML).
+
+資料來源預設為與本模組同目錄的 ``track_config.yaml``。
+執行 ``track_eval.py`` 或 ``tracker_grid_search_*.py`` 時可用 ``--track-config`` 指定
+其他 YAML；請在完整 argparse 之前呼叫 ``reload_track_config_from_cli()``，或於程式內
+呼叫 ``load_track_config(path)``。
+
+模組層級的 ``CLASS_NAMES``、``CLASS_TRACKING_PARAMS`` 等 dict 會以 clear/update 原地
+更新，以便與 ``from .config import CLASS_TRACKING_PARAMS`` 的參考保持相容。
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError as e:  # pragma: no cover
+    raise ImportError(
+        "需要 PyYAML 才能載入 track_config.yaml，請執行: pip install pyyaml"
+    ) from e
+
+# ---------------------------------------------------------------------------
+# 由 load_track_config 填充（保留同一 dict 物件供其他模組 import 參考）
+# ---------------------------------------------------------------------------
+CLASS_NAMES: dict[int, str] = {}
+CLASS_TRACKING_PARAMS: dict[str, dict[str, Any]] = {}
+CLASS_CONF_THRESH: dict[str, float] = {}
+DEFAULT_TRACKING_PARAMS: dict[str, Any] = {}
+_DEFAULT_CONF_THRESH: list[float] = [0.15]  # 單元素 list 避免「整數重賦值」破壞 import 參考
+
+_TRACK_CONFIG_RESOLVED: Path | None = None
+
+DEFAULT_TRACK_CONFIG_PATH = Path(__file__).resolve().parent / "track_config.yaml"
+
+
+def __getattr__(name: str) -> Any:
+    """向後相容：``DEFAULT_CONF_THRESH`` 改為由 YAML 載入後的即時值。"""
+    if name == "DEFAULT_CONF_THRESH":
+        return _DEFAULT_CONF_THRESH[0]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def get_track_config_path() -> Path | None:
+    """最近一次成功載入的 YAML 絕對路徑。"""
+    return _TRACK_CONFIG_RESOLVED
+
+
+def _resolve_yaml_path(path: str | Path) -> Path:
+    p = Path(path)
+    if p.is_file():
+        return p.resolve()
+    cwd = Path.cwd() / p
+    if cwd.is_file():
+        return cwd.resolve()
+    beside = Path(__file__).resolve().parent / p.name
+    if beside.is_file():
+        return beside.resolve()
+    pkg_rel = Path(__file__).resolve().parent / p
+    if pkg_rel.is_file():
+        return pkg_rel.resolve()
+    raise FileNotFoundError(
+        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、trackers/ 目錄）"
+    )
+
+
+def _coerce_class_names(raw: dict[Any, Any]) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for k, v in raw.items():
+        out[int(k)] = str(v)
+    return out
+
+
+def load_track_config(path: str | Path | None = None) -> Path:
+    """
+    從 YAML 載入 tracking 設定，並寫入全域參數（class-aware tracking 用）。
+
+    Parameters
+    ----------
+    path : str | Path | None
+        YAML 檔案路徑
+        - 若為 None → 使用 DEFAULT_TRACK_CONFIG_PATH
+
+    Returns
+    -------
+    Path
+        最終實際載入的 YAML 絕對路徑
+    """
+
+    # 宣告使用全域變數（記錄目前載入的 config 路徑）
+    global _TRACK_CONFIG_RESOLVED
+
+    # =========================
+    # 1️⃣ 解析 YAML 路徑
+    # =========================
+    resolved = _resolve_yaml_path(path or DEFAULT_TRACK_CONFIG_PATH)
+
+    # 讀取 YAML 檔
+    with open(resolved, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    # =========================
+    # 2️⃣ 基本格式驗證（防呆）
+    # =========================
+    if not isinstance(data, dict):
+        raise ValueError(f"track config 根節點必須為 mapping: {resolved}")
+
+    # 取得各區塊
+    cn = data.get("class_names")
+    ctp = data.get("class_tracking_params")
+    dtp = data.get("default_tracking_params")
+    cct = data.get("class_conf_thresh")
+
+    # 驗證 class_names
+    if not isinstance(cn, dict) or not cn:
+        raise ValueError(f"YAML 缺少非空 class_names: {resolved}")
+
+    # 驗證 class_tracking_params
+    if not isinstance(ctp, dict) or not ctp:
+        raise ValueError(f"YAML 缺少非空 class_tracking_params: {resolved}")
+
+    # 驗證 default_tracking_params
+    if not isinstance(dtp, dict):
+        raise ValueError(f"YAML 缺少 default_tracking_params mapping: {resolved}")
+
+    # 驗證 class_conf_thresh
+    if not isinstance(cct, dict) or not cct:
+        raise ValueError(f"YAML 缺少非空 class_conf_thresh: {resolved}")
+
+    # 預設 conf threshold（若沒寫就用 0.15）
+    dct = float(data.get("default_conf_thresh", 0.15))
+
+    # =========================
+    # 3️⃣ 更新 CLASS_NAMES
+    # =========================
+    # 清空舊資料
+    CLASS_NAMES.clear()
+
+    # 將 YAML 中 class_names 做型別轉換（例如 key 轉 int）
+    CLASS_NAMES.update(_coerce_class_names(cn))
+
+    # =========================
+    # 4️⃣ 更新 CLASS_TRACKING_PARAMS
+    # =========================
+    CLASS_TRACKING_PARAMS.clear()
+
+    for name, params in ctp.items():
+        # 每個 class 的設定必須是 dict
+        if not isinstance(params, dict):
+            raise ValueError(f"class_tracking_params['{name}'] 必須為 mapping")
+
+        # 強制 key 為 string（避免 int / str 混亂）
+        CLASS_TRACKING_PARAMS[str(name)] = dict(params)
+
+    # =========================
+    # 5️⃣ 更新 DEFAULT_TRACKING_PARAMS
+    # =========================
+    DEFAULT_TRACKING_PARAMS.clear()
+    DEFAULT_TRACKING_PARAMS.update(dtp)
+
+    # =========================
+    # 6️⃣ 更新 CLASS_CONF_THRESH
+    # =========================
+    CLASS_CONF_THRESH.clear()
+
+    for name, val in cct.items():
+        # 確保 value 是 float
+        CLASS_CONF_THRESH[str(name)] = float(val)
+
+    # =========================
+    # 7️⃣ 設定 default conf threshold
+    # =========================
+    # ⚠️ 用 list 存是為了「可變引用」（避免 global immutable 問題）
+    _DEFAULT_CONF_THRESH[0] = dct
+
+    # =========================
+    # 8️⃣ 記錄目前載入的 config
+    # =========================
+    _TRACK_CONFIG_RESOLVED = resolved
+
+    # 回傳最終路徑
+    return resolved
+
+
+def reload_track_config_from_cli(argv: list[str] | None = None) -> Path:
+    """
+    僅解析 ``--track-config`` 後載入 YAML，供 ``if __name__ == '__main__'`` 在
+    完整 ArgumentParser 之前呼叫；``argv`` 不含程式名稱（預設 ``sys.argv[1:]``）。
+    """
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument(
+        "--track-config",
+        default=str(DEFAULT_TRACK_CONFIG_PATH),
+        help=argparse.SUPPRESS,
+    )
+    ns, _ = p.parse_known_args(argv if argv is not None else sys.argv[1:])
+    return load_track_config(ns.track_config)
+
+
+def get_params_for_class(cls_id):
+    """Get tracking parameters for a specific class ID."""
+    if isinstance(cls_id, str):
+        cls_name = cls_id
+    else:
+        cls_name = CLASS_NAMES.get(int(cls_id))
+
+    if cls_name and cls_name in CLASS_TRACKING_PARAMS:
+        return CLASS_TRACKING_PARAMS[cls_name]
+    return DEFAULT_TRACKING_PARAMS
+
+
+def get_class_name(cls_id):
+    """Get class name from class ID."""
+    return CLASS_NAMES.get(int(cls_id), f"class_{cls_id}")
+
+
+def get_conf_thresh_for_class(cls_id):
+    """Get confidence threshold for a specific class ID."""
+    if isinstance(cls_id, str):
+        cls_name = cls_id
+    else:
+        cls_name = CLASS_NAMES.get(int(cls_id))
+
+    if cls_name and cls_name in CLASS_CONF_THRESH:
+        return CLASS_CONF_THRESH[cls_name]
+    return _DEFAULT_CONF_THRESH[0]
+
+
+def get_min_conf_thresh():
+    """Minimum confidence across classes (YOLO predict conf, then per-class filter)."""
+    return min(CLASS_CONF_THRESH.values())
+
+
+# 匯入模組時載入預設 YAML（未指定 --track-config 時與 CLI 預設一致）
+load_track_config(DEFAULT_TRACK_CONFIG_PATH)

@@ -1,0 +1,113 @@
+# =============================================================================
+# config.yaml — 全域參數設定檔
+# 所有模組共用此設定，修改此檔即可，無需動主程式。
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 資料目錄路徑常數
+# -----------------------------------------------------------------------------
+paths:
+  # 資料根目錄（可使用相對或絕對路徑）
+  SOURCE_VIDEO_DIR: ./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/
+
+  # TrackEval 輸出根目錄
+  TRACKEVAL_OUT_DIR: trackeval_output
+
+  # 第一、二階段統一輸出根目錄（與來源完全分開）
+  OUTPUT_ROOT: ./runs/track_eval
+
+  # DET 評估子目錄名稱（位於 base_dir 下）/   TRACK 評估子目錄名稱（位於 base_dir 下）
+  # run_det_eval_dir: "annotations_all8(orign)"
+  # run_track_eval_dir: "mot_annotations_all8(orign)"
+
+  run_det_eval_dir: annotations_all8
+  # run_det_eval_dir: annotations_all8(compasate)
+  run_track_eval_dir: mot_annotations_all8
+
+
+
+# -----------------------------------------------------------------------------
+# 模型路徑
+# -----------------------------------------------------------------------------
+models:
+  det_model_path:  ./models/yolo/yolo11x_dennis.pt
+
+# -----------------------------------------------------------------------------
+# TrackEval Dataset 設定
+# -----------------------------------------------------------------------------
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+# -----------------------------------------------------------------------------
+# 評估開關
+# -----------------------------------------------------------------------------
+eval_flags:
+  run_det_eval:   false   # true / false
+  run_track_eval: true    # true / false
+
+
+# -----------------------------------------------------------------------------
+# 要評估的類別（YOLO class id 為 0-based）
+# -----------------------------------------------------------------------------
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+# -----------------------------------------------------------------------------
+# 偵測區域多邊形（像素座標，左上→右上→右下→左下）
+# 設為 null 表示不啟用 crop 限制。
+# -----------------------------------------------------------------------------
+det_corner:
+  - [210, 90]
+  - [580, 100]
+  - [640, 320]
+  - [0,   280]
+
+# det_corner: null 
+
+# -----------------------------------------------------------------------------
+# Log 輸出控制
+#
+#   verbose: true  → 顯示每個序列的詳細處理過程（路徑、GT fix 統計、類別物件數等）
+#            false → 只保留關鍵進度訊息（序列名稱、最終 Excel 路徑）
+#
+#   debug:   false → 正常執行（建議維持 false）
+#            true  → 額外印出 TrackEval 內部 tracker 檔案逐項檢查（md5、head、路徑）
+#                    用於排查 tracker txt 格式或路徑問題
+# -----------------------------------------------------------------------------
+logging:
+  verbose: false
+  debug:   false
+
+# -----------------------------------------------------------------------------
+# tracking 與推論相關參數 (將與 CLI 參數對應)
+# -----------------------------------------------------------------------------
+tracking_params:
+  tracker: bytetrack       # Tracker 類型，可選: 'botsort' 或 'bytetrack'
+  conf:        0.15         # 信心門檻 (Detection confidence threshold)
+  iou:         0.50         # IoU 門檻 (IoU threshold for track association)
+  imgsz:       640          # 推論解析度 (Inference image size)
+  frame_rate:  30           # 處理影片影格率 (Inference video frame rate)
+  gmc_method:  ecc          # 運動補償方法 (BoTSORT/BYTETrack GMC method)
+  # gmc_method 可選: 'none', 'sparseOptFlow', 'orb', 'sift', 'ecc'
+
+# -----------------------------------------------------------------------------
+# 影片儲存控制
+# -----------------------------------------------------------------------------
+save params:
+  show: false               # 是否即時顯示畫面
+  save: true                # 是否儲存標註影片 (儲存推論後的影片)
+  save_txt: true            # 是否儲存 YOLO 風格的 label txt
+  show_unmatched: false     # 是否在影片/可視化中額外標示未匹配的 detection (顯示 tracking 失敗的框)
+  show_removed: false       # 是否顯示已移除的軌跡 (如閾值關係移除的目標)
+
+

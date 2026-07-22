@@ -10,6 +10,9 @@ wandb/
 __pycache__/
 *.pyc
 
+# macOS
+.DS_Store
+
 # 權重檔（若散落在其他目錄）
 *.pt
 *.pth
