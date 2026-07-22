@@ -1,0 +1,17 @@
+# 大型資料/權重/實驗輸出 — 不進版控
+dataset/
+dataset.zip
+runs/
+runs.zip
+models/
+wandb/
+
+# Python
+__pycache__/
+*.pyc
+
+# 權重檔（若散落在其他目錄）
+*.pt
+*.pth
+*.onnx
+*.engine
