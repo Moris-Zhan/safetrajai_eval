@@ -50,12 +50,12 @@ import random
 import string
 
 # ── 專案根目錄加入 path ─────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tracker import create_tracker, CLASS_NAMES
-from tracker import config as tracker_config_module   # 直接操作模組層級 dict
-from tracker.config import (
+from module.tracker import create_tracker, CLASS_NAMES
+from module.tracker import config as tracker_config_module   # 直接操作模組層級 dict
+from module.tracker.config import (
     get_conf_thresh_for_class,
     get_min_conf_thresh,
     get_track_config_path,
@@ -81,132 +81,75 @@ from ultralytics.utils.plotting import Annotator, colors
 # ──────────────────────────────────────────────────────────────────────────────
 PARAM_GRIDS: dict[str, dict[str, list]] = {
 
-    # Grid search 參數直接與 config_BotSort_0413.py (固定值, 非候選列表) 完全一致設定:
-    "car": {
-        "match_thresh":             [0.7],
-        "new_track_thresh":         [0.25],
-        "second_match_thresh":      [0.6],
-        "unconfirmed_match_thresh": [0.9],
-        "center_dist_weight":       [0.4],
-        "norm_factor":              [80.0],
-        "fuse_score":               [True],
-        "use_reid":                 [True],
-        "proximity_thresh":         [0.5],
-        "appearance_thresh":        [0.1],
-        "model": [
-            "models/yolo/yolo11x_dennis.pt"
-        ],
-    },
-
-    "bus": {
-        "match_thresh":             [0.7],
-        "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.55],
-        "unconfirmed_match_thresh": [0.95],
-        "center_dist_weight":       [0.25],
-        "norm_factor":              [200.0],
-        "fuse_score":               [False],
-        "use_reid":                 [True],
-        "proximity_thresh":         [0.1],
-        "appearance_thresh":        [0.1],
-        "model": [
-            "models/yolo/yolo11x_dennis.pt"
-        ],
-    },
-
-    "small_truck": {
-        "match_thresh":             [0.6],
-        "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.45],
-        "unconfirmed_match_thresh": [0.9],
-        "center_dist_weight":       [0.2],
-        "norm_factor":              [100.0],
-        "fuse_score":               [True],
-        "use_reid":                 [True],
-        "proximity_thresh":         [0.3],
-        "appearance_thresh":        [0.1],
-        "model": [
-            "models/yolo-reid/yolo11x-reid-ultra.pt"
-        ],
-    },
-
-    "truck": {
-        "match_thresh":             [0.6],
-        "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.45],
-        "unconfirmed_match_thresh": [0.9],
-        "center_dist_weight":       [0.2],
-        "norm_factor":              [100.0],
-        "fuse_score":               [False],
-        "use_reid":                 [True],
-        "proximity_thresh":         [0.6],
-        "appearance_thresh":        [0.1],
-        "model": [
-            "models/yolo/yolo11x.pt"
-        ],
-    },
+    "scooter": {
+        "match_thresh":             [0.6, 0.7, 0.8, 0.9],   
+        "new_track_thresh":         [0.1, 0.2, 0.3, 0.4],   
+        "second_match_thresh":      [0.4, 0.5, 0.6, 0.7],   
+        "unconfirmed_match_thresh": [0.6, 0.7, 0.8],   
+        "center_dist_weight":       [0.10, 0.15, 0.20, 0.25],
+        "norm_factor":              [80.0, 100.0, 120.0],
+        "fuse_score":               [True, False],
+    },    
 
     "person": {
-        "match_thresh":             [0.8, 0.85, 0.9, 0.95],           # 聚焦高門檻區間
-        "new_track_thresh":         [0.05, 0.1, 0.15],         # 往更低探索
-        "second_match_thresh":      [0.2, 0.3, 0.4],           # 往更低探索
-        "unconfirmed_match_thresh": [0.6, 0.7, 0.75],          # 往更低探索
-        "center_dist_weight":       [0.05, 0.1, 0.15],         # 往更低探索
-        "norm_factor":              [60, 80, 100],              # 往更低探索
-        "fuse_score":               [True],                     # 固定
-        # ReID 相關
-        "use_reid":                 [True],                     # 固定
-        "proximity_thresh":         [0.05, 0.1, 0.15],         # 往更低探索
-        "appearance_thresh":        [0.05, 0.1, 0.15],         # 往更低探索
-        "model": [
-            # "models/yolo/yolo11x.pt",
-            "models/reid_model_weights/vit_transreid/vit_transreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_S50_fastreid/mgn_sbs_S50_fastreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_R50_ibn_fastreid/mgn_sbs_R50_ibn_fastreid_wrap.pth",
-            "models/class_reid_weights/person/best_full_model.pt"
-        ], 
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
+        "new_track_thresh":         [0.15, 0.20, 0.25],
+        "second_match_thresh":      [0.40, 0.50, 0.60],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
+        "center_dist_weight":       [0.20, 0.25, 0.30],
+        "norm_factor":              [120.0, 150.0, 180.0],
+        "fuse_score":               [True, False],
     },
 
-    "scooter": {
-        "match_thresh":             [0.9, 1.0],                # 固定高門檻，加入 1.0 試探
-        "new_track_thresh":         [0.1, 0.2, 0.3],           # 聚焦低值區間，排除 0.4~0.5
-        "second_match_thresh":      [0.4, 0.5, 0.6],           # 在最佳值 0.5 附近精搜
-        "unconfirmed_match_thresh": [0.6, 0.7],                # 固定低值，往 0.6 試探
-        "center_dist_weight":       [0.1],                     # 固定，兩組一致
-        "norm_factor":              [150, 200, 250],            # 在 200 附近加密，補上 150/250
-        "fuse_score":               [True],                     # 固定
-        "use_reid":                 [True],                     # 固定
-        "proximity_thresh":         [0.2, 0.3, 0.4],           # 在最佳值 0.3 附近精搜
-        "appearance_thresh":        [0.1],                      # 固定
-        "model": [
-            # "models/yolo-reid/yolo11x-reid-ultra.pt",
-            "models/reid_model_weights/vit_transreid/vit_transreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_S50_fastreid/mgn_sbs_S50_fastreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_R50_ibn_fastreid/mgn_sbs_R50_ibn_fastreid_wrap.pth",
-            "models/class_reid_weights/scooter/best_full_model.pt"
-        ],
- 
-    },
+    "car": {
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
+        "new_track_thresh":         [0.20, 0.25, 0.30],
+        "second_match_thresh":      [0.50, 0.60, 0.70],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
+        "center_dist_weight":       [0.40, 0.50, 0.60],
+        "norm_factor":              [60.0, 80.0, 100.0],
+        "fuse_score":               [True, False],
+    },    
 
-
-    # 其餘類別使用通用網格
-    "_default": {
-        "match_thresh":             [0.80, 0.85, 0.90],
+    "bus": {
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
         "new_track_thresh":         [0.15, 0.20, 0.25],
         "second_match_thresh":      [0.45, 0.50, 0.55],
         "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
         "center_dist_weight":       [0.20, 0.25, 0.30],
-        "norm_factor":              [100.0, 150.0, 200.0],
-        "fuse_score":               [True],
-        # ReID 相關（僅 use_reid=True 時有效）
-        "use_reid":                 [True],
-        "proximity_thresh":         [round(x, 2) for x in np.arange(0.1, 0.7, 0.1)],   
-        "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],      
-        "model": [
-            'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
-            'models/yolo/yolo11x.pt',        
-        ]    
+        "norm_factor":              [100.0, 120.0, 150.0, 200.0],
+        "fuse_score":               [True, False],
+    },
+
+    "truck": {
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
+        "new_track_thresh":         [0.15, 0.20, 0.25],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
+        "center_dist_weight":       [0.20, 0.25, 0.30],
+        "norm_factor":              [100.0, 120.0, 150.0, 200.0],
+        "fuse_score":               [True, False],
+    },
+
+    "small_truck": {
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
+        "new_track_thresh":         [0.15, 0.20, 0.25],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
+        "center_dist_weight":       [0.20, 0.25, 0.30],
+        "norm_factor":              [100.0, 120.0, 150.0, 200.0],
+        "fuse_score":               [True, False],
+    },
+
+    # 其餘類別使用通用網格
+     "_default": {
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
+        "new_track_thresh":         [0.15, 0.20, 0.25],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
+        "center_dist_weight":       [0.20, 0.25, 0.30],
+        "norm_factor":              [100.0, 120.0, 150.0, 200.0],
+        "fuse_score":               [True, False],
     },
 }
 
@@ -487,6 +430,7 @@ def score_params(
     if not scores:
         return float("-inf")
     # return float(np.mean(scores))
+    # return float(np.min(scores))
 
     # 回傳所有影片 AssA_mean 的第 25 百分位作為此參數組合的總體分數（較偏保守評估，避免極端高分干擾）
     # 先過濾掉分數為 0 的值
@@ -515,7 +459,7 @@ def _run_tracking_for_video(
     這是 score_params 的內部函式，刻意精簡（不存影片、不繪框）以加速 grid search。
     """
     from copy import deepcopy
-    from tracker.config import get_conf_thresh_for_class, get_min_conf_thresh
+    from module.tracker.config import get_conf_thresh_for_class, get_min_conf_thresh
 
     conf      = get_min_conf_thresh()
     iou       = 0.5
@@ -686,8 +630,8 @@ class GridSearchRunner:
         video_paths:  list[str],
         model_path:   str,
         cfg,
-        tracker_type: str = "botsort",
-        output_root:  Path = Path("./runs/grid_search/botsort"),
+        tracker_type: str = "bytetrack",
+        output_root:  Path = Path("./runs/grid_search/bytetrack"),
         result_csv:   Path | None = None,
         resume:       bool = False,
         verbose:      bool = False,
@@ -896,11 +840,14 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
     parser.add_argument(
         "--track-config",
-        default="tracker/track_config.yaml",
-        help="class-aware tracker 設定 YAML（與 track_eval 相同）",
+        default=None,
+        help=(
+            "class-aware tracker 設定 YAML（與 track_eval 相同）。"
+            "不指定時使用 --config 內建的 class_tracking 章節。"
+        ),
     )
     parser.add_argument(
-        "--tracker", default="botsort",
+        "--tracker", default="bytetrack",
         choices=["botsort", "bytetrack"], help="Tracker 類型"
     )
     parser.add_argument(
@@ -948,7 +895,7 @@ def main():
 
     args = parser.parse_args()
 
-    load_track_config(args.track_config)
+    load_track_config(args.track_config or args.config)
     print(f"Loaded track config: {get_track_config_path()}")
 
     # ── 載入 config ───────────────────────────────────────────────────────────

@@ -32,7 +32,7 @@ track_eval.py — YOLO class-aware tracking + TrackEval evaluation pipeline
 
 架構
 ====
-Detector（detection/detector.py）  — YOLO 推論 + 逐類別信心過濾
+Detector（module/detection/detector.py）  — YOLO 推論 + 逐類別信心過濾
 VideoSequenceTracker（本檔）        — 單一影片的 class-aware tracking 迴圈（偵測→追蹤→標註→存檔）
 TrackingEvalPipeline（本檔）        — 兩階段主流程（stage1 tracking → stage2 TrackEval 評估）
 """
@@ -53,9 +53,9 @@ from ultralytics.utils.plotting import Annotator, colors
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from detection.detector import Detector
-from tracker import create_tracker, CLASS_NAMES
-from tracker.config import (
+from module.detection.detector import Detector
+from module.tracker import create_tracker, CLASS_NAMES
+from module.tracker.config import (
     get_track_config_path,
     load_track_config,
 )
@@ -592,14 +592,16 @@ if __name__ == "__main__":
     parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
     parser.add_argument(
         "--track-config",
-        default="tracker/track_config_ByteTrack_0411.yaml",
-        # default="tracker/track_config_BotSort_noreid_0413.yaml",
-        help="class-aware tracker 設定（CLASS_TRACKING_PARAMS、置信度門檻等）YAML 路徑",
+        default=None,
+        help=(
+            "class-aware tracker 設定（CLASS_TRACKING_PARAMS、置信度門檻等）YAML 路徑。"
+            "不指定時使用 --config 內建的 class_tracking 章節。"
+        ),
     )
 
     args = parser.parse_args()
 
-    load_track_config(args.track_config)
+    load_track_config(args.track_config or args.config)
     print(f"Loaded track config: {get_track_config_path()}")
 
     # 允許 CLI 覆蓋路徑常數

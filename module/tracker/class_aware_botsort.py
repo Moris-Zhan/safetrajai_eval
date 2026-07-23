@@ -8,8 +8,8 @@ import torch
 from ultralytics.trackers.bot_sort import BOTSORT, BOTrack
 from ultralytics.trackers.byte_tracker import STrack
 from ultralytics.trackers.basetrack import TrackState
-from reid.encoders import ReID, SOTA_ReID, Custom_ReID
-from tracker import matching
+from module.reid.encoders import ReID, SOTA_ReID, Custom_ReID
+from module.tracker import matching
 from ultralytics.trackers.utils.gmc import GMC
 from torchinfo import summary
 

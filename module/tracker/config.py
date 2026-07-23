@@ -35,7 +35,7 @@ _DEFAULT_CONF_THRESH: list[float] = [0.15]  # 單元素 list 避免「整數重�
 
 _TRACK_CONFIG_RESOLVED: Path | None = None
 
-DEFAULT_TRACK_CONFIG_PATH = Path(__file__).resolve().parent / "track_config.yaml"
+DEFAULT_TRACK_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 
 
 def __getattr__(name: str) -> Any:
@@ -64,7 +64,7 @@ def _resolve_yaml_path(path: str | Path) -> Path:
     if pkg_rel.is_file():
         return pkg_rel.resolve()
     raise FileNotFoundError(
-        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、tracker/ 目錄）"
+        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、module/tracker/ 目錄）"
     )
 
 
@@ -83,7 +83,7 @@ def load_track_config(path: str | Path | None = None) -> Path:
     ----------
     path : str | Path | None
         YAML 檔案路徑
-        - 若為 None → 使用 DEFAULT_TRACK_CONFIG_PATH
+        - 若為 None → 使用 DEFAULT_TRACK_CONFIG_PATH（即根目錄 config.yaml 的 class_tracking 章節）
 
     Returns
     -------
@@ -108,6 +108,10 @@ def load_track_config(path: str | Path | None = None) -> Path:
     # =========================
     if not isinstance(data, dict):
         raise ValueError(f"track config 根節點必須為 mapping: {resolved}")
+
+    # 若是合併進 config.yaml 的格式，實際內容在 class_tracking: 子章節；
+    # 獨立的 module/tracker/track_config_*.yaml 變體檔仍是扁平結構，直接用整份 data。
+    data = data.get("class_tracking", data)
 
     # 取得各區塊
     cn = data.get("class_names")

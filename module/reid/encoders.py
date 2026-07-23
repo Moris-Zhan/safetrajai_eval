@@ -5,7 +5,7 @@ from ultralytics.utils.ops import xywh2xyxy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from reid.yolo_reid_trainer import load_reid_model
+from module.reid.yolo_reid_trainer import load_reid_model
 
 class ReID:
     """YOLO model as encoder for re-identification."""

@@ -111,3 +111,97 @@ save params:
   show_removed: false       # 是否顯示已移除的軌跡 (如閾值關係移除的目標)
 
 
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表
+# 原本是 module/tracker/track_config_ByteTrack_0411.yaml（track_eval.py 實際使用的預設版），
+# 2026-07-23 合併進本檔，維持與合併前完全相同的 tracking 行為。
+# 由 module/tracker/config.py::load_track_config() 讀取。
+#
+# 不指定 --track-config 時，CLI 直接用這個章節當作 tracking 設定。
+# 若要套用其他實驗版本，用 --track-config 指向 module/tracker/track_config_*.yaml
+# 其中一個變體（含 track_config.yaml 這個較完整的 base 版、BotSort_0413、
+# BotSort_noreid_0413、new），該檔案內容會整份取代這個章節，不會跟這裡的值合併。
+#
+# ⚠️ 這個章節刻意不含 use_reid / appearance_thresh / model / track_buffer 等欄位
+# （ByteTrack 不用 ReID/GMC，per-class track_buffer 未指定時會回落全域預設 120）。
+# 若要套用含 ReID 的完整參數表（如跑 BoTSORT），改用 --track-config 指定
+# module/tracker/track_config.yaml 或其他變體，不要直接在這裡加欄位。
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  # 各類別追蹤參數（鍵為類別英文名，與 class_names 值一致）
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+    bus:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+    small_truck:
+      center_dist_weight: 0.2
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+    truck:
+      center_dist_weight: 0.2
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15
+

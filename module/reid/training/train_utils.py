@@ -13,7 +13,7 @@ from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
 from ultralytics import YOLO
 
-from reid.yolo_reid_trainer import (
+from module.reid.yolo_reid_trainer import (
     ReIDHookManager,
     BatchHardTripletLoss,
     save_yolo_reid,

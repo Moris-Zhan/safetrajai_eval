@@ -1,5 +1,5 @@
 # ============================================================
-# reid/yolo_reid_trainer.py
+# module/reid/yolo_reid_trainer.py
 #
 # 設計原則：
 #   - 不建立任何 wrapper nn.Module；直接在 ultralytics YOLO
