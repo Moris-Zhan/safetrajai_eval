@@ -64,7 +64,7 @@ def _resolve_yaml_path(path: str | Path) -> Path:
     if pkg_rel.is_file():
         return pkg_rel.resolve()
     raise FileNotFoundError(
-        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、trackers/ 目錄）"
+        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、tracker/ 目錄）"
     )
 
 

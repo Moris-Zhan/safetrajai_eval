@@ -34,25 +34,25 @@ if not hasattr(np, "int"):
 from ultralytics import YOLO
 
 # ---- 各功能模組 ----
-from utils.track_eval.utils import print_file_probe, ensure_parent
-from utils.track_eval.excel_export import (
+from evaluation.utils import print_file_probe, ensure_parent
+from evaluation.excel_export import (
     export_det_metrics_to_excel_openpyxl,
     export_trackeval_results_multi_to_excel,
     print_eval_summary,
 )
-from utils.track_eval.trackeval_runner import (
+from evaluation.trackeval_runner import (
     build_trackeval_paths,
     verify_gt_basic,
     run_trackeval_mot,
 )
-from utils.track_eval.dataset_prep import (
+from evaluation.dataset_prep import (
     discover_sequences,
     ensure_det_yaml_for_seq,
     fix_det_labels_to_5cols,
     # run_ultralytics_track_to_labels,  # ← 若需自動生成追蹤標籤則啟用
 )
 
-from utils.track_eval.config_loader import load_config
+from evaluation.config_loader import load_config
 
 def run_eval_pipeline(cfg):
     """

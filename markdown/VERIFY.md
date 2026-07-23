@@ -22,6 +22,24 @@
 - **來源**：`trackers/HANDOFF.md`（完整原理與程式碼對照表）。
 - **待補充**：沒有找到「改前 vs 改後」的量化比較數據（例如跨類別誤配次數），若需要作為佐證應另外統計。
 
+## 模組重組（Detection / Tracker / Re-ID）— 2026-07-23
+- **結論**：搬移後先用 `python3 -m py_compile` 對所有改動檔案做語法檢查、並寫了一支 AST 靜態掃描腳本逐一比對每個 `from detection/tracker/reid/evaluation/utils import X` 是否都能解析到實際存在的模組與符號，兩項皆通過。之後在 conda `safetrajai` 環境（`ultralytics==8.3.141`、`torch==2.7.1+cu128`、`opencv-python`，見專案 `requirement.txt`）補齊系統 `libgl1` 相依後，於 RTX 5090 上實際跑了一次 `TEST.md` 的完整 pipeline 煙霧測試：
+  ```bash
+  python track_eval.py --config config.yaml --track-config tracker/track_config_ByteTrack_0411.yaml
+  ```
+  6 支序列全部跑完 stage1（tracking）+ stage2（TrackEval），無 traceback。檢查點全過：
+  - 逐類別 tracker txt（`.../trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt`）在有偵測到的類別皆非空（如 person 在無偵測的序列裡是 0 行，且與該序列 TrackEval 印出的 person HOTA=0 一致，非漏算）。
+  - `trackeval_output/` 下 6 個 `trackeval_metrics_*_MULTI_new.xlsx` 全數產生，HOTA/DetA/AssA 數值正常（非 NaN、非全 0）。
+  - `save: true` 下 6 支 `Demo.mp4`（約 2–2.5MB，mp4v 編碼；系統無 `ffmpeg` 故 H.264 轉檔略過並保留原始 mp4v，屬既有行為非本次改動造成）全數產生。
+  - `DET skipped`（`config.yaml` 的 `run_det_eval: false`）行為與改動前一致。
+- **未跑**：`tracker/grid_search/grid_search_bytetrack.py --dry-run` 路徑檢查（超參數搜尋腳本），可視需要再補測。
+- **來源**：`/tmp/.../scratchpad/track_eval_run.log`（本次 smoke test 完整輸出）；本次重組的 git commit（`track_eval.py` OOP 重構 + 模組搬移）。
+
+## pickle 相容性 — `reid_models/` 與 `utils/model.py` 不可搬移
+- **結論**：`models/reid_model_weights/**/*.pth`、`models/class_reid_weights/*/best_full_model.pt` 皆為 `torch.save()` 整物件序列化（非 state_dict），內容以 `strings` 掃描確認寫死了 `reid_models.modeling....`、`utils.model.xxx` 的完整模組路徑。將 `reid_models/` 搬進 `reid/vendored/`、或將 `utils/model.py` 搬進 `reid/training/` 都會讓 `torch.load(weights_only=False)` 在還原時找不到原模組而失敗。已於本次重組中驗證並還原。
+- **來源**：`strings models/reid_model_weights/**/*.pth models/class_reid_weights/**/*.pt` 掃描結果；`tracker/class_aware_botsort.py` 的 `Custom_ReID` 分支、`reid/grid_search_botsort_reid.py` 對 `models/class_reid_weights/{person,scooter}/best_full_model.pt` 的引用。
+- **目前設定**：`reid_models/` 留在根目錄；`utils/model.py` 留在 `utils/model.py`。
+
 ## 待補充
 > 以下項目目前沒有找到對應的驗證紀錄，若已經做過請補上來源；若還沒做，建議列進 `NEED.md`：
 > - `config.yaml` 的 `det_corner` 偵測區域多邊形設定對指標的影響

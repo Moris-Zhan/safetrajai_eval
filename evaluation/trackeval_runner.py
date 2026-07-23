@@ -18,14 +18,14 @@ import numpy as np
 import cv2
 import trackeval
 
-# from utils.track_eval.utils import config_loader
-from utils.track_eval.utils import (
+# from evaluation.utils import config_loader
+from evaluation.utils import (
     _assert_exists,
     file_md5,
     get_video_wh,
     print_file_probe,
 )
-from utils.track_eval.mot_converter import (
+from evaluation.mot_converter import (
     ul_track_labels_to_mot,
     fix_mot_gt_unique_ids,
     keep_mot_gt_valid_ids

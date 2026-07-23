@@ -53,18 +53,18 @@ import string
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from trackers import create_tracker, CLASS_NAMES
-from trackers import config as tracker_config_module   # 直接操作模組層級 dict
-from trackers.config import (
+from tracker import create_tracker, CLASS_NAMES
+from tracker import config as tracker_config_module   # 直接操作模組層級 dict
+from tracker.config import (
     get_conf_thresh_for_class,
     get_min_conf_thresh,
     get_track_config_path,
     load_track_config,
 )
-from utils.track_utils import save_mot_format
-from utils.track_eval.config_loader import load_config
-from utils.track_eval.trackeval_runner import run_trackeval_mot
-from utils.track_eval.excel_export import flatten_any
+from evaluation.mot_format import save_mot_format
+from evaluation.config_loader import load_config
+from evaluation.trackeval_runner import run_trackeval_mot
+from evaluation.excel_export import flatten_any
 
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
@@ -609,7 +609,7 @@ def _run_tracking_for_video(
     這是 score_params 的內部函式，刻意精簡（不存影片、不繪框）以加速 grid search。
     """
     from copy import deepcopy
-    from trackers.config import get_conf_thresh_for_class, get_min_conf_thresh
+    from tracker.config import get_conf_thresh_for_class, get_min_conf_thresh
 
     stem_name = Path(video_path).stem.replace(" 中華三路 民生二路(東北角)_", "_")
 
@@ -1013,7 +1013,7 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
     parser.add_argument(
         "--track-config",
-        default="trackers/track_config.yaml",
+        default="tracker/track_config.yaml",
         help="class-aware tracker 設定 YAML（與 track_eval 相同）",
     )
     parser.add_argument(

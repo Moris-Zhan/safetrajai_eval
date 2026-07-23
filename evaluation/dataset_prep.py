@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-from utils.track_eval.utils import _assert_exists
+from evaluation.utils import _assert_exists
 
 # =========================================================
 # 序列探索
