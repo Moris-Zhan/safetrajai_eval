@@ -189,7 +189,13 @@ output_path, images_path, labels_path = seq_tracker.run(
 ```bash
 # config/botsort_save_reid_crops.yaml 已內建 save_reid_crops: true 且 stages.run_stage2: false（只蒐集資料，跳過評估）
 python track_eval.py --config config/botsort_save_reid_crops.yaml
+
+# 情境 3 的變體：來源改成 video/ 底下不同路口的原始影片（非既有 all8 資料集），
+# 用來補足特定類別（如 bus/person/truck/small_truck）身分數過少的問題
+python track_eval.py --config config/botsort_save_reid_crops_video.yaml
 ```
+
+`config/botsort_save_reid_crops_video.yaml` 的來源目錄 `dataset/video_seqs/annotations_video/annotation_<seq>/<seq>.mp4` 要符合 stage1 掃描的結構（跟 `dataset/中華三路_民生二路(東北角)yolo驗證用_all8/annotations_all8/` 同一套模式），不能直接指向 `video/` 底下的原始 mp4——新增來源影片時要先按這個結構整理好。這個變體也把 `det_corner` 關閉（`[]`），因為不同路口鏡頭的偵測區域多邊形不通用；換新路口來源時記得一併確認 `det_corner` 是否要沿用。
 
 或程式化只對單一影片蒐集：
 
@@ -207,7 +213,23 @@ seq_tracker.run(video_path="./dataset/C000025_clip_10s.mp4", output_dir=Path("./
 
 這個功能只是「蒐集資料」，跟 `dataset/reid/crop_dataset/train/{train,val}/{identity}/` 這個扁平（不分類別）的舊資料結構不是同一套配置——舊資料是否要轉成新的 `{class}/{影片}_track{id}/` 結構、以及後續訓練怎麼讀取，正在重新設計，見 `NEED.md`。
 
-蒐集到 `dataset/reid/crop_dataset/{class}/{identity}/*.jpg` 後，用 `dataset/reid/build_reid_split.py` 依身分切 train/val，輸出到 `dataset/reid/reid_category_dataset/`（逐類別各自切）或 `dataset/reid/reid_dataset/`（6 類別混合切一次），詳見 `dataset/reid/README.md`。
+### `dataset/reid/build_reid_split.py` — 把蒐集到的裁切切成 train/val
+
+蒐集到 `dataset/reid/crop_dataset/{class}/{identity}/*.jpg` 後，用這支腳本依身分（不是依影像）切 train/val：
+
+```bash
+# 逐類別各自切一次，輸出到 dataset/reid/reid_category_dataset/{class}/{train,val}/{identity}/
+python dataset/reid/build_reid_split.py --mode category
+
+# 6 類別身分全部混在一起切一次（身分資料夾加類別前綴避免 track_id 撞名），
+# 輸出到 dataset/reid/reid_dataset/{train,val}/{class}_{identity}/
+python dataset/reid/build_reid_split.py --mode flat
+
+# 輸出目錄已存在且非空時預設報錯中止，要清空重建才加 --overwrite
+python dataset/reid/build_reid_split.py --mode category --overwrite --val-ratio 0.2 --seed 42
+```
+
+兩種模式跑完都會在輸出目錄下產生 `numbers.txt`（每身分一行 "張數 相對路徑"）與 `res.txt`（`tree -h` 目錄結構），完整架構說明、目前資料量統計見 `dataset/reid/README.md`。
 
 ## 7. Grid Search（`module/grid_search/`）— 追蹤參數超參數搜尋
 
@@ -303,4 +325,4 @@ python module/reid/training/train.py \
 已用實際蒐集的 crop 資料驗證完整流程：蒐集 → 訓練（loss 確實下降）→ 存檔 → `load_reid_model()` 與 `ReID` class 兩條載入路徑皆能正確還原並產生 embedding。
 
 ## 待補充
-> 以上範例對應目前程式碼實際簽章（2026-07-23 確認）。若函式簽章之後有變動，此檔案要一併更新；若發現範例與實際行為不符，以程式碼為準並回報修正。
+> 以上範例對應目前程式碼實際簽章（2026-07-24 確認，含 `dataset/reid/build_reid_split.py`、`config/botsort_save_reid_crops_video.yaml`、`python -m evaluation.pipeline` 獨立執行路徑）。若函式簽章之後有變動，此檔案要一併更新；若發現範例與實際行為不符，以程式碼為準並回報修正。

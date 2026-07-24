@@ -584,29 +584,20 @@ class TrackingEvalPipeline:
 
     def run_stage2(self):
         """
-        覆寫 cfg 中的路徑，使第二階段直接讀取 OUTPUT_ROOT 內的第一階段產出，
-        並將 trackeval 評估結果也寫到 OUTPUT_ROOT/trackeval_output/ 下。
+        第二階段：讀取 OUTPUT_ROOT 內第一階段的產出，跑 TrackEval 評估，
+        結果寫到 OUTPUT_ROOT/trackeval_output/ 下。
         """
-        import types
-
         cfg = self.cfg
-
-        # 以 OUTPUT_ROOT 覆蓋 config 中的路徑（確保兩階段路徑一致）
-        patched = types.SimpleNamespace(**cfg.as_dict())
-        patched.base_dir             = str(cfg.OUTPUT_ROOT)
-        patched.run_det_eval_dir     = cfg.run_det_eval_dir
-        patched.run_track_eval_dir   = cfg.run_track_eval_dir
-        patched.trackeval_output_dir = str(cfg.OUTPUT_ROOT / cfg.TRACKEVAL_OUT_DIR)
 
         print(f"\n{'='*70}")
         print(f"  STAGE 2 — TrackEval")
-        print(f"  base_dir           : {patched.base_dir}")
-        print(f"  run_det_eval_dir   : {patched.run_det_eval_dir}")
-        print(f"  run_track_eval_dir : {patched.run_track_eval_dir}")
-        print(f"  trackeval_output   : {patched.trackeval_output_dir}")
+        print(f"  base_dir           : {cfg.base_dir}")
+        print(f"  run_det_eval_dir   : {cfg.run_det_eval_dir}")
+        print(f"  run_track_eval_dir : {cfg.run_track_eval_dir}")
+        print(f"  trackeval_output   : {cfg.trackeval_output_dir}")
         print(f"{'='*70}\n")
 
-        run_eval_pipeline(patched)
+        run_eval_pipeline(cfg)
 
     def run(self):
         """依 config 的 stages.run_stage1 / run_stage2 決定要跑哪幾階段（預設兩階段都跑）。"""

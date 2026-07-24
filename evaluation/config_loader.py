@@ -107,7 +107,12 @@ class AppConfig:
         
         d["OUTPUT_ROOT"]          = paths.get("OUTPUT_ROOT",    d["OUTPUT_ROOT"])
         d["OUTPUT_ROOT"]          = Path(d["OUTPUT_ROOT"])
- 
+
+        # base_dir / trackeval_output_dir：run_eval_pipeline() 讀取的欄位，衍生自 OUTPUT_ROOT，
+        # 這裡直接算好放進 AppConfig，呼叫方（無論是 track_eval.py 還是獨立呼叫）都不用自己組
+        d["base_dir"]             = str(d["OUTPUT_ROOT"])
+        d["trackeval_output_dir"] = str(d["OUTPUT_ROOT"] / d["TRACKEVAL_OUT_DIR"])
+
 
         # models 區塊
         models = raw.get("models", {}) or {}
