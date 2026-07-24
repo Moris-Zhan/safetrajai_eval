@@ -1,0 +1,185 @@
+# =============================================================================
+# config/bytetrack.yaml — 情境 1：ByteTrack 完整流程（stage1 tracking + stage2 TrackEval 評估）
+# 用法：python track_eval.py --config config/bytetrack.yaml
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 資料目錄路徑常數
+# -----------------------------------------------------------------------------
+paths:
+  # 資料根目錄（可使用相對或絕對路徑）
+  SOURCE_VIDEO_DIR: ./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/
+
+  # TrackEval 輸出根目錄
+  TRACKEVAL_OUT_DIR: trackeval_output
+
+  # 第一、二階段統一輸出根目錄（與來源完全分開）
+  OUTPUT_ROOT: ./runs/track_eval
+
+  run_det_eval_dir: annotations_all8
+  run_track_eval_dir: mot_annotations_all8
+
+
+# -----------------------------------------------------------------------------
+# 模型路徑
+# -----------------------------------------------------------------------------
+models:
+  det_model_path: ./models/yolo/yolo11x_dennis.pt
+
+# -----------------------------------------------------------------------------
+# TrackEval Dataset 設定
+# -----------------------------------------------------------------------------
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+# -----------------------------------------------------------------------------
+# 兩階段主流程開關（stage1 = tracking，stage2 = TrackEval 評估）
+# -----------------------------------------------------------------------------
+stages:
+  run_stage1: true
+  run_stage2: true
+
+# -----------------------------------------------------------------------------
+# 評估開關（僅在 stage2 有跑時才有意義）
+# -----------------------------------------------------------------------------
+eval_flags:
+  run_det_eval:   false
+  run_track_eval: true
+
+
+# -----------------------------------------------------------------------------
+# 要評估的類別（YOLO class id 為 0-based）
+# -----------------------------------------------------------------------------
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+# -----------------------------------------------------------------------------
+# 偵測區域多邊形（像素座標，左上→右上→右下→左下）
+# 設為 null 表示不啟用 crop 限制。
+# -----------------------------------------------------------------------------
+det_corner:
+  - [210, 90]
+  - [580, 100]
+  - [640, 320]
+  - [0,   280]
+
+# -----------------------------------------------------------------------------
+# Log 輸出控制
+# -----------------------------------------------------------------------------
+logging:
+  verbose: false
+  debug:   false
+
+# -----------------------------------------------------------------------------
+# tracking 與推論相關參數
+# -----------------------------------------------------------------------------
+tracking_params:
+  tracker: bytetrack
+  conf:        0.15
+  iou:         0.50
+  imgsz:       640
+  frame_rate:  30
+  gmc_method:  ecc   # ByteTrack 不用 GMC，此欄位無作用，保留供切換 tracker 時參考
+
+# -----------------------------------------------------------------------------
+# 影片儲存控制
+# -----------------------------------------------------------------------------
+save params:
+  show: false
+  save: true
+  save_txt: true
+  show_unmatched: false
+  show_removed: false
+  save_reid_crops: false
+  reid_crop_dir: ./dataset/reid/crop_dataset
+
+
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（ByteTrack 專用，不含 ReID/GMC 相關欄位）
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+    bus:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+    small_truck:
+      center_dist_weight: 0.2
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+    truck:
+      center_dist_weight: 0.2
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15

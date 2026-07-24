@@ -1,13 +1,13 @@
-# utils/config_loader.py
+# evaluation/config_loader.py
 # -*- coding: utf-8 -*-
 """
 設定檔載入器。
 
 用法：
-    from utils.config_loader import load_config, AppConfig
+    from evaluation.config_loader import load_config, AppConfig
 
-    cfg = load_config()                  # 預設讀 config.yaml（專案根目錄）
-    cfg = load_config("my_config.yaml")  # 指定路徑
+    cfg = load_config()                          # 預設讀 config/bytetrack.yaml
+    cfg = load_config("config/botsort_reid.yaml") # 指定路徑
 
     # 以屬性存取（推薦）
     print(cfg.base_dir)
@@ -54,6 +54,9 @@ _DEFAULTS: dict = {
     # flags
     "run_det_eval":          False,
     "run_track_eval":        True,
+    # 兩階段主流程開關
+    "run_stage1":            True,
+    "run_stage2":            True,
     # classes
     "classes_to_run": {
         "person":      0,
@@ -68,6 +71,9 @@ _DEFAULTS: dict = {
     # logging
     "verbose": True,   # False = 關掉 GT 處理過程的詳細 log
     "debug":   False,  # True  = 開啟 TrackEval tracker 檔案逐項檢查 log
+    # Re-ID 訓練資料裁切
+    "save_reid_crops": False,
+    "reid_crop_dir":   "./dataset/reid/crop_dataset",
 }
 
 
@@ -119,6 +125,11 @@ class AppConfig:
         d["run_det_eval"]   = bool(flags.get("run_det_eval",   d["run_det_eval"]))
         d["run_track_eval"] = bool(flags.get("run_track_eval", d["run_track_eval"]))
 
+        # stages 區塊（兩階段主流程開關；沒有這個區塊時預設兩階段都跑，向後相容）
+        stages = raw.get("stages", {}) or {}
+        d["run_stage1"] = bool(stages.get("run_stage1", d["run_stage1"]))
+        d["run_stage2"] = bool(stages.get("run_stage2", d["run_stage2"]))
+
         # classes_to_run（直接取頂層 key）
         if "classes_to_run" in raw and raw["classes_to_run"]:
             d["classes_to_run"] = {str(k): int(v) for k, v in raw["classes_to_run"].items()}
@@ -153,6 +164,8 @@ class AppConfig:
         d["save_txt"]       = save_params.get("save_txt", None)
         d["show_unmatched"] = save_params.get("show_unmatched", None)
         d["show_removed"]   = save_params.get("show_removed", None)
+        d["save_reid_crops"] = bool(save_params.get("save_reid_crops", d["save_reid_crops"]))
+        d["reid_crop_dir"]    = save_params.get("reid_crop_dir", d["reid_crop_dir"])
 
         self._data = d
 
@@ -189,7 +202,7 @@ class AppConfig:
 # =========================================================
 # 公開 API
 # =========================================================
-def load_config(config_path: str | Path = "config.yaml") -> AppConfig:
+def load_config(config_path: str | Path = "config/bytetrack.yaml") -> AppConfig:
     """
     載入 YAML 設定檔並回傳 AppConfig 實例。
 

@@ -93,6 +93,8 @@ class VideoSequenceTracker:
         show_unmatched: bool = False,
         show_removed: bool = False,
         det_corner: np.ndarray = None,
+        save_reid_crops: bool = False,
+        reid_crop_dir: str = "./dataset/reid/crop_dataset",
     ):
         self.detector = Detector(model_path)
         print(f"Loaded model : {model_path}")
@@ -117,6 +119,8 @@ class VideoSequenceTracker:
         self.show_unmatched = show_unmatched
         self.show_removed = show_removed
         self.det_corner = det_corner
+        self.save_reid_crops = save_reid_crops
+        self.reid_crop_dir = Path(reid_crop_dir) if reid_crop_dir else None
 
     def run(self, video_path: str, output_dir: Path) -> tuple[Path, Path, Path]:
         """
@@ -262,6 +266,34 @@ class VideoSequenceTracker:
                                     f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
                                     f" {track_id} {score:.4f}\n"
                                 )
+
+                # Re-ID 訓練資料：把每個追蹤到的物件裁切存檔
+                # 存到 reid_crop_dir/{class}/{影片名}_track{track_id}/{frame:06d}.jpg
+                # 用「影片名_track_id」當身分資料夾，避免不同影片的 track_id 重來（tracker 每支影片重建一次）互相撞名
+                if self.save_reid_crops and self.reid_crop_dir is not None:
+                    for track in tracks:
+                        if len(track) >= 7:
+                            x1, y1, x2, y2 = track[:4]
+                            track_id = int(track[4])
+                            cls_id   = int(track[6])
+
+                            # 是否落在偵測區域多邊形內（與 draw/annotate 邏輯一致）
+                            if self.det_corner is not None and len(self.det_corner) > 0:
+                                cx = (x1 + x2) / 2
+                                cy = (y1 + y2) / 2
+                                if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
+                                    continue
+
+                            xi1, yi1 = max(0, int(x1)), max(0, int(y1))
+                            xi2, yi2 = min(width, int(x2)), min(height, int(y2))
+                            if xi2 <= xi1 or yi2 <= yi1:
+                                continue
+
+                            crop = clean_frame[yi1:yi2, xi1:xi2]
+                            cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
+                            identity_dir = self.reid_crop_dir / cls_name / f"{stem_name}_track{track_id}"
+                            identity_dir.mkdir(parents=True, exist_ok=True)
+                            cv2.imwrite(str(identity_dir / f"{show_frame_id:06d}.jpg"), crop)
 
                 # 繪製標注
                 if self.save or self.show:
@@ -508,6 +540,8 @@ class TrackingEvalPipeline:
                 show_unmatched = cfg.show_unmatched,
                 show_removed   = cfg.show_removed,
                 det_corner    = cfg.det_corner,
+                save_reid_crops = cfg.save_reid_crops,
+                reid_crop_dir   = cfg.reid_crop_dir,
             )
             output_path, images_path, labels_path = seq_tracker.run(video_path, det_output_dir)
 
@@ -575,8 +609,16 @@ class TrackingEvalPipeline:
         run_eval_pipeline(patched)
 
     def run(self):
-        self.run_stage1()
-        self.run_stage2()
+        """依 config 的 stages.run_stage1 / run_stage2 決定要跑哪幾階段（預設兩階段都跑）。"""
+        if getattr(self.cfg, "run_stage1", True):
+            self.run_stage1()
+        else:
+            print("⏭️  stage1 skipped（config 的 stages.run_stage1: false）")
+
+        if getattr(self.cfg, "run_stage2", True):
+            self.run_stage2()
+        else:
+            print("⏭️  stage2 skipped（config 的 stages.run_stage2: false）")
 
 
 # =============================================================================
@@ -589,7 +631,7 @@ if __name__ == "__main__":
     )
 
     # 影片儲存控制
-    parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
+    parser.add_argument("--config", default="config/bytetrack.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
     parser.add_argument(
         "--track-config",
         default=None,

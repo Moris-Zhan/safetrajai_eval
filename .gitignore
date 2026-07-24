@@ -1,10 +1,19 @@
 # 大型資料/權重/實驗輸出 — 不進版控
-dataset/
+dataset/*
 dataset.zip
 runs/
 runs.zip
 models/
 wandb/
+video/
+
+# dataset/ 整包被忽略，但 dataset/reid/ 底下的程式碼/文件例外要進版控
+# （用 dataset/* 而非 dataset/ 是必要的：git 對「整個目錄」規則會直接剪枝不再往下比對，
+#  下面的例外規則就不會生效；逐層用 /* 展開才能讓子目錄的例外規則正常運作）
+!dataset/reid/
+dataset/reid/*
+!dataset/reid/README.md
+!dataset/reid/build_reid_split.py
 
 # Python
 __pycache__/

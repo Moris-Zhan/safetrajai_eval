@@ -1,0 +1,190 @@
+# =============================================================================
+# config/botsort_save_reid_crops_video.yaml — 情境 3 的變體：BoTSORT 追蹤 + save_reid_crops，
+#                                              來源是 video/ 底下不同路口的原始影片（非既有 all8 資料集）
+#                                              （只跑 stage1，蒐集 Re-ID 訓練用裁切影像，不跑 stage2 評估）
+# 用法：python track_eval.py --config config/botsort_save_reid_crops_video.yaml
+#
+# 跟 config/botsort_save_reid_crops.yaml 的差異：
+#   - SOURCE_VIDEO_DIR 指向 dataset/video_seqs/（見下方），來源是 video/ 底下 5 支不同路口的
+#     原始影片，各自取前 60 秒存成 dataset/video_seqs/annotations_video/annotation_<seq>/<seq>.mp4，
+#     符合 track_eval.py stage1 掃描的 annotation_<seq>/**/*.mp4 結構。
+#   - det_corner 關閉（空陣列）——這 5 支影片跟原本 config 的 det_corner 多邊形是不同路口鏡頭，
+#     沿用會把偵測區域限制在錯誤位置，這裡改成全畫面都算偵測區域。
+#   - 目的是補足 bus/person/truck/small_truck 這幾類身分數過少的問題，其餘追蹤參數
+#     （class_tracking、tracker、conf/iou/imgsz 等）跟 config/botsort_save_reid_crops.yaml 完全一致，
+#     沿用 config/botsort_noreid.yaml 的 class_tracking（ReID 關閉，蒐集資料不需要追蹤本身啟用 ReID）。
+# =============================================================================
+
+
+paths:
+  SOURCE_VIDEO_DIR: ./dataset/video_seqs/
+  TRACKEVAL_OUT_DIR: trackeval_output
+  OUTPUT_ROOT: ./runs/track_eval
+  run_det_eval_dir: annotations_video
+  run_track_eval_dir: mot_annotations_video
+
+
+models:
+  det_model_path: ./models/yolo/yolo11x_dennis.pt
+
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+# 只跑 stage1（tracking + 裁切蒐集），不需要 stage2 評估（這批來源影片沒有 GT 標註）
+stages:
+  run_stage1: true
+  run_stage2: false
+
+eval_flags:
+  run_det_eval:   false
+  run_track_eval: true
+
+
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+# 這 5 支影片來自不同路口，跟 config/botsort_save_reid_crops.yaml 的 det_corner 多邊形
+# （為「中華三路_民生二路」鏡頭設計）不適用，關閉偵測區域限制，全畫面都算偵測區域。
+det_corner: []
+
+logging:
+  verbose: false
+  debug:   false
+
+tracking_params:
+  tracker: botsort
+  conf:        0.15
+  iou:         0.50
+  imgsz:       640
+  frame_rate:  30
+  gmc_method:  ecc
+
+save params:
+  show: false
+  save: false        # 不需要標註影片
+  save_txt: false     # 不需要 YOLO label txt
+  show_unmatched: false
+  show_removed: false
+  save_reid_crops: true
+  reid_crop_dir: ./dataset/reid/crop_dataset
+
+
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（BoTSORT，ReID 關閉——跟 config/botsort_save_reid_crops.yaml 相同）
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 3.0
+    bus:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+      use_reid: false
+      proximity_thresh: 0.1
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 3.0
+    small_truck:
+      center_dist_weight: 0.2
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.1
+      model: models/yolo-reid/yolo11x-reid-ultra.pt
+      track_buffer: 3.0
+    truck:
+      center_dist_weight: 0.2
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.6
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 3.0
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.3
+      model: models/yolo/yolo11x.pt
+      track_buffer: 2.0
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo-reid/yolo11x-reid-ultra.pt
+      track_buffer: 2.0
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+    model: ./yolo11x-cls-reid.pt
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15

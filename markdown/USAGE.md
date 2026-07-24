@@ -6,14 +6,14 @@
 
 ## 1. Detection 模組（`module/detection/`）
 
-只有一個 `Detector` 類別：包 YOLO 模型 + 逐類別信心過濾（門檻定義在 `module/tracker/config.py` 的 `CLASS_CONF_THRESH`，隨 `load_track_config()` 載入的 YAML 而定）。`import module.tracker.config` 時會自動載入根目錄 `config.yaml` 的 `class_tracking:` 章節（2026-07-23 起，原本獨立的 `module/tracker/track_config.yaml` 預設版已合併進 `config.yaml`），所以不呼叫 `load_track_config()` 也能跑；要套用其他實驗設定（如含 ReID 欄位的 base 版）就要顯式呼叫：
+只有一個 `Detector` 類別：包 YOLO 模型 + 逐類別信心過濾（門檻定義在 `module/tracker/config.py` 的 `CLASS_CONF_THRESH`，隨 `load_track_config()` 載入的 YAML 而定）。`module/tracker/config.py` 的 `DEFAULT_TRACK_CONFIG_PATH` 預設指向 `config/bytetrack.yaml`，所以不呼叫 `load_track_config()` 也能跑；要套用其他情境（如含 ReID 欄位的 `botsort_reid.yaml`）就要顯式呼叫（2026-07-24 起：`config.yaml` + `module/tracker/track_config_*.yaml` 已整併成 `config/` 底下 6 個自包含情境檔，見 `CLAUDE.md`「設定檔」）：
 
 ```python
 from module.tracker.config import load_track_config
 from module.detection.detector import Detector
 import cv2
 
-load_track_config("module/tracker/track_config.yaml")  # 不呼叫則沿用 config.yaml 的 class_tracking 章節
+load_track_config("config/botsort_reid.yaml")  # 不呼叫則沿用 config/bytetrack.yaml 的 class_tracking 章節
 
 detector = Detector("models/yolo/yolo11x_dennis.pt")
 
@@ -26,13 +26,13 @@ print(boxes.cls, boxes.conf, boxes.xyxy)
 
 ## 2. Tracker 模組（`module/tracker/`）
 
-對外只有一個工廠函式 `create_tracker()`。同上，`import module.tracker.config` 會自動載入 `config.yaml` 的 `class_tracking:` 章節；若要用其他實驗設定，一樣要顯式呼叫 `load_track_config()`，而且**必須在 `create_tracker()` 之前呼叫**——順序反了不會報錯，只是會靜靜地套用錯的類別參數表，最容易漏測的坑（見 `TEST.md` 第 5 項）：
+對外只有一個工廠函式 `create_tracker()`。同上，`module/tracker/config.py` 預設載入 `config/bytetrack.yaml` 的 `class_tracking:` 章節；若要用其他情境檔，一樣要顯式呼叫 `load_track_config()`，而且**必須在 `create_tracker()` 之前呼叫**——順序反了不會報錯，只是會靜靜地套用錯的類別參數表，最容易漏測的坑（見 `TEST.md` 第 5 項）：
 
 ```python
 from module.tracker.config import load_track_config
 from module.tracker import create_tracker
 
-load_track_config("module/tracker/track_config.yaml")   # 套用含 ReID 欄位的 base 版
+load_track_config("config/botsort_reid.yaml")   # 套用含 ReID 欄位的情境
 
 tracker = create_tracker(
     tracker_type="bytetrack",     # 或 "botsort"
@@ -46,32 +46,31 @@ tracker = create_tracker(
 tracks, unmatched, removed = tracker.update(dets, frame)
 ```
 
-實務上很少需要手動這樣逐幀呼叫——`track_eval.py` 的 `VideoSequenceTracker`（見第 6 節）已經包好整個「讀影片 → 偵測 → 追蹤 → 存檔」流程，一般改動只需要調整 `module/tracker/track_config*.yaml` 或 `config.yaml`。
+實務上很少需要手動這樣逐幀呼叫——`track_eval.py` 的 `VideoSequenceTracker`（見第 6 節）已經包好整個「讀影片 → 偵測 → 追蹤 → 存檔」流程，一般改動只需要調整 `config/*.yaml` 對應情境檔。
 
 ### 逐類別 ReID 開關（YAML 設定，不是 Python API）
-`module/tracker/track_config*.yaml` 裡每個類別可以獨立設定 `use_reid` + `model`，`module/tracker/class_aware_botsort.py` 會依 `model` 路徑字串自動選擇對應的 Re-ID encoder（見 `module/reid/encoders.py`）：
+`config/*.yaml` 的 `class_tracking:` 章節裡每個類別可以獨立設定 `use_reid` + `model`，`module/tracker/class_aware_botsort.py` 會依 `model` 路徑字串自動選擇對應的 Re-ID encoder（見 `module/reid/encoders.py`）：
 
 ```yaml
 class_tracking_params:
   person:
     use_reid: true
-    model: models/yolo-reid/yolo11x-reid.pt              # 路徑不含 reid_model_weights/class_reid_weights → 用 ReID（YOLO 當 encoder）
+    model: models/yolo-reid/yolo11x-reid.pt              # 路徑不含 class_reid_weights → 用 ReID（YOLO 當 encoder）
   scooter:
     use_reid: true
     model: models/class_reid_weights/scooter/best_full_model.pt   # 路徑含 class_reid_weights → 用 Custom_ReID
-  car:
-    use_reid: true
-    model: models/reid_model_weights/mgn_sbs_S50_fastreid/mgn_sbs_S50_fastreid.pth   # 路徑含 reid_model_weights → 用 SOTA_ReID
 ```
 
 目前預設全部 `use_reid: false`（見 `VERIFY.md`「ReID 開關」段落：對 person 有幫助但會損害 scooter 並增加 IDSW）。
 
+> 2026-07-24：原本還有第三條路徑 `SOTA_ReID`（路徑含 `reid_model_weights` → 載入 vendored FastReID/TransReID 權重）已移除，只保留 `ReID` 與 `Custom_ReID` 兩條路徑。詳見 `VERIFY.md`「移除 reid_models」段落。
+
 ## 3. Re-ID 模組（`module/reid/`）
 
-`module/reid/encoders.py` 的三個 encoder 類別很少需要手動 new，通常透過上面的 YAML 設定自動建立。若要單獨測試某個 encoder：
+`module/reid/encoders.py` 的兩個 encoder 類別很少需要手動 new，通常透過上面的 YAML 設定自動建立。若要單獨測試某個 encoder：
 
 ```python
-from module.reid.encoders import ReID, SOTA_ReID, Custom_ReID
+from module.reid.encoders import ReID, Custom_ReID
 import numpy as np
 
 encoder = Custom_ReID("models/class_reid_weights/scooter/best_full_model.pt")
@@ -79,14 +78,14 @@ encoder = Custom_ReID("models/class_reid_weights/scooter/best_full_model.pt")
 embeddings = encoder(img, dets)   # -> list[np.ndarray]，每個偵測框一個特徵向量
 ```
 
-`module/reid/yolo_reid_trainer.py` 是訓練用的（見第 8 節），`module/reid/training/train_utils.py` 是消費它的訓練迴圈（目前無腳本呼叫，孤兒程式碼）。
+`module/reid/yolo_reid_trainer.py` 是訓練用的（見第 8 節），`module/reid/training/dataset.py` + `train.py` 是消費它的資料讀取與訓練迴圈（見第 9 節）。
 
 ## 4. Evaluation 模組（`evaluation/`）
 
 通常由 `track_eval.py`（第 6 節）呼叫，也可以獨立跑（假設 `runs/track_eval/annotations_all8/`、`mot_annotations_all8/` 底下已經有第一階段 tracking 輸出）：
 
 ```bash
-python -m evaluation.pipeline --config config.yaml
+python -m evaluation.pipeline --config config/bytetrack.yaml
 ```
 
 或在程式裡呼叫：
@@ -95,7 +94,7 @@ python -m evaluation.pipeline --config config.yaml
 from evaluation.config_loader import load_config
 from evaluation.pipeline import run_eval_pipeline
 
-cfg = load_config("config.yaml")
+cfg = load_config("config/bytetrack.yaml")
 run_eval_pipeline(cfg)   # 讀 cfg.base_dir 下的序列，逐類別跑 TrackEval，輸出 Excel 到 cfg.trackeval_output_dir
 ```
 
@@ -134,14 +133,14 @@ python visualize/visualize_gt_on_class_video.py \
 **CLI（最常用）：**
 
 ```bash
-# 不指定 --track-config 時，直接用 config.yaml 內建的 class_tracking 章節
-python track_eval.py --config config.yaml
+# --config 預設就是 config/bytetrack.yaml，內建 class_tracking 章節不需另外指定
+python track_eval.py --config config/bytetrack.yaml
 
-# 要套用其他實驗設定（含 ReID 欄位的 base 版）才需要 --track-config
-python track_eval.py --config config.yaml --track-config module/tracker/track_config.yaml
+# 換其他情境檔即可套用不同 tracker / ReID 設定，例如含 ReID 欄位的 botsort_reid
+python track_eval.py --config config/botsort_reid.yaml
 ```
 
-依序執行 `run_stage1()`（逐影片 class-aware tracking，輸出 MOT 格式結果）與 `run_stage2()`（TrackEval 評估，輸出 Excel）。輸出目錄結構見 `track_eval.py` 檔頭 docstring。
+依序執行 `run_stage1()`（逐影片 class-aware tracking，輸出 MOT 格式結果）與 `run_stage2()`（TrackEval 評估，輸出 Excel），實際跑哪幾階段由該情境檔的 `stages.run_stage1`/`run_stage2` 決定（預設都 `true`；`config/botsort_save_reid_crops.yaml` 把 `run_stage2` 設 `false`，只做資料蒐集）。輸出目錄結構見 `track_eval.py` 檔頭 docstring。
 
 **程式化呼叫**（例如只想跑 stage1，或包進自己的腳本）：
 
@@ -150,13 +149,13 @@ from module.tracker.config import load_track_config
 from evaluation.config_loader import load_config
 from track_eval import TrackingEvalPipeline
 
-load_track_config("config.yaml")   # 務必在 create_tracker 之前呼叫；亦可指定 module/tracker/track_config*.yaml 其中一個變體
-cfg = load_config("config.yaml")
+load_track_config("config/botsort_reid.yaml")   # 務必在 create_tracker 之前呼叫；可指定 config/ 底下任一情境檔
+cfg = load_config("config/botsort_reid.yaml")
 
 pipeline = TrackingEvalPipeline(cfg)
 pipeline.run_stage1()   # 只跑 tracking
 # pipeline.run_stage2()  # 只跑 TrackEval 評估（需要 stage1 的輸出已存在）
-# pipeline.run()         # 兩階段都跑
+# pipeline.run()         # 依 cfg 的 stages.run_stage1/run_stage2 決定要跑哪幾階段
 ```
 
 **單一影片只想跑 tracking**（不經過整個 stage1 的影片掃描邏輯），可以直接用 `VideoSequenceTracker`：
@@ -177,6 +176,39 @@ output_path, images_path, labels_path = seq_tracker.run(
 )
 ```
 
+### Re-ID 訓練資料蒐集（`save_reid_crops`，2026-07-24 新增）
+
+情境檔的 `save params.save_reid_crops`（預設 `false`）打開後，`VideoSequenceTracker.run()` 每一幀會把每個追蹤到的物件裁切存檔到：
+
+```
+{reid_crop_dir}/{class}/{影片檔名}_track{track_id}/{frame:06d}.jpg
+```
+
+`reid_crop_dir` 預設 `./dataset/reid/crop_dataset`。身分資料夾用「影片檔名_track_id」而不是單純 `track_id`——因為 tracker 是每支影片重新建立一個，`track_id` 只在同一支影片內唯一，不同影片可能都有 `track_id=3` 但代表不同物體，直接用 `track_id` 當資料夾會把不同身分的照片混在一起。有設定 `det_corner` 時，裁切也會套用同樣的多邊形過濾（只存落在偵測區域內的物件）。
+
+```bash
+# config/botsort_save_reid_crops.yaml 已內建 save_reid_crops: true 且 stages.run_stage2: false（只蒐集資料，跳過評估）
+python track_eval.py --config config/botsort_save_reid_crops.yaml
+```
+
+或程式化只對單一影片蒐集：
+
+```python
+seq_tracker = VideoSequenceTracker(
+    model_path="models/yolo/yolo11x_dennis.pt",
+    tracker_type="bytetrack",
+    conf=0.15, iou=0.50, imgsz=640, frame_rate=30, gmc_method="ecc",
+    save=False, save_txt=False,
+    save_reid_crops=True,
+    reid_crop_dir="./dataset/reid/crop_dataset",
+)
+seq_tracker.run(video_path="./dataset/C000025_clip_10s.mp4", output_dir=Path("./runs/adhoc_test"))
+```
+
+這個功能只是「蒐集資料」，跟 `dataset/reid/crop_dataset/train/{train,val}/{identity}/` 這個扁平（不分類別）的舊資料結構不是同一套配置——舊資料是否要轉成新的 `{class}/{影片}_track{id}/` 結構、以及後續訓練怎麼讀取，正在重新設計，見 `NEED.md`。
+
+蒐集到 `dataset/reid/crop_dataset/{class}/{identity}/*.jpg` 後，用 `dataset/reid/build_reid_split.py` 依身分切 train/val，輸出到 `dataset/reid/reid_category_dataset/`（逐類別各自切）或 `dataset/reid/reid_dataset/`（6 類別混合切一次），詳見 `dataset/reid/README.md`。
+
 ## 7. Grid Search（`module/grid_search/`）— 追蹤參數超參數搜尋
 
 三支腳本，介面幾乎相同（`grid_search_botsort_reid.py` 額外把 ReID 相關參數固定在搜尋空間裡，見 `PARAM_GRIDS` 的 `use_reid`）：
@@ -189,9 +221,9 @@ python module/grid_search/grid_search_bytetrack.py --target-class scooter --dry-
 python module/grid_search/grid_search_bytetrack.py --target-class scooter --max-videos 1
 
 # 正式搜尋，可用 --resume 續跑（會跳過 CSV 裡已有的組合）
-python module/grid_search/grid_search_bytetrack.py --target-class scooter --config config.yaml --resume
+python module/grid_search/grid_search_bytetrack.py --target-class scooter --config config/grid_search_bytetrack.yaml --resume
 
-# 只搜尋指定參數，其餘用目前 track_config.yaml 的值
+# 只搜尋指定參數，其餘用目前情境檔 class_tracking 的值
 python module/grid_search/grid_search_botsort.py --target-class car --tracker botsort \
     --params-subset match_thresh,new_track_thresh
 
@@ -205,7 +237,7 @@ python module/grid_search/grid_search_botsort_reid.py --target-class person --dr
 
 ## 8. `yolo_reid_trainer`（`module/reid/yolo_reid_trainer.py`）— ReID 訓練工具
 
-目前沒有任何啟用中的腳本呼叫這個模組（孤兒程式碼，僅 `module/reid/training/train_utils.py` 引用它，而 `train_utils.py` 本身也沒有腳本呼叫）。核心是 `ReIDHookManager`：直接在 ultralytics YOLO 原生模型倒數第二層掛 forward hook 取特徵，接一個 `ReIDProjector` 做 metric embedding，不另外包 wrapper nn.Module。
+核心是 `ReIDHookManager`：直接在 ultralytics YOLO 原生模型倒數第二層掛 forward hook 取特徵，接一個 `ReIDProjector` 做 metric embedding，不另外包 wrapper nn.Module。訓練出來的權重可以直接被 `module/reid/encoders.py::ReID` 載入（推論期用同一份 `ReIDHookManager`/`load_reid_model` 邏輯重建）。
 
 **低階 API（手動組訓練迴圈時使用）：**
 
@@ -235,39 +267,40 @@ manager2.eval_mode()
 embed = manager2.embed(imgs)
 ```
 
-**高階 API（現成訓練迴圈，`module/reid/training/train_utils.py::train()`）：**
+⚠️ `save_yolo_reid()` 存檔前會暫時清空每個 submodule 的 `_forward_hooks`/`_forward_pre_hooks`/`_backward_hooks` 以避開無法 pickle 的 hook，2026-07-24 之前這裡誤用 `{}` 清空（型別變成一般 `dict`），會導致存檔內容裡的 hook 容器型別跟著變成 `dict`，之後 `load_reid_model()` 重新 `register_forward_hook()` 時丟 `TypeError: cannot create weak reference to 'dict' object`。已修正為 `OrderedDict()`；此修正只影響用 `save_yolo_reid()` 存檔之後的檔案，舊權重不受影響。
+
+## 9. Re-ID 訓練資料蒐集 + 訓練（`module/reid/training/`，2026-07-24 新增）
+
+**資料蒐集**：先用 `track_eval.py` 的 `save_reid_crops` 功能蒐集資料（見第 6 節），或直接跑一次完整 pipeline 累積 `dataset/reid/crop_dataset/{class}/{影片}_track{id}/*.jpg`。
+
+**資料讀取**（`module/reid/training/dataset.py`）：
 
 ```python
-from module.reid.training.train_utils import train
+from module.reid.training.dataset import discover_identities, split_identities, ReIDCropDataset, PKSampler
+from torch.utils.data import DataLoader
 
-train({
-    "device": "cuda",
-    "img_size": 128,
-    "data_path": "dataset/reid_dataset/train",       # torchvision ImageFolder 結構：<root>/<identity_id>/*.jpg
-    "data_path_val": "dataset/reid_dataset/val",
-    "batch_size": 32,
-    "shuffle": True,
-    "yolo_weights": "models/yolo/yolo11x_dennis.pt",
-    "freeze_backbone": True,
-    "margin": 0.3,
-    "lr": 1e-4,
-    "weight_decay": 1e-4,
-    "epochs": 50,
-    "early_stopping": {"enabled": True, "patience": 10, "min_delta": 0.0, "verbose": True},
-    "project": "yolo-reid-experiment-01",
-    "augmentation": {
-        "enabled": True,
-        "random_horizontal_flip": 0.5,
-        "random_rotation": 10,
-        "color_jitter": {"enabled": False, "brightness": 0.2, "contrast": 0.2, "saturation": 0.2, "hue": 0.1},
-        "random_affine": {"enabled": False, "translate": [0.1, 0.1], "scale": [0.9, 1.1]},
-        "normalize": {"enabled": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]},
-        "random_erasing": {"enabled": False, "p": 0.5, "scale": [0.02, 0.33], "ratio": [0.3, 3.3]},
-    },
-})
+identity_dirs = discover_identities("dataset/reid/crop_dataset", "scooter")
+train_dirs, val_dirs = split_identities(identity_dirs, val_ratio=0.2, seed=42)   # 依身分切分，不會資料外洩
+
+train_dataset = ReIDCropDataset(train_dirs, transform=my_transform, min_images_per_identity=4)
+train_loader = DataLoader(train_dataset, batch_sampler=PKSampler(train_dataset.labels, P=8, K=4))
+# 每個 batch 固定 8 個身分 × 4 張影像，符合 BatchHardTripletLoss 需要同 batch 內有 positive pair 的假設
 ```
 
-會用 `wandb.init(project="reid-training", ...)` 記錄訓練過程（對應根目錄的 `wandb/` log，見 `Project.md`「資料與輸出目錄」）；跑之前要先 `wandb login`，或設 `WANDB_MODE=offline` 避免卡在登入提示。
+**訓練**（`module/reid/training/train.py`，取代已移除的 `train_utils.py`，只走 YOLO-as-encoder 這條架構，不使用 `utils/model.py` 的 `ReIDNet`）：
+
+```bash
+python module/reid/training/train.py \
+    --class-name scooter \
+    --data-root dataset/reid/crop_dataset \
+    --yolo-weights models/yolo/yolo11x_dennis.pt \
+    --output models/yolo-reid/scooter_reid.pt \
+    --epochs 50 --P 8 --K 4 --lr 1e-4 --val-ratio 0.2 --patience 10
+```
+
+常用旗標：`--freeze-backbone`（只訓練 projector）、`--img-size`、`--margin`、`--min-images`（身分資料夾影像數低於此值整個捨棄）、`--wandb`（預設關閉，開啟才會呼叫 `wandb.init()`；要用的話先 `wandb login` 或設 `WANDB_MODE=offline`，對應根目錄的 `wandb/` log，見 `Project.md`「資料與輸出目錄」）。一次只練一個類別的模型（呼應 `config/*.yaml` 的 `class_tracking:` 逐類別指定 `model:` 路徑的慣例），要練多個類別就跑多次、換 `--class-name` 和 `--output`。
+
+已用實際蒐集的 crop 資料驗證完整流程：蒐集 → 訓練（loss 確實下降）→ 存檔 → `load_reid_model()` 與 `ReID` class 兩條載入路徑皆能正確還原並產生 embedding。
 
 ## 待補充
 > 以上範例對應目前程式碼實際簽章（2026-07-23 確認）。若函式簽章之後有變動，此檔案要一併更新；若發現範例與實際行為不符，以程式碼為準並回報修正。

@@ -262,7 +262,7 @@ def run_eval_pipeline(cfg):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run MOT/TrackEval pipeline with specified config.")
-    parser.add_argument("--config", type=str, default="config.yaml", help="Path to config yaml file")
+    parser.add_argument("--config", type=str, default="config/bytetrack.yaml", help="Path to config yaml file")
     args = parser.parse_args()
     cfg = load_config(args.config)
     run_eval_pipeline(cfg)

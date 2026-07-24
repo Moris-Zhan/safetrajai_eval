@@ -11,6 +11,8 @@
 #     還原 projector 並重掛 hook。
 # ============================================================
 
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -230,9 +232,12 @@ def save_yolo_reid(yolo: YOLO, save_path: str, train_args: dict | None = None):
             "fwd_pre":  dict(module._forward_pre_hooks),
             "bwd":      dict(module._backward_hooks),
         }
-        module._forward_hooks     = {}
-        module._forward_pre_hooks = {}
-        module._backward_hooks    = {}
+        # 用 OrderedDict()（而非 {}）清空，維持跟 nn.Module 原生 hook 容器同型別，
+        # 否則存檔內容會把 _forward_hooks 序列化成一般 dict，之後 register_forward_hook()
+        # 嘗試對它建立 weakref 時會拋 TypeError: cannot create weak reference to 'dict' object。
+        module._forward_hooks     = OrderedDict()
+        module._forward_pre_hooks = OrderedDict()
+        module._backward_hooks    = OrderedDict()
 
     try:
         yolo.save(save_path)

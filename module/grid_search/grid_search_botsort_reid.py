@@ -160,11 +160,8 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [0.05, 0.1, 0.15],         # 往更低探索
         "model": [
             # "models/yolo/yolo11x.pt",
-            "models/reid_model_weights/vit_transreid/vit_transreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_S50_fastreid/mgn_sbs_S50_fastreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_R50_ibn_fastreid/mgn_sbs_R50_ibn_fastreid_wrap.pth",
             "models/class_reid_weights/person/best_full_model.pt"
-        ], 
+        ],
     },
 
     "scooter": {
@@ -180,12 +177,8 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [0.1],                      # 固定
         "model": [
             # "models/yolo-reid/yolo11x-reid-ultra.pt",
-            "models/reid_model_weights/vit_transreid/vit_transreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_S50_fastreid/mgn_sbs_S50_fastreid_wrap.pth",
-            "models/reid_model_weights/mgn_sbs_R50_ibn_fastreid/mgn_sbs_R50_ibn_fastreid_wrap.pth",
             "models/class_reid_weights/scooter/best_full_model.pt"
         ],
- 
     },
 
 
@@ -596,7 +589,7 @@ def _resolve_gt_source_root(cfg, seq_stem: str) -> str | None:
             gt.txt        ← flat GT（9 columns MOT format）
           seqinfo.ini     ← 可選
     """
-    base    = Path(cfg.base_dir)
+    base    = Path(cfg.OUTPUT_ROOT)
     mot_dir = base / cfg.run_track_eval_dir
  
     candidate = mot_dir / f"mot_annotation_{seq_stem}"
@@ -893,7 +886,7 @@ def main():
         choices=list(CLASS_NAMES.values()),
         help="要調優的類別名稱"
     )
-    parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
+    parser.add_argument("--config", default="config/botsort_reid.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
     parser.add_argument(
         "--track-config",
         default=None,
@@ -984,7 +977,7 @@ def main():
         video_paths = sorted(_glob.glob(args.video_glob, recursive=True))
     else:
         pattern = str(
-            Path(cfg.base_dir) / cfg.run_det_eval_dir
+            Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
             / "annotation_*" / "**" / "*.mp4"
         )
         video_paths = sorted(

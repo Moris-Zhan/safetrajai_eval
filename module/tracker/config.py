@@ -35,7 +35,7 @@ _DEFAULT_CONF_THRESH: list[float] = [0.15]  # 單元素 list 避免「整數重�
 
 _TRACK_CONFIG_RESOLVED: Path | None = None
 
-DEFAULT_TRACK_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
+DEFAULT_TRACK_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "bytetrack.yaml"
 
 
 def __getattr__(name: str) -> Any:
@@ -109,8 +109,9 @@ def load_track_config(path: str | Path | None = None) -> Path:
     if not isinstance(data, dict):
         raise ValueError(f"track config 根節點必須為 mapping: {resolved}")
 
-    # 若是合併進 config.yaml 的格式，實際內容在 class_tracking: 子章節；
-    # 獨立的 module/tracker/track_config_*.yaml 變體檔仍是扁平結構，直接用整份 data。
+    # 若是 config/*.yaml 這種合併格式，實際內容在 class_tracking: 子章節；
+    # 若是舊式獨立 track_config_*.yaml（扁平結構，已歸檔於 archive/track_config_variants/），
+    # 沒有 class_tracking 鍵，直接用整份 data。
     data = data.get("class_tracking", data)
 
     # 取得各區塊

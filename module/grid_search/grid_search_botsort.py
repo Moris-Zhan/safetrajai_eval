@@ -693,7 +693,7 @@ def _resolve_gt_source_root(cfg, seq_stem: str) -> str | None:
             gt.txt        ← flat GT（9 columns MOT format）
           seqinfo.ini     ← 可選
     """
-    base    = Path(cfg.base_dir)
+    base    = Path(cfg.OUTPUT_ROOT)
     mot_dir = base / cfg.run_track_eval_dir
  
     candidate = mot_dir / f"mot_annotation_{seq_stem}"
@@ -1010,7 +1010,7 @@ def main():
         choices=list(CLASS_NAMES.values()),
         help="要調優的類別名稱"
     )
-    parser.add_argument("--config", default="config.yaml", help="流程用 config.yaml（路徑、eval 等）")
+    parser.add_argument("--config", default="config/grid_search_botsort.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
     parser.add_argument(
         "--track-config",
         default=None,
@@ -1117,7 +1117,7 @@ def main():
         video_paths = sorted(_glob.glob(args.video_glob, recursive=True))
     else:
         pattern = str(
-            Path(cfg.base_dir) / cfg.run_det_eval_dir
+            Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
             / "annotation_*" / "**" / "*.mp4"
         )
         video_paths = sorted(

@@ -4,11 +4,10 @@ Extends Ultralytics BOTSORT to implement class-specific matching thresholds.
 """
 import numpy as np
 
-import torch
 from ultralytics.trackers.bot_sort import BOTSORT, BOTrack
 from ultralytics.trackers.byte_tracker import STrack
 from ultralytics.trackers.basetrack import TrackState
-from module.reid.encoders import ReID, SOTA_ReID, Custom_ReID
+from module.reid.encoders import ReID, Custom_ReID
 from module.tracker import matching
 from ultralytics.trackers.utils.gmc import GMC
 from torchinfo import summary
@@ -67,24 +66,7 @@ class ClassAwareBOTSORT(BOTSORT):
                 track_buffer = get_params_for_class(cls_id).get('track_buffer')
                 print(f"[Tracker] Loading track_buffer for class {CLASS_NAMES[cls_id]}: {track_buffer}")
 
-                if "reid_model_weights" in model_path:
-                    self.cls_encoder[cls_id] = SOTA_ReID(model_path)
-                    reid_model = self.cls_encoder[cls_id].model
-                    dummy_input = torch.randn(1, 3, 256, 128)
-                    if "vit_transreid" in model_path:
-                        # input_data = (dummy_input, torch.tensor([-1]), torch.tensor([-1]))
-                        input_data = (dummy_input, [0], [0])
-                    else:
-                        input_data = (dummy_input,)
-                    # summary(
-                    #     reid_model,
-                    #     input_data=input_data,
-                    #     device="cpu",
-                    #     col_names=["num_params", "trainable", "mult_adds"],
-                    #     depth=0,
-                    #     row_settings=["var_names"],
-                    # )
-                elif "class_reid_weights" in model_path:
+                if "class_reid_weights" in model_path:
                     self.cls_encoder[cls_id] = Custom_ReID(model_path)
                     reid_model = self.cls_encoder[cls_id].model
                     # dummy_input = torch.randn(1, 3, 256, 128)                    
