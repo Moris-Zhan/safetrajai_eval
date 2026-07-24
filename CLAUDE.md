@@ -54,7 +54,8 @@ python visualize/visualize_gt_on_class_video.py --trackeval_root <path> --video_
 ```
 module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不在本專案範圍，見 markdown/NEED.md。
 module/tracker/   — class-aware BoTSORT / ByteTrack（原 trackers/ → tracker/ → module/tracker/）
-module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py）
+module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py，
+                     模型架構與訓練腳本說明見 module/reid/HANDOFF.md）
 evaluation/       — DET/TrackEval 共用 pipeline（config_loader、dataset_prep、mot_converter、
                      trackeval_runner、excel_export、mot_format、pipeline）
 utils/            — 通用小工具（visualization.py）+ model.py（見下方「⚠️ pickle 相容性」）
@@ -99,7 +100,7 @@ archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeva
 
 `HANDOFF.md` 講的是「為什麼這樣改、原版 vs 改版對照」；逐步的 `update()` 執行流程（每個階段做什麼、`get_dists_class_aware()` 怎麼算距離矩陣）分別寫在 `class_aware_botsort_flow.md` / `class_aware_bytetrack_flow.md`，兩者也整理了差異對照表。⚠️ 這兩份文件記錄了一個既有落差：`track_buffer` 在 BoTSORT 版被當作「秒」，在 ByteTrack 版被當作「30fps 基準幀數」，同一個設定值換算出的實際存活時間差 30 倍，詳見 `NEED.md`。
 
-ReID 有兩種來源（`module/reid/encoders.py`）：`ReID`（用 YOLO 模型本身當 encoder，權重在 `models/yolo-reid/`）與 `Custom_ReID`（自己訓練的模型，權重在 `models/class_reid_weights/`）。目前預設關閉 ReID —— 實驗結論是對 person 有幫助但會損害 scooter 且增加 IDSW（見 `module/tracker/__init__.py` 註解）。`module/tracker/` 依賴 `module/reid/`（BoTSORT 匹配時用 Re-ID 外觀特徵），`module/reid/` 不依賴 `module/tracker/`。
+ReID 有兩種來源（`module/reid/encoders.py`）：`ReID`（用 YOLO 模型本身當 encoder，權重在 `models/yolo-reid/`，模型架構與訓練腳本說明見 `module/reid/HANDOFF.md`）與 `Custom_ReID`（自己訓練的模型，權重在 `models/class_reid_weights/`，訓練程式碼不在本專案範圍內）。目前預設關閉 ReID —— 實驗結論是對 person 有幫助但會損害 scooter 且增加 IDSW（見 `module/tracker/__init__.py` 註解）。`module/tracker/` 依賴 `module/reid/`（BoTSORT 匹配時用 Re-ID 外觀特徵），`module/reid/` 不依賴 `module/tracker/`。
 
 對外入口只有一個工廠函式：`create_tracker(tracker_type='botsort'|'bytetrack', frame_rate=..., **overrides)`。
 

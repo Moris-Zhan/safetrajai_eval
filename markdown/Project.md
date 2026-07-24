@@ -60,7 +60,8 @@ safetrajai_eval/
 │   │   ├── config.py               逐類別參數查表（match_thresh、track_buffer、use_reid…）
 │   │   └── matching.py, HANDOFF.md（track_config*.yaml 已移到 config/，見下方）
 │   │
-│   ├── reid/                       【Re-ID 模組】只保留兩條路徑（SOTA_ReID／reid_models 已移除）
+│   ├── reid/                       【Re-ID 模組】只保留兩條路徑（SOTA_ReID／reid_models 已移除），
+│   │   │                          自行設計的模型架構＋訓練腳本說明見 module/reid/HANDOFF.md
 │   │   ├── encoders.py             ReID（YOLO 本身當 encoder）／Custom_ReID（自己訓練的模型，推論期特徵抽取，被 module/tracker/ 引用）
 │   │   ├── yolo_reid_trainer.py    YOLO ReID 訓練用 hook/projector（ReIDHookManager、BatchHardTripletLoss）
 │   │   └── training/               重新設計的訓練資料/訓練迴圈（取代已移除的 train_utils.py）
