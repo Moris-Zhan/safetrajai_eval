@@ -69,10 +69,21 @@ def draw_track_box(
 ```python
 class ReidCropCollector:
     """蒐集 Re-ID 訓練用裁切圖（save_reid_crops=True 時啟用）。"""
-    def __init__(self, crop_dir: Path, det_corner: np.ndarray | None): ...
+    def __init__(
+        self,
+        crop_dir: Path,
+        det_corner: np.ndarray | None,
+        quality_filters: list[Callable[[np.ndarray], bool]] | None = None,
+    ):
+        """quality_filters：【2026-09-03 module/reid/ round 新增】每個 filter 接收裁切後的
+        影像陣列，回傳 True＝保留、False＝丟棄（不寫檔）。預設 None，行為與現行完全一致
+        （不過濾）。具體 filter 函式（尺寸/模糊度/邊界截斷等）與門檻值留待後續依實際資料
+        調校再實作，見 2026-09-03-reid-module-design.md 第 5 節。"""
     def collect(self, tracks, clean_frame, seq_stem: str, frame_id: int, width: int, height: int) -> None:
-        """對每個 track：多邊形過濾 → 裁切 → 存到
-        crop_dir/{class}/{seq_stem}_track{id}/{frame_id:06d}.jpg（邏輯與現行完全一致，只是搬出方法）。"""
+        """對每個 track：多邊形過濾 → （若有設定）quality_filters 逐一套用 → 裁切 → 存到
+        crop_dir/{class}/{seq_stem}_track{id}/{frame_id:06d}.jpg（多邊形過濾與存檔邏輯與現行
+        完全一致，只是搬出方法；quality_filters 為新增的可選步驟，任一 filter 回傳 False
+        即跳過該張，不寫檔）。"""
 
 
 class VideoWriterWithFfmpeg:
