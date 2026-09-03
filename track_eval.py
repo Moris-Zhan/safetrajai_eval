@@ -45,7 +45,6 @@ import argparse
 import glob
 from copy import deepcopy
 from pathlib import Path
-import json
 
 import cv2
 import numpy as np
@@ -135,26 +134,6 @@ class VideoSequenceTracker:
         labels_path : Path
             output_path/labels/<seq>
         """
-        orig_frames = None
-
-        # 讀取 frame_comparison.json 取得 interpolated_frame_ids
-        comparison_json_path = Path(video_path).with_name(f"{Path(video_path).stem}_frame_comparison.json")
-        interpolated_frame_ids = set()
-        if comparison_json_path.exists():
-            with open(comparison_json_path, "r", encoding="utf-8") as f:
-                comparison_data = json.load(f)
-                # 根據常見格式，假設 {"interpolated_frame_ids": [id1, id2, ...]}
-                interpolated_frame_ids = set(comparison_data["interpolated_frame_ids"])
-                orig_frames = comparison_data["summary"]["orig_frames"]
-        else:
-            print(f"Warning: {comparison_json_path} not found. No frames will be excluded.")
-
-        def should_skip_frame(frame_id: int) -> bool:
-            return frame_id in interpolated_frame_ids
-
-        # 用法參考：
-        # if should_skip_frame(cur_frame_id): continue # 在處理 frame 時跳過
-
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Cannot open video: {video_path}")
@@ -163,17 +142,9 @@ class VideoSequenceTracker:
         width        = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height       = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         print(f"Video        : {video_path}")
-        if orig_frames != None:
-            total_frames = orig_frames
-            print(f"Video        : {width}x{height} @ {fps}fps, {orig_frames} Original frames")
-        else:
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            print(f"Video        : {width}x{height} @ {fps}fps, {total_frames} frames")
-
-        # Video        : 640x480 @ 4fps, 72 frames
-        # Video        : 640x480 @ 30fps, 449 frames
-        # print(f"Video        : {width}x{height} @ {fps}fps, {total_frames} frames")
+        print(f"Video        : {width}x{height} @ {fps}fps, {total_frames} frames")
 
         seq_stem    = Path(video_path).stem
         output_path = output_dir / f"annotation_{seq_stem}"
@@ -237,203 +208,199 @@ class VideoSequenceTracker:
             tr_st = time.time()
             # avg_track_time.append(tr_st - en)
 
-            # 檢查是否跳過當前幀
-            if should_skip_frame(frame_id):
-                continue
-            else:
-                avg_track_time.append(tr_st - en)
-                show_frame_id = len(avg_track_time)
-                # 儲存 label / image
-                if self.save_txt:
-                    # label_file = labels_path / f"{stem_name}_f{frame_id:06d}.txt"
-                    # img_file   = images_path / f"{stem_name}_f{frame_id:06d}.jpg"
-                    label_file = labels_path / f"{stem_name}_f{show_frame_id:06d}.txt"
-                    img_file   = images_path / f"{stem_name}_f{show_frame_id:06d}.jpg"
+            avg_track_time.append(tr_st - en)
+            show_frame_id = len(avg_track_time)
+            # 儲存 label / image
+            if self.save_txt:
+                # label_file = labels_path / f"{stem_name}_f{frame_id:06d}.txt"
+                # img_file   = images_path / f"{stem_name}_f{frame_id:06d}.jpg"
+                label_file = labels_path / f"{stem_name}_f{show_frame_id:06d}.txt"
+                img_file   = images_path / f"{stem_name}_f{show_frame_id:06d}.jpg"
 
-                    cv2.imwrite(str(img_file), clean_frame)
-                    with open(label_file, "w") as f:
-                        for track in tracks:
-                            if len(track) >= 7:
-                                x1, y1, x2, y2 = track[:4]
-                                track_id = int(track[4])
-                                score    = track[5]
-                                cls_id   = int(track[6])
-                                cx = (x1 + x2) / 2 / width
-                                cy = (y1 + y2) / 2 / height
-                                w  = (x2 - x1) / width
-                                h  = (y2 - y1) / height
-                                f.write(
-                                    f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
-                                    f" {track_id} {score:.4f}\n"
-                                )
-
-                # Re-ID 訓練資料：把每個追蹤到的物件裁切存檔
-                # 存到 reid_crop_dir/{class}/{影片名}_track{track_id}/{frame:06d}.jpg
-                # 用「影片名_track_id」當身分資料夾，避免不同影片的 track_id 重來（tracker 每支影片重建一次）互相撞名
-                if self.save_reid_crops and self.reid_crop_dir is not None:
+                cv2.imwrite(str(img_file), clean_frame)
+                with open(label_file, "w") as f:
                     for track in tracks:
                         if len(track) >= 7:
                             x1, y1, x2, y2 = track[:4]
                             track_id = int(track[4])
+                            score    = track[5]
                             cls_id   = int(track[6])
+                            cx = (x1 + x2) / 2 / width
+                            cy = (y1 + y2) / 2 / height
+                            w  = (x2 - x1) / width
+                            h  = (y2 - y1) / height
+                            f.write(
+                                f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
+                                f" {track_id} {score:.4f}\n"
+                            )
 
-                            # 是否落在偵測區域多邊形內（與 draw/annotate 邏輯一致）
-                            if self.det_corner is not None and len(self.det_corner) > 0:
-                                cx = (x1 + x2) / 2
-                                cy = (y1 + y2) / 2
-                                if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
-                                    continue
+            # Re-ID 訓練資料：把每個追蹤到的物件裁切存檔
+            # 存到 reid_crop_dir/{class}/{影片名}_track{track_id}/{frame:06d}.jpg
+            # 用「影片名_track_id」當身分資料夾，避免不同影片的 track_id 重來（tracker 每支影片重建一次）互相撞名
+            if self.save_reid_crops and self.reid_crop_dir is not None:
+                for track in tracks:
+                    if len(track) >= 7:
+                        x1, y1, x2, y2 = track[:4]
+                        track_id = int(track[4])
+                        cls_id   = int(track[6])
 
-                            xi1, yi1 = max(0, int(x1)), max(0, int(y1))
-                            xi2, yi2 = min(width, int(x2)), min(height, int(y2))
-                            if xi2 <= xi1 or yi2 <= yi1:
+                        # 是否落在偵測區域多邊形內（與 draw/annotate 邏輯一致）
+                        if self.det_corner is not None and len(self.det_corner) > 0:
+                            cx = (x1 + x2) / 2
+                            cy = (y1 + y2) / 2
+                            if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
                                 continue
 
-                            crop = clean_frame[yi1:yi2, xi1:xi2]
-                            cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
-                            identity_dir = self.reid_crop_dir / cls_name / f"{stem_name}_track{track_id}"
-                            identity_dir.mkdir(parents=True, exist_ok=True)
-                            cv2.imwrite(str(identity_dir / f"{show_frame_id:06d}.jpg"), crop)
+                        xi1, yi1 = max(0, int(x1)), max(0, int(y1))
+                        xi2, yi2 = min(width, int(x2)), min(height, int(y2))
+                        if xi2 <= xi1 or yi2 <= yi1:
+                            continue
 
-                # 繪製標注
-                if self.save or self.show:
-                    annotator = Annotator(frame, line_width=2)
+                        crop = clean_frame[yi1:yi2, xi1:xi2]
+                        cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
+                        identity_dir = self.reid_crop_dir / cls_name / f"{stem_name}_track{track_id}"
+                        identity_dir.mkdir(parents=True, exist_ok=True)
+                        cv2.imwrite(str(identity_dir / f"{show_frame_id:06d}.jpg"), crop)
 
-                    for track in tracks:
+            # 繪製標注
+            if self.save or self.show:
+                annotator = Annotator(frame, line_width=2)
+
+                for track in tracks:
+                    if len(track) >= 7:
+                        x1, y1, x2, y2 = track[:4]
+                        track_id = int(track[4])
+
+                        # 如果有指定偵測區域多邊形 (det_corner is not None 且長度 > 0)
+                        if self.det_corner is not None and len(self.det_corner) > 0:
+                            # 計算目標 (track) 邊框的中心點 (cx, cy)
+                            cx = (x1 + x2) / 2
+                            cy = (y1 + y2) / 2
+                            # 使用 cv2.pointPolygonTest 判斷中心點是否在多邊形內
+                            result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
+                            if result >= 0:
+                                # 如果中心點在多邊形內，則畫框和 id 標記
+                                annotator.box_label(
+                                    [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
+                                )
+                        # 如果沒有偵測區域 (det_corner is None)，則對所有目標都畫框和 id 標記
+                        elif self.det_corner is None:
+                            annotator.box_label(
+                                    [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
+                                )
+
+
+
+                if self.show_unmatched:
+                    for track in unmatched:
                         if len(track) >= 7:
                             x1, y1, x2, y2 = track[:4]
-                            track_id = int(track[4])
-
-                            # 如果有指定偵測區域多邊形 (det_corner is not None 且長度 > 0)
+                            score    = track[5]
+                            cls_id   = int(track[6])
+                            cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
+                            # label_id = f"{cls_name}-{score:.2f}"
+                            label_id = f"unmat: {cls_name}"
+                            # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
                             if self.det_corner is not None and len(self.det_corner) > 0:
-                                # 計算目標 (track) 邊框的中心點 (cx, cy)
+                                # 計算未配對目標邊框的中心點 (cx, cy)
                                 cx = (x1 + x2) / 2
                                 cy = (y1 + y2) / 2
-                                # 使用 cv2.pointPolygonTest 判斷中心點是否在多邊形內
+                                # 使用 cv2.pointPolygonTest 判斷中心點是否落於多邊形內
                                 result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
                                 if result >= 0:
-                                    # 如果中心點在多邊形內，則畫框和 id 標記
-                                    annotator.box_label(
-                                        [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
-                                    )
-                            # 如果沒有偵測區域 (det_corner is None)，則對所有目標都畫框和 id 標記
-                            elif self.det_corner is None:
-                                annotator.box_label(
-                                        [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
-                                    )
-
-
-
-                    if self.show_unmatched:
-                        for track in unmatched:
-                            if len(track) >= 7:
-                                x1, y1, x2, y2 = track[:4]
-                                score    = track[5]
-                                cls_id   = int(track[6])
-                                cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
-                                # label_id = f"{cls_name}-{score:.2f}"
-                                label_id = f"unmat: {cls_name}"
-                                # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
-                                if self.det_corner is not None and len(self.det_corner) > 0:
-                                    # 計算未配對目標邊框的中心點 (cx, cy)
-                                    cx = (x1 + x2) / 2
-                                    cy = (y1 + y2) / 2
-                                    # 使用 cv2.pointPolygonTest 判斷中心點是否落於多邊形內
-                                    result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
-                                    if result >= 0:
-                                        # 若在多邊形內，畫紅色方框及顯示標籤 (unmatched)
-                                        annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 255))
-                                        annotator.text(
-                                            (int(x2), int(y2)), label_id,
-                                            txt_color=(255, 255, 255), anchor="top",
-                                            box_color=(0, 0, 255),
-                                        )
-                                # 若未指定偵測區域，則對所有 unmatched 畫紅框與標籤
-                                elif self.det_corner is None:
+                                    # 若在多邊形內，畫紅色方框及顯示標籤 (unmatched)
                                     annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 255))
                                     annotator.text(
                                         (int(x2), int(y2)), label_id,
                                         txt_color=(255, 255, 255), anchor="top",
                                         box_color=(0, 0, 255),
                                     )
+                            # 若未指定偵測區域，則對所有 unmatched 畫紅框與標籤
+                            elif self.det_corner is None:
+                                annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 255))
+                                annotator.text(
+                                    (int(x2), int(y2)), label_id,
+                                    txt_color=(255, 255, 255), anchor="top",
+                                    box_color=(0, 0, 255),
+                                )
 
 
-                    if self.show_removed:
-                        for track in removed:
-                            if len(track) >= 7:
-                                x1, y1, x2, y2 = track[:4]
-                                track_id = int(track[4])
-                                score    = track[5]
-                                # label = f"{track_id}-{score:.2f}"
-                                label = f"Rm: {track_id}"
-                                # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
-                                if self.det_corner is not None and len(self.det_corner) > 0:
-                                    # 計算被移除目標的邊框中心點座標
-                                    cx = (x1 + x2) / 2
-                                    cy = (y1 + y2) / 2
-                                    # 判斷中心點是否落在多邊形內 (result >= 0 代表在內)
-                                    result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
-                                    if result >= 0:
-                                        # 在移除目標的邊框畫上黑色方框與標籤
-                                        annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 0))
-                                        annotator.text(
-                                            (int(x1), int(y1)), label,
-                                            txt_color=(255, 255, 255), anchor="top",
-                                            box_color=(0, 0, 0),
-                                        )
-                                # 若未指定偵測區域，則對所有 removed 畫黑框與標籤
-                                elif self.det_corner is None:
+                if self.show_removed:
+                    for track in removed:
+                        if len(track) >= 7:
+                            x1, y1, x2, y2 = track[:4]
+                            track_id = int(track[4])
+                            score    = track[5]
+                            # label = f"{track_id}-{score:.2f}"
+                            label = f"Rm: {track_id}"
+                            # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
+                            if self.det_corner is not None and len(self.det_corner) > 0:
+                                # 計算被移除目標的邊框中心點座標
+                                cx = (x1 + x2) / 2
+                                cy = (y1 + y2) / 2
+                                # 判斷中心點是否落在多邊形內 (result >= 0 代表在內)
+                                result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
+                                if result >= 0:
+                                    # 在移除目標的邊框畫上黑色方框與標籤
                                     annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 0))
                                     annotator.text(
                                         (int(x1), int(y1)), label,
                                         txt_color=(255, 255, 255), anchor="top",
                                         box_color=(0, 0, 0),
                                     )
+                            # 若未指定偵測區域，則對所有 removed 畫黑框與標籤
+                            elif self.det_corner is None:
+                                annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 0))
+                                annotator.text(
+                                    (int(x1), int(y1)), label,
+                                    txt_color=(255, 255, 255), anchor="top",
+                                    box_color=(0, 0, 0),
+                                )
 
 
-                    annotated_frame = annotator.result()
+                annotated_frame = annotator.result()
 
-                    # 在左上角顯示幀號
-                    # text = f"frame: {frame_id}"
-                    text = f"frame: {show_frame_id}"
-                    org  = (8, 22)
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    fs, ft = 0.6, 1
-                    (tw, th), bl = cv2.getTextSize(text, font, fs, ft)
-                    cv2.rectangle(
-                        annotated_frame,
-                        (org[0] - 3, org[1] - th - 3),
-                        (org[0] + tw + 3, org[1] + bl + 3),
-                        (0, 0, 0), -1,
-                    )
-                    cv2.putText(annotated_frame, text, org, font, fs, (0, 255, 0), ft, cv2.LINE_AA)
+                # 在左上角顯示幀號
+                # text = f"frame: {frame_id}"
+                text = f"frame: {show_frame_id}"
+                org  = (8, 22)
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                fs, ft = 0.6, 1
+                (tw, th), bl = cv2.getTextSize(text, font, fs, ft)
+                cv2.rectangle(
+                    annotated_frame,
+                    (org[0] - 3, org[1] - th - 3),
+                    (org[0] + tw + 3, org[1] + bl + 3),
+                    (0, 0, 0), -1,
+                )
+                cv2.putText(annotated_frame, text, org, font, fs, (0, 255, 0), ft, cv2.LINE_AA)
 
-                if self.show:
-                    cv2.imshow("Class-Aware Tracking", annotated_frame)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
+            if self.show:
+                cv2.imshow("Class-Aware Tracking", annotated_frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
 
-                # 如果已開啟 video_writer，將多邊形疊加到 annotated_frame 並寫入影片檔
-                if video_writer:
-                    # 疊加偵測多邊形（不保存，只進行繪製）
-                    draw_polygon_and_save(annotated_frame, pts=self.det_corner, output_path=None, save_img=False)
-                    # 將已標注與多邊形的影格寫到影片
-                    video_writer.write(annotated_frame)
+            # 如果已開啟 video_writer，將多邊形疊加到 annotated_frame 並寫入影片檔
+            if video_writer:
+                # 疊加偵測多邊形（不保存，只進行繪製）
+                draw_polygon_and_save(annotated_frame, pts=self.det_corner, output_path=None, save_img=False)
+                # 將已標注與多邊形的影格寫到影片
+                video_writer.write(annotated_frame)
 
 
-                # if frame_id % 10 == 0:
-                #     print(
-                #         f"  [{frame_id}/{total_frames}] "
-                #         f"pred={avg_pred_time[-1]:.3f}s  "
-                #         f"track={avg_track_time[-1]:.3f}s"
-                #     )
+            # if frame_id % 10 == 0:
+            #     print(
+            #         f"  [{frame_id}/{total_frames}] "
+            #         f"pred={avg_pred_time[-1]:.3f}s  "
+            #         f"track={avg_track_time[-1]:.3f}s"
+            #     )
 
-                if show_frame_id % 10 == 0:
-                    print(
-                        f"  [{show_frame_id}/{total_frames}] "
-                        f"pred={avg_pred_time[-1]:.3f}s  "
-                        f"track={avg_track_time[-1]:.3f}s"
-                    )
+            if show_frame_id % 10 == 0:
+                print(
+                    f"  [{show_frame_id}/{total_frames}] "
+                    f"pred={avg_pred_time[-1]:.3f}s  "
+                    f"track={avg_track_time[-1]:.3f}s"
+                )
 
         cap.release()
         if video_writer:
