@@ -98,11 +98,27 @@ class AppConfig:
 
         # paths 區塊
         paths = raw.get("paths", {}) or {}
-        d["SOURCE_VIDEO_DIR"]     = paths.get("SOURCE_VIDEO_DIR", d["SOURCE_VIDEO_DIR"])
+
+        # dataset id 對照表（見 evaluation/dataset_layout.py、config/datasets.yaml）：
+        # 有 paths.dataset 時先查表取得 root/run_det_eval_dir/run_track_eval_dir 當起始值，
+        # 顯式欄位（下方 paths.get(..., registry_value)）仍可逐欄位覆蓋（escape hatch）。
+        dataset_id = paths.get("dataset")
+        registry_entry: dict = {}
+        if dataset_id is not None:
+            from evaluation.dataset_layout import load_dataset_registry
+            registry = load_dataset_registry()
+            if dataset_id not in registry:
+                raise ValueError(
+                    f"paths.dataset={dataset_id!r} 不存在於 config/datasets.yaml，"
+                    f"可用的 dataset id：{sorted(registry.keys())}"
+                )
+            registry_entry = registry[dataset_id]
+
+        d["SOURCE_VIDEO_DIR"]     = paths.get("SOURCE_VIDEO_DIR", registry_entry.get("root", d["SOURCE_VIDEO_DIR"]))
         d["SOURCE_VIDEO_DIR"]     = Path(d["SOURCE_VIDEO_DIR"])
 
-        d["run_det_eval_dir"]     = paths.get("run_det_eval_dir", d["run_det_eval_dir"])
-        d["run_track_eval_dir"]   = paths.get("run_track_eval_dir", d["run_track_eval_dir"])
+        d["run_det_eval_dir"]     = paths.get("run_det_eval_dir", registry_entry.get("run_det_eval_dir", d["run_det_eval_dir"]))
+        d["run_track_eval_dir"]   = paths.get("run_track_eval_dir", registry_entry.get("run_track_eval_dir", d["run_track_eval_dir"]))
         d["TRACKEVAL_OUT_DIR"]    = paths.get("TRACKEVAL_OUT_DIR", d["TRACKEVAL_OUT_DIR"])
         
         d["OUTPUT_ROOT"]          = paths.get("OUTPUT_ROOT",    d["OUTPUT_ROOT"])
