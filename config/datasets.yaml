@@ -1,0 +1,14 @@
+# config/datasets.yaml
+# dataset id → 根路徑/子目錄名稱對照表。
+# config/*.yaml 的 paths.dataset 欄位用短 id 取代重複的中文長路徑字面值；
+# 詳見 docs/superpowers/specs/2026-09-03-dataset-path-refactor-design.md 第 3.3 節。
+
+datasets:
+  cctv_all8:
+    root: "./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/"
+    run_det_eval_dir: annotations_all8
+    run_track_eval_dir: mot_annotations_all8
+  video_seqs:
+    root: "./dataset/video_seqs/"
+    run_det_eval_dir: annotations_video
+    run_track_eval_dir: mot_annotations_video
