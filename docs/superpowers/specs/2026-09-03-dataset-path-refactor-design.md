@@ -141,6 +141,9 @@ paths:
 | `config/*.yaml`(8 個) | `paths:` 區塊精簡為 `dataset:` + 差異欄位 |
 | `module/grid_search/grid_search_bytetrack.py` / `grid_search_botsort.py` / `grid_search_botsort_reid.py` | 路徑組裝改呼叫 `dataset_layout.py`,移除自行組的 `mot_annotation_{seq_stem}` |
 | `module/collision/homography_pick_aid.py` | 硬編碼中文路徑改用 `config/datasets.yaml` 的 `cctv_all8` |
+| `module/collision/__init__.py`(`run_collision_detection_for_sequence()`) | 【2026-09-03 module/collision/ round 補充發現】第 117 行 `seq_name = seq_output_dir.stem.replace("annotation_", "")` 改為直接用 `seq_output_dir.stem`(stage1 目錄已不帶前綴,`.replace()` 變成 no-op,應一併移除避免誤導) |
+| `module/collision/trajectory_adapter.py`(`load_sequence_tracks()`) | 【同上補充發現】第 152 行同樣的 `seq_output_dir.stem.replace("annotation_", "")` 改為直接用 `seq_output_dir.stem` |
+| `module/collision/output.py`、`module/collision/homography_points.py`、`module/collision/homography_compare_video.py` | 【同上補充發現】文件字串裡提到 `annotation_<seq>/` 命名慣例的敘述(說明 stage1 輸出目錄長相)改成 `<seq>/`,純文件更新,無邏輯變動 |
 
 ## 4. 錯誤處理與邊界情況
 
