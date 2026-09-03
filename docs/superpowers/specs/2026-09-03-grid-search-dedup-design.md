@@ -61,6 +61,7 @@ def _setup_trial_gt(gt_src_root: str, trial_dir: Path) -> bool: ...
 
 ```python
 def _run_tracking_for_video(
+    detector: Detector,
     video_path: str,
     tracker_type: str,
     conf: float,
@@ -72,7 +73,15 @@ def _run_tracking_for_video(
 ) -> ...:
     """統一簽章，一律接受 conf/iou/imgsz/frame_rate/gmc_method；
     gmc_method 只在 tracker_type == "botsort" 時加入 tracker_kwargs
-    （沿用現行 botsort 版本的判斷邏輯，行為對兩種 tracker 都不變）。"""
+    （沿用現行 botsort 版本的判斷邏輯，行為對兩種 tracker 都不變）。
+
+    【2026-09-03 module/detection/ round 修訂】原本各腳本手刻的
+    `model = YOLO(model_path)` + `model.predict(...)` + 逐偵測套用
+    get_conf_thresh_for_class() 過濾，改成呼叫 module/detection/detector.py
+    的 Detector.detect(frame, iou=iou, imgsz=imgsz)（與 track_eval.py 共用同一份
+    偵測+信心過濾邏輯，不再各自重寫）。呼叫端（score_params()）改成每個 trial
+    開始時建立一次 detector = Detector(model_path)（取代 model = YOLO(model_path)），
+    效能特性不變（trial 內的影片迴圈仍重用同一個 detector 實例）。"""
 
 
 class GridSearchRunner:
