@@ -1,7 +1,7 @@
 # module/tracker/ 去重複 + track_buffer 語意統一 — 設計文件
 
 - 日期:2026-09-03
-- 狀態:待審查
+- **狀態:已作廢(2026-09-03)**——使用者明確決定:`class_aware_botsort.py`/`class_aware_bytetrack.py` 內繼承自 `ultralytics.trackers`(`BOTSORT`/`BYTETracker`)的 override 方法(`__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`)**程式碼本身一字不可更動,也不可搬離**。這條約束直接推翻本文件的兩個提案:(1) 第 3 節把 `update()` 內的 stage1-4 匹配邏輯抽到 `class_aware_common.py`——需要修改/搬移 `update()`,禁止;(2) 第 4 節 track_buffer 語意統一(改動 BoTSORT `update()` 內的換算公式)——同樣需要修改 `update()`,禁止。兩者均不執行。約束已記錄進 `.claude/rules/tracker.md`,`markdown/NEED.md` 的 track_buffer 項目已回頭撤銷「已決定」狀態。本文件以下內容保留供歷史對照,不再是待實作的設計。
 - 範圍:五模組(detection/collision/grid_search/reid/tracker)+ `track_eval.py` 主流程整體重構的**第五個子專案**。這是**核心 matching 邏輯**的改動,風險評等高於前四輪,驗證要求也相應提高。
 - 本文件涵蓋兩件事:(1) `update()` 結構去重複(行為保留,逐位元組不變);(2) `track_buffer`/`max_time_lost` 語意統一為幀數基準(**行為變更**,使用者已明確決定,見下節)。兩者一起做是因為語意統一後,track_buffer 換算本身也變成兩邊完全相同的邏輯,可以一起抽進共用模組。
 
