@@ -13,6 +13,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 from evaluation.utils import _assert_exists
+from evaluation import dataset_layout
 
 # =========================================================
 # 序列探索
@@ -21,14 +22,14 @@ def discover_sequences(base_dir: str, cfg):
     """
     在 base_dir 下遞迴搜尋所有序列，回傳包含路徑資訊的 list[dict]。
 
-    預期目錄結構：
+    預期目錄結構（OUTPUT 端，無前綴，見 evaluation/dataset_layout.py）：
       base_dir/
         annotations_all8/
-          annotation_<seq_name>/
+          <seq_name>/
             <seq_name>.mp4
             data.yaml
         mot_annotations_all8/
-          mot_annotation_<seq_name>/
+          <seq_name>/
             (TrackEval GT 資料)
     """
     run_det_eval_dir   = cfg.run_det_eval_dir
@@ -38,26 +39,28 @@ def discover_sequences(base_dir: str, cfg):
     if not base.exists():
         raise FileNotFoundError(f"base_dir not found: {base}")
 
-        
-    mp4s = sorted([
-        p for p in base.glob(f"{run_det_eval_dir}/annotation_*/**/*.mp4")
-        if not p.stem.startswith("Demo")
-    ])
-    if not mp4s:
+    det_output_dir = base / run_det_eval_dir
+    seq_dirs = dataset_layout.list_stage1_sequences(det_output_dir)
+    if not seq_dirs:
         raise RuntimeError(
-            f"No mp4 found under: {base} (pattern: annotation_*/**/*.mp4)"
+            f"No stage1 sequence dirs found under: {det_output_dir}"
         )
 
     seqs = []
-    for mp4 in mp4s:
-        mp4 = mp4.resolve()
-        seq_name = mp4.stem
+    for seq_dir in seq_dirs:
+        seq_name = seq_dir.name
 
-        det_yaml = (
-            base / run_det_eval_dir / f"annotation_{seq_name}" / "data.yaml"
-        ).resolve()
-        trackeval_root = (
-            base / run_track_eval_dir / f"mot_annotation_{seq_name}"
+        mp4s = sorted(
+            p for p in seq_dir.glob("*.mp4")
+            if not p.stem.startswith("Demo")
+        )
+        if not mp4s:
+            continue
+        mp4 = mp4s[0].resolve()
+
+        det_yaml = (seq_dir / "data.yaml").resolve()
+        trackeval_root = dataset_layout.stage2_seq_dir(
+            base / run_track_eval_dir, seq_name
         ).resolve()
 
         if "_org" not in seq_name:
@@ -67,6 +70,11 @@ def discover_sequences(base_dir: str, cfg):
                 "det_yaml": str(det_yaml),
                 "trackeval_root": str(trackeval_root),
             })
+
+    if not seqs:
+        raise RuntimeError(
+            f"No sequence mp4 found under: {det_output_dir}/<seq>/*.mp4"
+        )
     return seqs
 
 
