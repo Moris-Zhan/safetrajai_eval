@@ -8,17 +8,13 @@
 # 資料目錄路徑常數
 # -----------------------------------------------------------------------------
 paths:
-  # 資料根目錄（可使用相對或絕對路徑）
-  SOURCE_VIDEO_DIR: ./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/
+  dataset: cctv_all8
 
   # TrackEval 輸出根目錄
   TRACKEVAL_OUT_DIR: trackeval_output
 
   # 第一、二階段統一輸出根目錄（與來源完全分開）
   OUTPUT_ROOT: ./runs/track_eval
-
-  run_det_eval_dir: annotations_all8
-  run_track_eval_dir: mot_annotations_all8
 
 
 # -----------------------------------------------------------------------------
