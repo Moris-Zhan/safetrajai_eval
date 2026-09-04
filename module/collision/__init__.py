@@ -114,7 +114,7 @@ def run_collision_detection_for_sequence(
         原始 CCTV 像素座標——即使運算是在 Homography 轉換後座標系下進行的，輸出前都會
         反投影回來，跟 TRAJECTORY_FORMAT.md 的座標慣例一致，也跟熱區圖疊圖背景一致。
     """
-    seq_name = seq_output_dir.stem.replace("annotation_", "")
+    seq_name = seq_output_dir.stem
 
     tracks = load_sequence_tracks(seq_output_dir, cfg, fps)
 

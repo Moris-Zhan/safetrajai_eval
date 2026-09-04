@@ -149,7 +149,7 @@ def load_sequence_tracks(seq_output_dir: Path, cfg, fps: float) -> List[Dict[str
     Returns:
         list[dict]，每個元素是一個 track 的 Layer 2 格式（見模組 docstring）。
     """
-    seq_name = seq_output_dir.stem.replace("annotation_", "")
+    seq_name = seq_output_dir.stem
     traj_root = seq_output_dir / "trackers" / "mot_challenge" / f"{cfg.benchmark_name}-{cfg.split_name}"
 
     tracks: List[Dict[str, Any]] = []
