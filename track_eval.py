@@ -42,7 +42,6 @@ import sys
 import time
 import shutil
 import argparse
-import glob
 from copy import deepcopy
 from pathlib import Path
 
@@ -62,6 +61,7 @@ from utils.visualization import draw_polygon_and_save, save_fst_frame
 from evaluation.mot_format import save_mot_format, make_det_eval_dataset
 from evaluation.pipeline import run_eval_pipeline
 from evaluation.config_loader import load_config
+from evaluation import dataset_layout
 
 
 # =============================================================================
@@ -146,8 +146,8 @@ class VideoSequenceTracker:
         print(f"Video        : {video_path}")
         print(f"Video        : {width}x{height} @ {fps}fps, {total_frames} frames")
 
-        seq_stem    = Path(video_path).stem
-        output_path = output_dir / f"annotation_{seq_stem}"
+        seq_stem    = dataset_layout.seq_name_from_video_path(video_path)
+        output_path = dataset_layout.stage1_seq_dir(output_dir, seq_stem)
         output_path.mkdir(parents=True, exist_ok=True)
 
         labels_path = output_path / "labels" / seq_stem
@@ -471,13 +471,7 @@ class TrackingEvalPipeline:
         track_output_dir.mkdir(parents=True, exist_ok=True)
 
         # 搜尋來源影片（跳過 Demo.mp4）
-        mp4_pattern = str(cfg.SOURCE_VIDEO_DIR / cfg.run_det_eval_dir / "annotation_*" / "**" / "*.mp4")
-
-        mp4s = sorted(
-            p for p in glob.glob(mp4_pattern, recursive=True)
-            if not Path(p).stem.startswith("Demo")
-            if "_org.mp4" not in p
-        )
+        mp4s = [str(p) for p in dataset_layout.discover_source_sequences(cfg.SOURCE_VIDEO_DIR, cfg.run_det_eval_dir)]
 
         if not mp4s:
             print(f"⚠️  No source videos found under: {cfg.SOURCE_VIDEO_DIR / cfg.run_det_eval_dir}")
@@ -531,18 +525,17 @@ class TrackingEvalPipeline:
             # 生成 DET data.yaml
             make_det_eval_dataset(output_path, CLASS_NAMES)
 
-            # 將 trackers/ 由annotations_all8複製到 runs/track_eval/mot_annotations_all8/mot_annotation_<seq>/trackers/
-            mot_seq_dir = track_output_dir / f"mot_annotation_{output_path.stem.replace('annotation_', '')}"
+            # 將 trackers/ 由 annotations_all8 複製到 runs/track_eval/mot_annotations_all8/<seq>/trackers/
+            mot_seq_dir = dataset_layout.stage2_seq_dir(track_output_dir, output_path.stem)
             shutil.copytree(
-                output_path / "trackers",  # annotations_all8
-                mot_seq_dir / "trackers",  # mot_annotations_all8
+                output_path / "trackers",  # annotations_all8/<seq>
+                mot_seq_dir / "trackers",  # mot_annotations_all8/<seq>
                 dirs_exist_ok=True,
             )
-            # 準備GT 驗證資料集
-            src_gt_dir = cfg.SOURCE_VIDEO_DIR / "mot_annotations_all8" / f"mot_annotation_{output_path.stem.replace('annotation_', '')}"
+            # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）
             shutil.copytree(
-                src_gt_dir / "gt",  # dataset/中華三路_民生二路(東北角)yolo驗證用_all8/mot_annotations_all8/mot_annotation_<seq>
-                mot_seq_dir / "gt", # runs/track_eval/mot_annotations_all8/mot_annotation_<seq>
+                dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, output_path.stem),
+                mot_seq_dir / "gt",
                 dirs_exist_ok=True,
             )
             print(f"  trackers → {mot_seq_dir / 'trackers'}")
