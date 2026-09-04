@@ -45,7 +45,7 @@ python visualize/visualize_gt_on_video.py --trackeval_root <path> --video_path <
 python visualize/visualize_gt_on_class_video.py --trackeval_root <path> --video_path <path> --output_video <path>
 ```
 
-六支情境設定檔都在 `config/`（見下方「設定檔」）。跑單一序列或除錯時，改對應 `config/*.yaml` 的 `paths.SOURCE_VIDEO_DIR`、`eval_flags`（`run_det_eval` / `run_track_eval`）縮小範圍，比另外加 CLI flag 更快。
+六支情境設定檔都在 `config/`（見下方「設定檔」）。跑單一序列或除錯時，可在對應 `config/*.yaml` 的 `paths:` 底下顯式加 `SOURCE_VIDEO_DIR`（覆蓋 `paths.dataset` 查表值，見下方「設定檔」與 `evaluation/dataset_layout.py`）、或改 `eval_flags`（`run_det_eval` / `run_track_eval`）縮小範圍，比另外加 CLI flag 更快。
 
 ## 架構
 
@@ -56,7 +56,7 @@ module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不
 module/tracker/   — class-aware BoTSORT / ByteTrack（原 trackers/ → tracker/ → module/tracker/）
 module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py，
                      模型架構與訓練腳本說明見 module/reid/HANDOFF.md）
-evaluation/       — DET/TrackEval 共用 pipeline（config_loader、dataset_prep、mot_converter、
+evaluation/       — DET/TrackEval 共用 pipeline（config_loader、dataset_layout、dataset_prep、mot_converter、
                      trackeval_runner、excel_export、mot_format、pipeline）
 utils/            — 通用小工具（visualization.py）+ model.py（見下方「⚠️ pickle 相容性」）
 track_eval.py     — CLI 入口，TrackingEvalPipeline 類別（stage1 tracking → stage2 TrackEval）
@@ -74,6 +74,9 @@ archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeva
 > **2026-07-24 更新**：`reid_models/`（vendored fast-reid 風格套件）、`SOTA_ReID`（`module/reid/encoders.py`）、`models/reid_model_weights/`（FastReID/TransReID 權重）已全數移除。這是先前用來討論同一個 pickle 相容性限制的第三個範例，現在已不適用；上面只留 `utils/model.py`/`Custom_ReID` 這組還存在的限制。移除原因與過程見 `NEED.md`。
 
 ### 設定檔（2026-07-24 統一放進 `config/`，固定 6 個情境檔 + 1 個變體）
+
+**`config/datasets.yaml`（2026-09 新增）** 是 dataset id 對照表（目前 `cctv_all8`、`video_seqs` 兩筆，各含 `root`/`run_det_eval_dir`/`run_track_eval_dir`）。情境檔的 `paths:` 區塊用 `dataset: <id>` 查表取得這三個欄位的預設值，仍可逐欄位顯式覆蓋（escape hatch）。查表與 SOURCE 掃描、OUTPUT 序列目錄命名等路徑組裝邏輯集中在 `evaluation/dataset_layout.py`（純函式，供 `track_eval.py`、`module/grid_search/*.py`、`module/collision/` 共用）：OUTPUT 端（本專案產生的 `annotations_all8/`、`mot_annotations_all8/` 底下的序列目錄）**不含**前綴，直接是 `<seq>/`；SOURCE 端既有資料（影片、人工標註 GT）維持原本的 `annotation_<seq>/`／`mot_annotation_<seq>/` 命名不變。
+
 `module/tracker/track_config_*.yaml` 與根目錄 `config.yaml` 已全數移除／併入，改成 `config/` 底下固定 6 個「情境設定檔」，每個都是完整、獨立可用的 config（一般設定 + 內建 `class_tracking:` 章節），不再需要另外指定 `--track-config`：
 
 | 檔案 | 情境 | tracker | ReID | stage1 | stage2 |
@@ -108,13 +111,14 @@ ReID 有兩種來源（`module/reid/encoders.py`）：`ReID`（用 YOLO 模型�
 - `Detector`（`module/detection/detector.py`）：YOLO 推論 + 逐類別信心過濾。
 - `VideoSequenceTracker`（`track_eval.py`）：單一影片的 class-aware tracking 迴圈（每支影片各自建立一個 Detector + tracker 實例，與舊版函式每次呼叫都重建的行為一致）。
 - `TrackingEvalPipeline`（`track_eval.py`）：
-  1. `run_stage1()`：對 `SOURCE_VIDEO_DIR` 下每個序列跑 YOLO 偵測 + class-aware tracking，輸出 MOT 格式追蹤結果與（可選）標註影片，寫到 `OUTPUT_ROOT/<run_det_eval_dir>/annotation_<seq>/`。
+  1. `run_stage1()`：對 `SOURCE_VIDEO_DIR` 下每個序列跑 YOLO 偵測 + class-aware tracking，輸出 MOT 格式追蹤結果與（可選）標註影片，寫到 `OUTPUT_ROOT/<run_det_eval_dir>/<seq>/`（OUTPUT 端不含前綴，見上方「設定檔」；SOURCE 端仍是 `annotation_<seq>/`，命名不變）。
   2. `run_stage2()`：把第一階段輸出轉成 TrackEval 期望的目錄結構（`OUTPUT_ROOT/<run_track_eval_dir>/`），呼叫 `trackeval` 逐類別計算 HOTA/CLEAR/Identity，合併結果輸出 Excel（`evaluation/excel_export.py`）到 `OUTPUT_ROOT/trackeval_output/`。
 
 腳本頂部 docstring 有完整輸入/輸出目錄結構圖，改動輸出路徑邏輯前先讀那段。
 
 ### `evaluation/` — DET/TrackEval 共用 pipeline
-- `config_loader.py`：讀 `config/*.yaml`（一般設定章節）。
+- `config_loader.py`：讀 `config/*.yaml`（一般設定章節），含 `paths.dataset` 的 registry 查表解析。
+- `dataset_layout.py`：集中 SOURCE 掃描與 OUTPUT 序列目錄命名的純函式（`load_dataset_registry`、`discover_source_sequences`、`stage1_seq_dir`、`stage2_seq_dir`、`source_gt_dir`、`list_stage1_sequences`、`seq_name_from_video_path`），供 `track_eval.py`、`module/grid_search/*.py`、`module/collision/` 共用，避免各自重複拼字串。
 - `dataset_prep.py`：序列探索、DET yaml 產生、ultralytics tracking 標籤產生。
 - `mot_converter.py`：Ultralytics 追蹤標籤 → MOT 7 欄格式，處理重複幀 / 重複 ID 等髒資料問題。
 - `trackeval_runner.py`：組出 TrackEval 要求的 GT/tracker 目錄結構（`seqinfo.ini` 等）並呼叫評估。

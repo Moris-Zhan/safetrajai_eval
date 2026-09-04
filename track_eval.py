@@ -540,12 +540,14 @@ class TrackingEvalPipeline:
                 mot_seq_dir / "trackers",  # mot_annotations_all8/<seq>
                 dirs_exist_ok=True,
             )
-            # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）
-            shutil.copytree(
-                dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, output_path.stem),
-                mot_seq_dir / "gt",
-                dirs_exist_ok=True,
-            )
+            # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）。
+            # 並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註，見 config/datasets.yaml），
+            # 來源不存在時略過並警告，不當成錯誤中斷整條 pipeline。
+            gt_src = dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, cfg.run_track_eval_dir, output_path.stem)
+            if gt_src.exists():
+                shutil.copytree(gt_src, mot_seq_dir / "gt", dirs_exist_ok=True)
+            else:
+                print(f"  ⚠️  {output_path.stem}: 找不到 GT 來源 {gt_src}，略過（此 dataset 可能本來就沒有 GT 標註）")
             print(f"  trackers → {mot_seq_dir / 'trackers'}")
 
         return det_output_dir

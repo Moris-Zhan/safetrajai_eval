@@ -13,15 +13,20 @@ python track_eval.py --config config/bytetrack.yaml
 ```
 
 檢查點：
-- `runs/track_eval/<run_det_eval_dir>/annotation_<seq>/trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt` 有產生且非空
+- `runs/track_eval/<run_det_eval_dir>/<seq>/trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt` 有產生且非空（OUTPUT 端目錄不含前綴，見 `evaluation/dataset_layout.py`）
 - `runs/track_eval/trackeval_output/` 下有對應序列的 `det_metrics_*.xlsx` / `trackeval_metrics_*_MULTI_new.xlsx`
 - 若 `config/bytetrack.yaml` 的 `save: true`，`Demo.mp4` 標註影片有正常產生（可開啟播放）
 
 其餘 5 個情境（`config/botsort_noreid.yaml`、`botsort_save_reid_crops.yaml`、`botsort_reid.yaml`、`grid_search_bytetrack.yaml`、`grid_search_botsort.yaml`）改動後也應各跑一次對應腳本；`botsort_save_reid_crops.yaml` 額外檢查 `stages.run_stage2: false` 有沒有正確跳過 stage2、`dataset/reid/crop_dataset/{class}/` 有沒有正確產生裁切影像。
 
+⚠️ **舊格式 `runs/` 殘留清理（2026-09 dataset-path 重構後的一次性遷移）**：OUTPUT 端序列目錄命名從 `annotation_<seq>/` 改成 `<seq>/` 後，重構前留下的舊格式目錄（`runs/track_eval/{annotations_all8,mot_annotations_all8,trackeval_output}/annotation_<seq>/`、`mot_annotation_<seq>/`）不會被自動清掉，且 `dataset_layout.py::list_stage1_sequences()` 沒有過濾機制，會把它們當成額外的「幽靈序列」一併列入——只是恰好在目前 6 支序列的字母排序下不影響結果。若 `runs/` 底下還有重構前的輸出，先手動清掉再驗證：
+```bash
+rm -rf runs/track_eval/annotations_all8/annotation_* runs/track_eval/mot_annotations_all8/mot_annotation_* runs/track_eval/trackeval_output/mot_annotation_*
+```
+
 ### 2. 縮小範圍快速驗證
 改動 tracker 邏輯（`module/tracker/class_aware_botsort.py`、`class_aware_bytetrack.py`）時，先用少量序列跑，不要每次都跑全量資料集：
-- 縮小 `config/*.yaml` 的 `paths.SOURCE_VIDEO_DIR` 或直接改 `eval_flags` 只開 `run_track_eval`
+- 在 `config/*.yaml` 的 `paths:` 底下顯式加 `SOURCE_VIDEO_DIR`（覆蓋 `dataset:` 查表值）縮小來源，或直接改 `eval_flags` 只開 `run_track_eval`
 - 或用 grid search 腳本的 `--dry-run` 先確認參數組合數量，再用 `--max-videos 1` 只跑一支影片
 
 ```bash

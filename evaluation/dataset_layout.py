@@ -59,10 +59,15 @@ def stage2_seq_dir(track_output_dir: Path, seq_name: str) -> Path:
     return Path(track_output_dir) / seq_name
 
 
-def source_gt_dir(source_video_dir: Path, seq_name: str) -> Path:
-    """SOURCE_VIDEO_DIR/mot_annotations_all8/mot_annotation_<seq_name>/gt/
-    （SOURCE 端既有命名不變，此函式只是讀取，不產生新命名。回傳值已含尾端 /gt。）"""
-    return Path(source_video_dir) / "mot_annotations_all8" / f"mot_annotation_{seq_name}" / "gt"
+def source_gt_dir(source_video_dir: Path, run_track_eval_dir: str, seq_name: str) -> Path:
+    """SOURCE_VIDEO_DIR/<run_track_eval_dir>/mot_annotation_<seq_name>/gt/
+    （SOURCE 端既有命名不變，此函式只是讀取，不產生新命名。回傳值已含尾端 /gt。
+    <run_track_eval_dir> 來自 dataset registry 該筆的 run_track_eval_dir 欄位，
+    不同 dataset 可能是不同子目錄名稱（例：cctv_all8 是 mot_annotations_all8，
+    video_seqs 是 mot_annotations_video）——呼叫端不可再硬編碼 "mot_annotations_all8"。
+    注意：並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註），回傳的路徑
+    不保證存在，呼叫端需自行判斷是否要略過。）"""
+    return Path(source_video_dir) / run_track_eval_dir / f"mot_annotation_{seq_name}" / "gt"
 
 
 def list_stage1_sequences(det_output_dir: Path) -> list[Path]:
