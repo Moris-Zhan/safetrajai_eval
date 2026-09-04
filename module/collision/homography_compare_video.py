@@ -52,7 +52,7 @@ def save_reprojection_compare_video(
     疊底圖（疊 GT/預測點 + 誤差統計文字），並排輸出成一支 mp4。
 
     Args:
-        video_path: 來源 CCTV 影片路徑（建議用 stage1 已複製到 annotation_<seq>/ 底下的那份，
+        video_path: 來源 CCTV 影片路徑（建議用 stage1 已複製到 <seq>/ 底下的那份，
             跟 homography_pick_aid.py 抓第一幀的來源一致）
         satellite_bgr: 衛星底圖，numpy array (H,W,3)，BGR
         H: 3x3 Homography 矩陣

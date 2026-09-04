@@ -11,7 +11,7 @@ TTC/PET 碰撞事件輸出：乾淨 CSV/JSON、比照原始欄位風格的 log C
    另外本專案每次執行覆寫檔案（不用原始的 append 累加模式），避免跨執行結果混雜。
 3. 熱區圖 PNG——改寫自 markdown/reference_code/draw_utils.py::draw_collision_heatmap()，
    拿掉即時逐幀繪圖/影片疊圖的部分，只保留「一批碰撞點 + 一張背景圖 → 熱區圖」的核心邏輯，
-   背景圖用 stage1 已存的 annotation_<seq>/first_frame_with_box.jpg。
+   背景圖用 stage1 已存的 <seq>/first_frame_with_box.jpg。
 """
 
 from __future__ import annotations
