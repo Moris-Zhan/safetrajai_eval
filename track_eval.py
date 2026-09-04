@@ -585,7 +585,7 @@ class TrackingEvalPipeline:
         cfg = self.cfg
         det_output_dir = cfg.OUTPUT_ROOT / cfg.run_det_eval_dir
 
-        seq_dirs = sorted(det_output_dir.glob("annotation_*"))
+        seq_dirs = dataset_layout.list_stage1_sequences(det_output_dir)
         if not seq_dirs:
             print(f"⚠️  No stage1 output found under: {det_output_dir}（stage3 需要先跑過 stage1）")
             return
@@ -597,7 +597,7 @@ class TrackingEvalPipeline:
         print(f"{'='*70}\n")
 
         for seq_dir in seq_dirs:
-            seq_name = seq_dir.stem.replace("annotation_", "")
+            seq_name = seq_dir.stem
             video_path = seq_dir / f"{seq_name}.mp4"
             if not video_path.exists():
                 print(f"  ⚠️  {seq_name}: 找不到 {video_path}，略過（stage1 是否有跑完？）")
