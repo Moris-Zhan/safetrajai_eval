@@ -600,6 +600,18 @@ class TrackingEvalPipeline:
 
         run_eval_pipeline(cfg)
 
+    def _ensure_stage1_output_exists(self, det_output_dir: Path) -> bool:
+        """檢查 det_output_dir 下是否有任何序列輸出。沒有則印警告並回傳 False——
+        這是合法的 soft-skip 情境（見 config/collision_detect.yaml 的「只重跑 stage3、
+        沿用之前 stage1 舊輸出」用法：run_stage1: false + run_stage3: true）。
+        行為與現行完全一致，只是抽成獨立、可單獨測試的函式。
+        """
+        seq_dirs = dataset_layout.list_stage1_sequences(det_output_dir)
+        if not seq_dirs:
+            print(f"⚠️  No stage1 output found under: {det_output_dir}（stage3 需要先跑過 stage1）")
+            return False
+        return True
+
     def run_stage3(self):
         """
         第三階段：軌跡碰撞偵測（TTC/PET，module/collision/）。
@@ -618,10 +630,10 @@ class TrackingEvalPipeline:
         cfg = self.cfg
         det_output_dir = cfg.OUTPUT_ROOT / cfg.run_det_eval_dir
 
-        seq_dirs = dataset_layout.list_stage1_sequences(det_output_dir)
-        if not seq_dirs:
-            print(f"⚠️  No stage1 output found under: {det_output_dir}（stage3 需要先跑過 stage1）")
+        if not self._ensure_stage1_output_exists(det_output_dir):
             return
+
+        seq_dirs = dataset_layout.list_stage1_sequences(det_output_dir)
 
         print(f"\n{'='*70}")
         print(f"  STAGE 3 — Collision Detection (TTC/PET)")
