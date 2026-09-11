@@ -275,31 +275,29 @@ class VideoSequenceTracker:
 
         return annotated_frame
 
-    def run(self, video_path: str, output_dir: Path) -> tuple[Path, Path, Path]:
-        """
-        將所有結果輸出到 output_dir。
-
-        Returns
-        -------
-        output_path : Path
-            annotation_<seq> 目錄
-        images_path : Path
-            output_path/images/<seq>
-        labels_path : Path
-            output_path/labels/<seq>
-        """
+    def _open_video(self, video_path: str):
+        """開啟影片來源，回傳 (cap, fps, width, height, total_frames)。"""
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Cannot open video: {video_path}")
 
-        fps          = int(cap.get(cv2.CAP_PROP_FPS))
-        width        = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height       = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
+        fps    = int(cap.get(cv2.CAP_PROP_FPS))
+        width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
         print(f"Video        : {video_path}")
         print(f"Video        : {width}x{height} @ {fps}fps, {total_frames} frames")
 
+        return cap, fps, width, height, total_frames
+
+    def _prepare_output_dirs(self, output_dir: Path, video_path: str):
+        """建立 <seq>/、labels/、images/ 目錄，複製原始影片，
+        並設定 self._stem_name（縮短過的檔名前綴，供 label/image/reid 檔名使用）。
+
+        回傳 (output_path, images_path, labels_path)。OUTPUT 端序列目錄不含前綴
+        （見 evaluation/dataset_layout.py），SOURCE 端既有命名不受影響。
+        """
         seq_stem    = dataset_layout.seq_name_from_video_path(video_path)
         output_path = dataset_layout.stage1_seq_dir(output_dir, seq_stem)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -316,104 +314,152 @@ class VideoSequenceTracker:
             shutil.copy(video_path, video_dst)
 
         # 縮短 stem 用於檔案命名（去掉中文地名）
-        stem_name = seq_stem.replace(" 中華三路 民生二路(東北角)_", "_")
+        self._stem_name = seq_stem.replace(" 中華三路 民生二路(東北角)_", "_")
 
-        # ── 影片輸出設定 ─────────────────────────────────────────
-        video_writer = None
-        if self.save:
-            video_writer = VideoWriterWithFfmpeg(output_path / "Demo.mp4", fps, width, height)
+        return output_path, images_path, labels_path
 
-        frame_id      = 0
-        avg_pred_time = []
-        avg_track_time = []
+    def _process_frame(
+        self,
+        frame: np.ndarray,
+        clean_frame: np.ndarray,
+        frame_id: int,
+        images_path: Path,
+        labels_path: Path,
+        width: int,
+        height: int,
+    ) -> np.ndarray | None:
+        """偵測 → 追蹤 → 存 label/image → reid 裁切蒐集 → 回傳（若需要）已標註的 frame。
 
-        # ── 主迴圈 ───────────────────────────────────────────────
+        frame_id 是逐幀遞增的計數器（對應現行的 show_frame_id），用於輸出檔名與進度輸出。
+        """
+        st = time.time()
+        boxes = self.detector.detect(frame, iou=self.iou, imgsz=self.imgsz)
+        en = time.time()
+        self._avg_pred_time.append(en - st)
+
+        if len(boxes) > 0:
+            tracks, unmatched, removed = self.tracker.update(boxes.cpu().numpy(), frame)
+        else:
+            tracks = unmatched = removed = np.array([])
+
+        tr_st = time.time()
+        self._avg_track_time.append(tr_st - en)
+
+        if self.save_txt:
+            label_file = labels_path / f"{self._stem_name}_f{frame_id:06d}.txt"
+            img_file   = images_path / f"{self._stem_name}_f{frame_id:06d}.jpg"
+
+            cv2.imwrite(str(img_file), clean_frame)
+            with open(label_file, "w") as f:
+                for track in tracks:
+                    if len(track) >= 7:
+                        x1, y1, x2, y2 = track[:4]
+                        track_id = int(track[4])
+                        score    = track[5]
+                        cls_id   = int(track[6])
+                        cx = (x1 + x2) / 2 / width
+                        cy = (y1 + y2) / 2 / height
+                        w  = (x2 - x1) / width
+                        h  = (y2 - y1) / height
+                        f.write(
+                            f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
+                            f" {track_id} {score:.4f}\n"
+                        )
+
+        if self._reid_collector is not None:
+            self._reid_collector.collect(tracks, clean_frame, self._stem_name, frame_id, width, height)
+
+        annotated_frame = None
+        if self.save or self.show:
+            annotated_frame = self._annotate_frame(frame, tracks, unmatched, removed, frame_id)
+
+        if frame_id % 10 == 0:
+            print(
+                f"  [{frame_id}/{self._total_frames}] "
+                f"pred={self._avg_pred_time[-1]:.3f}s  "
+                f"track={self._avg_track_time[-1]:.3f}s"
+            )
+
+        return annotated_frame
+
+    def _run_frame_loop(
+        self,
+        cap,
+        output_path: Path,
+        images_path: Path,
+        labels_path: Path,
+        video_writer,
+        width: int,
+        height: int,
+        total_frames: int,
+    ) -> None:
+        """逐幀讀取、處理、（若需要）顯示/寫入影片，直到影片結束或使用者按 'q'。"""
+        self._total_frames   = total_frames
+        self._avg_pred_time  = []
+        self._avg_track_time = []
+
+        frame_id = 0
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            clean_frame = deepcopy(frame)  # 預先複製一份原始 frame，供後續標註圖與 image 儲存保持無污染
-            st = time.time()  # 記錄推論前的時間，之後可用於性能分析
+            clean_frame = deepcopy(frame)
 
             if frame_id == 0:
                 draw_polygon_and_save(clean_frame, output_path, pts=self.det_corner, save_img=True)
 
             frame_id += 1
 
-            # 推論
-            boxes = self.detector.detect(frame, iou=self.iou, imgsz=self.imgsz)
-            en = time.time()
-            avg_pred_time.append(en - st)
+            annotated_frame = self._process_frame(
+                frame, clean_frame, frame_id, images_path, labels_path, width, height,
+            )
 
-            # 追蹤
-            if len(boxes) > 0:
-                tracks, unmatched, removed = self.tracker.update(boxes.cpu().numpy(), frame)
-            else:
-                tracks = unmatched = removed = np.array([])
-
-            tr_st = time.time()
-            # avg_track_time.append(tr_st - en)
-
-            avg_track_time.append(tr_st - en)
-            show_frame_id = len(avg_track_time)
-            # 儲存 label / image
-            if self.save_txt:
-                # label_file = labels_path / f"{stem_name}_f{frame_id:06d}.txt"
-                # img_file   = images_path / f"{stem_name}_f{frame_id:06d}.jpg"
-                label_file = labels_path / f"{stem_name}_f{show_frame_id:06d}.txt"
-                img_file   = images_path / f"{stem_name}_f{show_frame_id:06d}.jpg"
-
-                cv2.imwrite(str(img_file), clean_frame)
-                with open(label_file, "w") as f:
-                    for track in tracks:
-                        if len(track) >= 7:
-                            x1, y1, x2, y2 = track[:4]
-                            track_id = int(track[4])
-                            score    = track[5]
-                            cls_id   = int(track[6])
-                            cx = (x1 + x2) / 2 / width
-                            cy = (y1 + y2) / 2 / height
-                            w  = (x2 - x1) / width
-                            h  = (y2 - y1) / height
-                            f.write(
-                                f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
-                                f" {track_id} {score:.4f}\n"
-                            )
-
-            if self._reid_collector is not None:
-                self._reid_collector.collect(tracks, clean_frame, stem_name, show_frame_id, width, height)
-
-            # 繪製標注
-            if self.save or self.show:
-                annotated_frame = self._annotate_frame(frame, tracks, unmatched, removed, show_frame_id)
-
-            if self.show:
+            if self.show and annotated_frame is not None:
                 cv2.imshow("Class-Aware Tracking", annotated_frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
-            # 如果已開啟 video_writer，將多邊形疊加到 annotated_frame 並寫入影片檔
-            if video_writer:
-                # 疊加偵測多邊形（不保存，只進行繪製）
+            if video_writer and annotated_frame is not None:
                 draw_polygon_and_save(annotated_frame, pts=self.det_corner, output_path=None, save_img=False)
-                # 將已標注與多邊形的影格寫到影片
                 video_writer.write(annotated_frame)
 
+    def _print_summary(self) -> None:
+        COLOR_RESET   = "\033[0m"
+        COLOR_YELLOW  = "\033[33m"
+        COLOR_CYAN    = "\033[36m"
+        COLOR_MAGENTA = "\033[35m"
+        COLOR_GREEN   = "\033[32m"
 
-            # if frame_id % 10 == 0:
-            #     print(
-            #         f"  [{frame_id}/{total_frames}] "
-            #         f"pred={avg_pred_time[-1]:.3f}s  "
-            #         f"track={avg_track_time[-1]:.3f}s"
-            #     )
+        tracker_name_str = f"{COLOR_MAGENTA}[Algorithm]{COLOR_RESET} {COLOR_CYAN}{self.tracker_type.upper()}{COLOR_RESET}"
+        print(f"\n{COLOR_YELLOW}Tracking complete — {len(self._avg_track_time)} frames{COLOR_RESET}")
+        print(f"  {COLOR_MAGENTA}pred  avg{COLOR_RESET} : {COLOR_GREEN}{sum(self._avg_pred_time)  / len(self._avg_pred_time):.4f}s{COLOR_RESET}")
+        print(f"  {COLOR_MAGENTA}track avg{COLOR_RESET} : {COLOR_GREEN}{sum(self._avg_track_time) / len(self._avg_track_time):.4f}s{COLOR_RESET}")
+        print(tracker_name_str)
 
-            if show_frame_id % 10 == 0:
-                print(
-                    f"  [{show_frame_id}/{total_frames}] "
-                    f"pred={avg_pred_time[-1]:.3f}s  "
-                    f"track={avg_track_time[-1]:.3f}s"
-                )
+    def run(self, video_path: str, output_dir: Path) -> tuple[Path, Path, Path]:
+        """
+        將所有結果輸出到 output_dir。
+
+        Returns
+        -------
+        output_path : Path
+            <seq> 目錄（OUTPUT 端無前綴，見 evaluation/dataset_layout.py）
+        images_path : Path
+            output_path/images/<seq>
+        labels_path : Path
+            output_path/labels/<seq>
+        """
+        cap, fps, width, height, total_frames = self._open_video(video_path)
+        output_path, images_path, labels_path = self._prepare_output_dirs(output_dir, video_path)
+
+        video_writer = None
+        if self.save:
+            video_writer = VideoWriterWithFfmpeg(output_path / "Demo.mp4", fps, width, height)
+
+        self._run_frame_loop(
+            cap, output_path, images_path, labels_path, video_writer, width, height, total_frames,
+        )
 
         cap.release()
         if video_writer:
@@ -421,20 +467,7 @@ class VideoSequenceTracker:
         if self.show:
             cv2.destroyAllWindows()
 
-        # 加上顏色並標示所使用的演算法 (bytetrack或botsort)
-        COLOR_RESET = "\033[0m"
-        COLOR_YELLOW = "\033[33m"
-        COLOR_CYAN = "\033[36m"
-        COLOR_MAGENTA = "\033[35m"
-        COLOR_GREEN = "\033[32m"
-
-        tracker_name_str = f"{COLOR_MAGENTA}[Algorithm]{COLOR_RESET} {COLOR_CYAN}{self.tracker_type.upper()}{COLOR_RESET}"
-        # print(f"\n{COLOR_YELLOW}Tracking complete — {frame_id} frames{COLOR_RESET}")
-        print(f"\n{COLOR_YELLOW}Tracking complete — {show_frame_id} frames{COLOR_RESET}")
-        print(f"  {COLOR_MAGENTA}pred  avg{COLOR_RESET} : {COLOR_GREEN}{sum(avg_pred_time)  / len(avg_pred_time):.4f}s{COLOR_RESET}")
-        print(f"  {COLOR_MAGENTA}track avg{COLOR_RESET} : {COLOR_GREEN}{sum(avg_track_time) / len(avg_track_time):.4f}s{COLOR_RESET}")
-        # print(f"  {COLOR_MAGENTA}output    {COLOR_RESET}: {COLOR_CYAN}{output_path}{COLOR_RESET}")
-        print(tracker_name_str)
+        self._print_summary()
 
         return output_path, images_path, labels_path
 
