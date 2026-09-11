@@ -122,6 +122,43 @@ class ReidCropCollector:
                 cv2.imwrite(str(identity_dir / f"{frame_id:06d}.jpg"), crop)
 
 
+class VideoWriterWithFfmpeg:
+    """包裝 cv2.VideoWriter，close() 時額外做 ffmpeg H.264 轉檔
+    （失敗則保留原始 mp4v 檔並印警告，行為與現行一致）。
+
+    ⚠️ 建構子的 cv2.VideoWriter fps 沿用現行寫死值 5（不是傳入的 fps 參數）——
+    這是既有行為，重構時不修正，只搬移位置。
+    """
+
+    def __init__(self, output_path: Path, fps: int, width: int, height: int):
+        self.output_path = output_path
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        self._writer = cv2.VideoWriter(str(output_path), fourcc, 5, (width, height))
+        print(f"Output video : {output_path}")
+
+    def write(self, frame: np.ndarray) -> None:
+        self._writer.write(frame)
+
+    def close(self) -> None:
+        self._writer.release()
+        if not self.output_path.exists():
+            return
+
+        ffmpeg_out = self.output_path.with_stem(self.output_path.stem + "_h264")
+        ffmpeg_cmd = (
+            f'ffmpeg -y -i "{self.output_path}" '
+            f'-vcodec libx264 -pix_fmt yuv420p -acodec aac "{ffmpeg_out}"'
+        )
+        print(f"  ffmpeg    : {ffmpeg_cmd}")
+        ret = os.system(ffmpeg_cmd)
+        if ret == 0 and ffmpeg_out.exists():
+            self.output_path.unlink()
+            ffmpeg_out.rename(self.output_path)
+            print(f"  video     : {self.output_path}")
+        else:
+            print("  ffmpeg conversion failed; keeping original mp4v file.")
+
+
 class VideoSequenceTracker:
     """
     對單一影片執行 class-aware tracking。
@@ -282,16 +319,9 @@ class VideoSequenceTracker:
         stem_name = seq_stem.replace(" 中華三路 民生二路(東北角)_", "_")
 
         # ── 影片輸出設定 ─────────────────────────────────────────
-        video_writer     = None
-        output_video_path = None
+        video_writer = None
         if self.save:
-            output_video_path = output_path / "Demo.mp4"
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            video_writer = cv2.VideoWriter(
-                # str(output_video_path), fourcc, fps, (width, height)
-                str(output_video_path), fourcc, 5, (width, height)
-            )
-            print(f"Output video : {output_video_path}")
+            video_writer = VideoWriterWithFfmpeg(output_path / "Demo.mp4", fps, width, height)
 
         frame_id      = 0
         avg_pred_time = []
@@ -387,7 +417,7 @@ class VideoSequenceTracker:
 
         cap.release()
         if video_writer:
-            video_writer.release()
+            video_writer.close()
         if self.show:
             cv2.destroyAllWindows()
 
@@ -405,22 +435,6 @@ class VideoSequenceTracker:
         print(f"  {COLOR_MAGENTA}track avg{COLOR_RESET} : {COLOR_GREEN}{sum(avg_track_time) / len(avg_track_time):.4f}s{COLOR_RESET}")
         # print(f"  {COLOR_MAGENTA}output    {COLOR_RESET}: {COLOR_CYAN}{output_path}{COLOR_RESET}")
         print(tracker_name_str)
-
-        # ffmpeg 轉檔（H.264 相容）
-        if self.save and output_video_path and output_video_path.exists():
-            ffmpeg_out = output_video_path.with_stem(output_video_path.stem + "_h264")
-            ffmpeg_cmd = (
-                f'ffmpeg -y -i "{output_video_path}" '
-                f'-vcodec libx264 -pix_fmt yuv420p -acodec aac "{ffmpeg_out}"'
-            )
-            print(f"  ffmpeg    : {ffmpeg_cmd}")
-            ret = os.system(ffmpeg_cmd)
-            if ret == 0 and ffmpeg_out.exists():
-                output_video_path.unlink()
-                ffmpeg_out.rename(output_video_path)
-                print(f"  video     : {output_video_path}")
-            else:
-                print("  ffmpeg conversion failed; keeping original mp4v file.")
 
         return output_path, images_path, labels_path
 
