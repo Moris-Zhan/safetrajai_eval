@@ -377,3 +377,171 @@ def _run_tracking_for_video(
             print(f"      tracking {frame_id}/{total}", end="\r")
 
     cap.release()
+
+
+# =============================================================================
+# 5. Scoring Function（完整流程）
+# =============================================================================
+
+def score_params(
+    params: dict,
+    target_class: str,
+    video_paths: list[str],
+    model_path: str,
+    cfg,                        # AppConfig
+    tracker_type: str = "bytetrack",
+    conf: float = 0.15,
+    iou: float = 0.50,
+    imgsz: int = 640,
+    frame_rate: int = 30,
+    gmc_method: str = "ecc",
+    output_root: Path = Path("./runs/gs_tmp"),
+    verbose: bool = False,
+) -> float:
+    """
+    Scoring function（sklearn 慣例：分數越高越好）。
+
+    流程：
+      1. Patch CLASS_TRACKING_PARAMS[target_class] with params
+      2. 對所有 video_paths 執行 tracking → save_mot_format
+      3. 呼叫 run_trackeval_mot → 取得 HOTA.AssA_mean
+      4. 還原 CLASS_TRACKING_PARAMS
+      5. 回傳平均分數
+
+    Parameters
+    ----------
+    params        : 本次試驗的參數字典
+    target_class  : 要調優的類別名稱（如 "scooter"）
+    video_paths   : 評估用的影片路徑清單
+    model_path    : YOLO 模型路徑
+    cfg           : AppConfig（含 benchmark_name, split_name 等）
+    tracker_type  : "botsort" 或 "bytetrack"
+    conf/iou/imgsz/frame_rate/gmc_method : 傳給 _run_tracking_for_video()，
+        呼叫端（GridSearchRunner.run()）依各腳本現行行為決定實際值。
+    output_root   : 暫存 tracking 輸出的根目錄
+    verbose       : 是否印出逐幀進度
+
+    Returns
+    -------
+    float
+        所有序列的 HOTA.AssA_mean 平均值；若無有效結果回傳 -inf。
+    """
+    # ── 1. Patch CLASS_TRACKING_PARAMS ───────────────────────────────────────
+    original_params = copy.deepcopy(
+        tracker_config_module.CLASS_TRACKING_PARAMS.get(target_class, {})
+    )
+    patched = copy.deepcopy(original_params)
+    patched.update(params)
+    tracker_config_module.CLASS_TRACKING_PARAMS[target_class] = patched
+
+    scores: list[float] = []
+
+    try:
+        detector = Detector(model_path)
+
+        for video_path in video_paths:
+            seq_stem  = dataset_layout.seq_name_from_video_path(video_path)
+            trial_dir = dataset_layout.stage2_seq_dir(output_root / "mot_annotations_all8", seq_stem)
+            trial_dir.mkdir(parents=True, exist_ok=True)
+
+            labels_path = trial_dir / "labels" / seq_stem
+            images_path = trial_dir / "images" / seq_stem
+            labels_path.mkdir(parents=True, exist_ok=True)
+            images_path.mkdir(parents=True, exist_ok=True)
+
+            # ── 2a. Tracking ──────────────────────────────────────────────────
+            _run_tracking_for_video(
+                detector    = detector,
+                video_path  = video_path,
+                labels_path = labels_path,
+                images_path = images_path,
+                trial_dir   = trial_dir,
+                tracker_type= tracker_type,
+                conf        = conf,
+                iou         = iou,
+                imgsz       = imgsz,
+                frame_rate  = frame_rate,
+                gmc_method  = gmc_method,
+                verbose     = verbose,
+            )
+
+            # ── 2b. MOT format + per-class tracker txt ────────────────────────
+            cap    = cv2.VideoCapture(video_path)
+            width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+
+            save_mot_format(
+                imgs_path   = images_path,
+                labels_path = labels_path,
+                output_file = trial_dir / f"{trial_dir.stem}.txt",
+                img_width   = width,
+                img_height  = height,
+            )
+
+            # ── 2c. 將 GT 複製進 trial_dir，使 trial_dir 自成完整的 trackeval_root ──
+            #
+            # run_trackeval_mot 的設計是以單一目錄（trackeval_root）同時讀取：
+            #   trackeval_root/gt/gt.txt          ← flat GT（prepare_mot_gt_shadow 讀取）
+            #   trackeval_root/seqinfo.ini        ← 序列資訊（可選）
+            #   trackeval_root/trackers/...       ← tracker prediction txt
+            #
+            # save_mot_format 已把 tracker txt 寫入 trial_dir/trackers/...
+            # 因此只需把 GT 來源的 gt/gt.txt 和 seqinfo.ini 複製進 trial_dir，
+            # 再以 trial_dir 作為 trackeval_root 呼叫 run_trackeval_mot 即可。
+            # 這樣每次 trial 完全隔離，不會污染原始 GT 目錄。
+            gt_src_root = _resolve_gt_source_root(cfg, seq_stem)
+            if gt_src_root is None or not Path(gt_src_root).exists():
+                print(f"  [score] GT source root not found for seq={seq_stem}, skip.")
+                continue
+
+            ok = _setup_trial_gt(
+                gt_src_root    = gt_src_root,
+                trial_dir      = trial_dir,
+            )
+            if not ok:
+                print(f"  [score] GT setup failed for seq={seq_stem}, skip.")
+                continue
+
+            # ── 3. TrackEval（以 trial_dir 作為 trackeval_root）──────────────
+            tracker_variant = f"{cfg.tracker_name}__{target_class}"
+            out_root        = str(trial_dir / "trackeval_out")
+
+            results = run_trackeval_mot(
+                cfg,
+                trackeval_root         = str(trial_dir),
+                benchmark_name         = cfg.benchmark_name,
+                split_name             = cfg.split_name,
+                seq_name               = seq_stem,
+                tracker_names_to_eval  = [tracker_variant],
+                out_root               = out_root,
+                video_path             = video_path,
+                classes_to_eval        = [target_class],
+                allow_empty_tracker_file = True,
+                verbose                = False,
+                DEBUG                  = False,
+            )
+
+            score = extract_assa_mean(results, target_class, tracker_variant)
+            if score is not None:
+                scores.append(score)
+                if verbose:
+                    print(f"    seq={seq_stem}  AssA_mean={score:.4f}")
+            else:
+                print(f"  [score] AssA_mean=None for seq={seq_stem}")
+
+    except Exception:
+        traceback.print_exc()
+    finally:
+        # ── 4. 還原 CLASS_TRACKING_PARAMS ────────────────────────────────────
+        tracker_config_module.CLASS_TRACKING_PARAMS[target_class] = original_params
+
+    if not scores:
+        return float("-inf")
+
+    # 回傳所有影片 AssA_mean 的第 25 百分位作為此參數組合的總體分數（較偏保守評估，避免極端高分干擾）
+    # 先過濾掉分數為 0 的值
+    filtered_scores = [s for s in scores if s != 0]
+    if not filtered_scores:
+        return float("-inf")
+    return float(np.percentile(filtered_scores, 25))
