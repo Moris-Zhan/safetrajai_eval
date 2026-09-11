@@ -7,11 +7,9 @@
 
 
 paths:
-  SOURCE_VIDEO_DIR: ./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/
+  dataset: cctv_all8
   TRACKEVAL_OUT_DIR: trackeval_output
   OUTPUT_ROOT: ./runs/track_eval
-  run_det_eval_dir: annotations_all8
-  run_track_eval_dir: mot_annotations_all8
 
 
 models:

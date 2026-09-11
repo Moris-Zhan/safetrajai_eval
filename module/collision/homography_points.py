@@ -15,7 +15,7 @@ module/collision/homography_validation.py）；其餘 20 個只有矩陣本身�
 原始 SafeTrajAI 的選點是 cv2 滑鼠互動視窗（見 markdown/HOMOGRAPHY.md），本專案
 headless 環境（無 $DISPLAY）無法直接沿用，改成人工流程：
 
-    1. 打開 stage1 已存的 annotation_<seq>/first_frame_with_box.jpg，自己在圖上
+    1. 打開 stage1 已存的 <seq>/first_frame_with_box.jpg，自己在圖上
        量測/估計 4 個以上對應點的像素座標。
     2. 把座標填進 <homography_points_dir>/<seq>.yaml（cctv_points + map_points，
        見下方格式）。

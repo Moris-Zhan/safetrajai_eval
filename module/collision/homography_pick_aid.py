@@ -11,6 +11,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sys
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from evaluation.dataset_layout import load_dataset_registry
+
 import cv2
 import numpy as np
 
@@ -84,13 +92,21 @@ def get_first_frame(video_path: Path) -> np.ndarray:
 # 批次產生：本專案實際有 CCTV 影片可用的 6 個路口
 # =============================================================================
 
+_CCTV_ALL8_ROOT = Path(
+    load_dataset_registry()
+    .get("cctv_all8", {})
+    .get("root", "./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/")
+)
+
 # (tag, 來源影片路徑) —— tag 需與 models/homography/matrices/H_<tag>.npy 的檔名一致
 USABLE_INTERSECTIONS = [
     (
         "C000025 中華三路 民生二路(東北角)-2-20-1280-1280",
-        "dataset/中華三路_民生二路(東北角)yolo驗證用_all8/annotations_all8/"
-        "annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1/"
-        "C000025 中華三路 民生二路(東北角)_20251209145630_15s_1.mp4",
+        str(
+            _CCTV_ALL8_ROOT / "annotations_all8"
+            / "annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1"
+            / "C000025 中華三路 民生二路(東北角)_20251209145630_15s_1.mp4"
+        ),
     ),
     (
         "C000043 民族一路 九如一路-2-20-1280-1280",

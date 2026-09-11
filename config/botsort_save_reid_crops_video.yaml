@@ -17,11 +17,9 @@
 
 
 paths:
-  SOURCE_VIDEO_DIR: ./dataset/video_seqs/
+  dataset: video_seqs
   TRACKEVAL_OUT_DIR: trackeval_output
   OUTPUT_ROOT: ./runs/track_eval
-  run_det_eval_dir: annotations_video
-  run_track_eval_dir: mot_annotations_video
 
 
 models:

@@ -61,6 +61,7 @@ from module.tracker.config import (
     get_track_config_path,
     load_track_config,
 )
+from evaluation import dataset_layout
 from evaluation.mot_format import save_mot_format
 from evaluation.config_loader import load_config
 from evaluation.trackeval_runner import run_trackeval_mot
@@ -336,8 +337,8 @@ def score_params(
         model = YOLO(model_path)
 
         for video_path in video_paths:
-            seq_stem  = Path(video_path).stem
-            trial_dir = output_root / "mot_annotations_all8" / f"mot_annotation_{seq_stem}"
+            seq_stem  = dataset_layout.seq_name_from_video_path(video_path)
+            trial_dir = dataset_layout.stage2_seq_dir(output_root / "mot_annotations_all8", seq_stem)
             trial_dir.mkdir(parents=True, exist_ok=True)
 
             labels_path = trial_dir / "labels" / seq_stem
@@ -532,26 +533,26 @@ def _run_tracking_for_video(
 def _resolve_gt_source_root(cfg, seq_stem: str) -> str | None:
     """
     從 cfg 的 run_track_eval_dir 下，找出指定序列的原始 GT 目錄。
- 
-    預期結構：
+
+    預期結構（無前綴，見 evaluation/dataset_layout.py）：
       base_dir/mot_annotations_all8/
-        mot_annotation_<seq_stem>/
+        <seq_stem>/
           gt/
             gt.txt        ← flat GT（9 columns MOT format）
           seqinfo.ini     ← 可選
     """
     base    = Path(cfg.OUTPUT_ROOT)
     mot_dir = base / cfg.run_track_eval_dir
- 
-    candidate = mot_dir / f"mot_annotation_{seq_stem}"
+
+    candidate = dataset_layout.stage2_seq_dir(mot_dir, seq_stem)
     if candidate.exists():
         return str(candidate)
- 
+
     # fallback: glob 比對前綴（容許 seq_stem 含特殊字元）
-    matches = sorted(mot_dir.glob(f"mot_annotation_{seq_stem[:20]}*"))
+    matches = sorted(mot_dir.glob(f"{seq_stem[:20]}*"))
     if matches:
         return str(matches[0])
- 
+
     return None
  
  
@@ -923,17 +924,17 @@ def main():
         sys.exit(0)
 
     # ── 收集影片路徑 ──────────────────────────────────────────────────────────
+    # 預設來源是 stage1 已產生的輸出樹（OUTPUT_ROOT/run_det_eval_dir/<seq>/<seq>.mp4），
+    # 不是 SOURCE_VIDEO_DIR——grid search 需要 stage1 已經跑過（trackers/ 與 GT 都已就緒）。
     import glob as _glob
     if args.video_glob:
         video_paths = sorted(_glob.glob(args.video_glob, recursive=True))
     else:
-        pattern = str(
-            Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
-            / "annotation_*" / "**" / "*.mp4"
-        )
+        det_output_dir = Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
         video_paths = sorted(
-            p for p in _glob.glob(pattern, recursive=True)
-            if not Path(p).stem.startswith("Demo")
+            str(seq_dir / f"{seq_dir.name}.mp4")
+            for seq_dir in dataset_layout.list_stage1_sequences(det_output_dir)
+            if (seq_dir / f"{seq_dir.name}.mp4").exists()
         )
 
     if not video_paths:
