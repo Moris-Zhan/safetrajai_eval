@@ -545,3 +545,248 @@ def score_params(
     if not filtered_scores:
         return float("-inf")
     return float(np.percentile(filtered_scores, 25))
+
+
+# =============================================================================
+# 6. GridSearchRunner
+# =============================================================================
+
+class GridSearchRunner:
+    """
+    Tracker 參數 Grid Search 執行器。
+
+    Parameters
+    ----------
+    param_grid    : 參數搜尋空間 {param_name: [v1, v2, ...]}
+    target_class  : 調優目標類別（如 "scooter"）
+    video_paths   : 評估用影片路徑清單
+    model_path    : YOLO 模型路徑
+    cfg           : AppConfig
+    tracker_type  : "botsort" 或 "bytetrack"
+    conf/iou/imgsz/frame_rate/gmc_method : 傳給 score_params()，各呼叫端（腳本 main()）
+        依現行行為決定實際值（bytetrack/botsort_reid 傳寫死常數，botsort 傳 CLI 值）。
+    output_root   : 暫存 tracking 結果的根目錄
+    result_csv    : 結果存檔路徑（可 None）
+    resume        : True = 跳過已有結果的組合
+    verbose       : 是否印出逐幀進度
+    """
+
+    def __init__(
+        self,
+        param_grid:   dict[str, list],
+        target_class: str,
+        video_paths:  list[str],
+        model_path:   str,
+        cfg,
+        tracker_type: str = "botsort",
+        conf: float = 0.15,
+        iou: float = 0.50,
+        imgsz: int = 640,
+        frame_rate: int = 30,
+        gmc_method: str = "ecc",
+        output_root:  Path = Path("./runs/grid_search/botsort"),
+        result_csv:   Path | None = None,
+        resume:       bool = False,
+        verbose:      bool = False,
+    ):
+        self.grid         = ParameterGrid(param_grid)
+        self.target_class = target_class
+        self.video_paths  = video_paths
+        self.model_path   = model_path
+        self.cfg          = cfg
+        self.tracker_type = tracker_type
+        self.conf         = conf
+        self.iou          = iou
+        self.imgsz        = imgsz
+        self.frame_rate   = frame_rate
+        self.gmc_method   = gmc_method
+        self.output_root  = Path(output_root) / tracker_type
+        rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+
+        self.result_csv   = result_csv or (
+            self.output_root / f"gs_{target_class}_{datetime.now():%Y%m%d_%H%M%S}_{rand_id}.csv"
+        )
+        self.resume       = resume
+        self.verbose      = verbose
+
+        self.results_: list[dict] = []          # 所有試驗結果
+        self.best_score_: float   = float("-inf")
+        self.best_params_: dict   = {}
+
+        self.output_root.mkdir(parents=True, exist_ok=True)
+
+        # 讀取已有的 CSV（resume 模式）
+        self._done_ids: set[str] = set()
+        if resume and self.result_csv.exists():
+            self._load_existing_results()
+
+    def _load_existing_results(self):
+        """讀取已完成的試驗結果，供 resume 時跳過。"""
+        with open(self.result_csv, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                combo_id = row.get("combo_id", "")
+                score    = float(row.get("score", float("-inf")))
+                params   = json.loads(row.get("params", "{}"))
+                self._done_ids.add(combo_id)
+                self.results_.append({"combo_id": combo_id, "score": score, "params": params})
+                if score > self.best_score_:
+                    self.best_score_  = score
+                    self.best_params_ = params
+
+        print(f"  [resume] Loaded {len(self._done_ids)} completed trials from {self.result_csv}")
+
+    def _append_csv(self, combo_id: str, score: float, params: dict, elapsed: float):
+        """將一筆試驗結果追加寫入 CSV。"""
+        is_new = not self.result_csv.exists()
+        with open(self.result_csv, "a", newline="", encoding="utf-8") as f:
+            fieldnames = ["combo_id", "score", "elapsed_sec", "params"] + sorted(params.keys())
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if is_new:
+                writer.writeheader()
+            row = {
+                "combo_id":    combo_id,
+                "score":       f"{score:.6f}",
+                "elapsed_sec": f"{elapsed:.1f}",
+                "params":      json.dumps(params, sort_keys=True),
+            }
+            row.update({k: v for k, v in params.items()})
+            writer.writerow(row)
+
+    def run(self) -> dict:
+        """
+        執行完整的 Grid Search。
+
+        Returns
+        -------
+        dict
+            {"best_params": ..., "best_score": ..., "all_results": ...}
+        """
+        total  = len(self.grid)
+        done   = len(self._done_ids)
+        remain = total - done
+
+        print(f"\n{'='*70}")
+        print(f"  Grid Search: class={self.target_class}  total={total}  remain={remain}")
+        print(f"  tracker_type  : {self.tracker_type}")
+        print(f"  conf          : {self.conf}")
+        print(f"  iou           : {self.iou}")
+        print(f"  imgsz         : {self.imgsz}")
+        print(f"  frame_rate    : {self.frame_rate}")
+        print(f"  gmc_method    : {self.gmc_method}")
+        print(f"  videos        : {len(self.video_paths)}")
+        print(f"  result_csv    : {self.result_csv}")
+        print(f"{'='*70}")
+
+        trial_idx = 0
+        for params in self.grid:
+            combo_id = self.grid.combo_id(params)
+
+            # Resume: 跳過已完成
+            if self.resume and combo_id in self._done_ids:
+                continue
+
+            trial_idx += 1
+            print(f"\n[{trial_idx}/{remain}] Testing: {params}")
+
+            trial_output = self.output_root / f"trial_{trial_idx:04d}"
+            t0 = time.time()
+
+            score = score_params(
+                params       = params,
+                target_class = self.target_class,
+                video_paths  = self.video_paths,
+                model_path   = self.model_path,
+                cfg          = self.cfg,
+                tracker_type = self.tracker_type,
+                conf         = self.conf,
+                iou          = self.iou,
+                imgsz        = self.imgsz,
+                frame_rate   = self.frame_rate,
+                gmc_method   = self.gmc_method,
+                output_root  = trial_output,
+                verbose      = self.verbose,
+            )
+
+            elapsed = time.time() - t0
+            status  = "✅" if score > float("-inf") else "❌"
+            print(f"  {status} score (AssA_mean) = {score:.4f}  ({elapsed:.1f}s)")
+
+            # 記錄結果
+            entry = {"combo_id": combo_id, "score": score, "params": copy.deepcopy(params)}
+            self.results_.append(entry)
+            self._append_csv(combo_id, score, params, elapsed)
+
+            if score > self.best_score_:
+                self.best_score_  = score
+                self.best_params_ = copy.deepcopy(params)
+                print(f"  🏆 New best! AssA_mean={self.best_score_:.4f}")
+
+            # 每次試驗結束後清除暫存（節省磁碟空間）
+            if trial_output.exists():
+                shutil.rmtree(trial_output, ignore_errors=True)
+
+        return {
+            "best_params": self.best_params_,
+            "best_score":  self.best_score_,
+            "all_results": self.results_,
+        }
+
+    def print_summary(self):
+        """在 terminal 印出搜尋結果摘要（Top-10 + 最佳參數）。"""
+        if not self.results_:
+            print("No results to summarize.")
+            return
+
+        sorted_results = sorted(
+            self.results_, key=lambda r: r["score"], reverse=True
+        )
+
+        GREEN = "\033[32m"
+        RESET = "\033[0m"
+        print(f"\n{GREEN}{'='*70}{RESET}")
+        print(f"{GREEN}  Grid Search Summary — class={self.target_class}{RESET}")
+        print(f"{GREEN}{'='*70}{RESET}")
+        print(f"{GREEN}  Total trials : {len(self.results_)}{RESET}")
+        print(f"{GREEN}  Best score   : {self.best_score_:.4f}  (HOTA.AssA_mean){RESET}")
+        print(f"{GREEN}  Best params  :{RESET}")
+        for k, v in sorted(self.best_params_.items()):
+            print(f"{GREEN}    {k:<30} = {v}{RESET}")
+
+        print(f"\n{GREEN}  Top-10 trials:{RESET}")
+        header = f"  {'Rank':<5} {'AssA_mean':<12} params"
+        print(f"{GREEN}{header}{RESET}")
+        print(f"{GREEN}  {'-'*65}{RESET}")
+        for i, r in enumerate(sorted_results[:10], 1):
+            param_str = "  ".join(f"{k}={v}" for k, v in sorted(r["params"].items()))
+            print(f"{GREEN}  {i:<5} {r['score']:<12.4f} {param_str}{RESET}")
+
+        print(f"{GREEN}{'='*70}{RESET}")
+
+
+# =============================================================================
+# 7. 便利函式：產生 config.py 的更新建議
+# =============================================================================
+
+def generate_config_patch(
+    target_class: str,
+    best_params: dict,
+    original_params: dict,
+) -> str:
+    """
+    產生可直接貼入 config.py 的 CLASS_TRACKING_PARAMS 更新片段。
+    保留原始參數中 grid search 未涉及的欄位（如 use_reid、model 等）。
+    """
+    merged = copy.deepcopy(original_params)
+    merged.update(best_params)
+
+    lines = [f"    '{target_class}': {{"]
+    for k, v in sorted(merged.items()):
+        if isinstance(v, str):
+            lines.append(f"        '{k}': '{v}',")
+        elif isinstance(v, bool):
+            lines.append(f"        '{k}': {v},")
+        else:
+            lines.append(f"        '{k}': {v},")
+    lines.append("    },")
+    return "\n".join(lines)
