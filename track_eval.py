@@ -65,7 +65,7 @@ from module.tracker.config import (
     load_track_config,
 )
 from module.collision import run_collision_detection_for_sequence
-from utils.visualization import draw_polygon_and_save, save_fst_frame
+from utils.visualization import draw_polygon_and_save, save_fst_frame, draw_track_box
 from evaluation.mot_format import save_mot_format, make_det_eval_dataset
 from evaluation.pipeline import run_eval_pipeline
 from evaluation.config_loader import load_config
@@ -128,6 +128,64 @@ class VideoSequenceTracker:
         self.det_corner = det_corner
         self.save_reid_crops = save_reid_crops
         self.reid_crop_dir = Path(reid_crop_dir) if reid_crop_dir else None
+
+    def _annotate_frame(self, frame, tracks, unmatched, removed, frame_id) -> np.ndarray:
+        """呼叫 utils.visualization.draw_track_box() 分別處理 matched/unmatched/removed，
+        取代原本內嵌的三段重複迴圈。左上角幀號文字邏輯不變。"""
+        annotator = Annotator(frame, line_width=2)
+
+        for track in tracks:
+            if len(track) >= 7:
+                x1, y1, x2, y2 = track[:4]
+                track_id = int(track[4])
+                draw_track_box(
+                    annotator, (x1, y1, x2, y2), self.det_corner,
+                    color=colors(track_id, True),
+                    embed_label=f"{track_id}",
+                )
+
+        if self.show_unmatched:
+            for track in unmatched:
+                if len(track) >= 7:
+                    x1, y1, x2, y2 = track[:4]
+                    cls_id   = int(track[6])
+                    cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
+                    draw_track_box(
+                        annotator, (x1, y1, x2, y2), self.det_corner,
+                        color=(0, 0, 255),
+                        overlay_label=f"unmat: {cls_name}",
+                        overlay_anchor=(int(x2), int(y2)),
+                    )
+
+        if self.show_removed:
+            for track in removed:
+                if len(track) >= 7:
+                    x1, y1, x2, y2 = track[:4]
+                    track_id = int(track[4])
+                    draw_track_box(
+                        annotator, (x1, y1, x2, y2), self.det_corner,
+                        color=(0, 0, 0),
+                        overlay_label=f"Rm: {track_id}",
+                        overlay_anchor=(int(x1), int(y1)),
+                    )
+
+        annotated_frame = annotator.result()
+
+        # 在左上角顯示幀號
+        text = f"frame: {frame_id}"
+        org  = (8, 22)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        fs, ft = 0.6, 1
+        (tw, th), bl = cv2.getTextSize(text, font, fs, ft)
+        cv2.rectangle(
+            annotated_frame,
+            (org[0] - 3, org[1] - th - 3),
+            (org[0] + tw + 3, org[1] + bl + 3),
+            (0, 0, 0), -1,
+        )
+        cv2.putText(annotated_frame, text, org, font, fs, (0, 255, 0), ft, cv2.LINE_AA)
+
+        return annotated_frame
 
     def run(self, video_path: str, output_dir: Path) -> tuple[Path, Path, Path]:
         """
@@ -272,116 +330,7 @@ class VideoSequenceTracker:
 
             # 繪製標注
             if self.save or self.show:
-                annotator = Annotator(frame, line_width=2)
-
-                for track in tracks:
-                    if len(track) >= 7:
-                        x1, y1, x2, y2 = track[:4]
-                        track_id = int(track[4])
-
-                        # 如果有指定偵測區域多邊形 (det_corner is not None 且長度 > 0)
-                        if self.det_corner is not None and len(self.det_corner) > 0:
-                            # 計算目標 (track) 邊框的中心點 (cx, cy)
-                            cx = (x1 + x2) / 2
-                            cy = (y1 + y2) / 2
-                            # 使用 cv2.pointPolygonTest 判斷中心點是否在多邊形內
-                            result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
-                            if result >= 0:
-                                # 如果中心點在多邊形內，則畫框和 id 標記
-                                annotator.box_label(
-                                    [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
-                                )
-                        # 如果沒有偵測區域 (det_corner is None)，則對所有目標都畫框和 id 標記
-                        elif self.det_corner is None:
-                            annotator.box_label(
-                                    [x1, y1, x2, y2], f"{track_id}", color=colors(track_id, True)
-                                )
-
-
-
-                if self.show_unmatched:
-                    for track in unmatched:
-                        if len(track) >= 7:
-                            x1, y1, x2, y2 = track[:4]
-                            score    = track[5]
-                            cls_id   = int(track[6])
-                            cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
-                            # label_id = f"{cls_name}-{score:.2f}"
-                            label_id = f"unmat: {cls_name}"
-                            # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
-                            if self.det_corner is not None and len(self.det_corner) > 0:
-                                # 計算未配對目標邊框的中心點 (cx, cy)
-                                cx = (x1 + x2) / 2
-                                cy = (y1 + y2) / 2
-                                # 使用 cv2.pointPolygonTest 判斷中心點是否落於多邊形內
-                                result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
-                                if result >= 0:
-                                    # 若在多邊形內，畫紅色方框及顯示標籤 (unmatched)
-                                    annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 255))
-                                    annotator.text(
-                                        (int(x2), int(y2)), label_id,
-                                        txt_color=(255, 255, 255), anchor="top",
-                                        box_color=(0, 0, 255),
-                                    )
-                            # 若未指定偵測區域，則對所有 unmatched 畫紅框與標籤
-                            elif self.det_corner is None:
-                                annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 255))
-                                annotator.text(
-                                    (int(x2), int(y2)), label_id,
-                                    txt_color=(255, 255, 255), anchor="top",
-                                    box_color=(0, 0, 255),
-                                )
-
-
-                if self.show_removed:
-                    for track in removed:
-                        if len(track) >= 7:
-                            x1, y1, x2, y2 = track[:4]
-                            track_id = int(track[4])
-                            score    = track[5]
-                            # label = f"{track_id}-{score:.2f}"
-                            label = f"Rm: {track_id}"
-                            # 判斷是否有指定偵測區域 (det_corner 不為 None 且長度大於 0)
-                            if self.det_corner is not None and len(self.det_corner) > 0:
-                                # 計算被移除目標的邊框中心點座標
-                                cx = (x1 + x2) / 2
-                                cy = (y1 + y2) / 2
-                                # 判斷中心點是否落在多邊形內 (result >= 0 代表在內)
-                                result = cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False)
-                                if result >= 0:
-                                    # 在移除目標的邊框畫上黑色方框與標籤
-                                    annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 0))
-                                    annotator.text(
-                                        (int(x1), int(y1)), label,
-                                        txt_color=(255, 255, 255), anchor="top",
-                                        box_color=(0, 0, 0),
-                                    )
-                            # 若未指定偵測區域，則對所有 removed 畫黑框與標籤
-                            elif self.det_corner is None:
-                                annotator.box_label([x1, y1, x2, y2], "", color=(0, 0, 0))
-                                annotator.text(
-                                    (int(x1), int(y1)), label,
-                                    txt_color=(255, 255, 255), anchor="top",
-                                    box_color=(0, 0, 0),
-                                )
-
-
-                annotated_frame = annotator.result()
-
-                # 在左上角顯示幀號
-                # text = f"frame: {frame_id}"
-                text = f"frame: {show_frame_id}"
-                org  = (8, 22)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                fs, ft = 0.6, 1
-                (tw, th), bl = cv2.getTextSize(text, font, fs, ft)
-                cv2.rectangle(
-                    annotated_frame,
-                    (org[0] - 3, org[1] - th - 3),
-                    (org[0] + tw + 3, org[1] + bl + 3),
-                    (0, 0, 0), -1,
-                )
-                cv2.putText(annotated_frame, text, org, font, fs, (0, 255, 0), ft, cv2.LINE_AA)
+                annotated_frame = self._annotate_frame(frame, tracks, unmatched, removed, show_frame_id)
 
             if self.show:
                 cv2.imshow("Class-Aware Tracking", annotated_frame)
