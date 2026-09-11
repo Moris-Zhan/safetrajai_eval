@@ -276,3 +276,104 @@ def discover_grid_search_videos(
         )
 
     return video_paths[:max_videos]
+
+
+# =============================================================================
+# 4. Tracking（單一影片）
+# =============================================================================
+
+def _run_tracking_for_video(
+    detector: Detector,
+    video_path: str,
+    labels_path: Path,
+    images_path: Path,
+    trial_dir: Path,
+    tracker_type: str,
+    conf: float,
+    iou: float,
+    imgsz: int,
+    frame_rate: int,
+    gmc_method: str,
+    verbose: bool,
+):
+    """
+    對單一影片執行 class-aware tracking，輸出 label txt 和 jpg 到指定目錄。
+    這是 score_params 的內部函式，刻意精簡（不存影片、不繪框）以加速 grid search。
+
+    統一簽章，一律接受 conf/iou/imgsz/frame_rate/gmc_method；gmc_method 只在
+    tracker_type == "botsort" 時加入 tracker_kwargs（沿用現行 grid_search_botsort.py
+    的判斷邏輯，行為對兩種 tracker 都不變）。
+
+    conf 只影響 create_tracker() 的 track_high_thresh/track_low_thresh（追蹤器的軌跡
+    確認門檻），不影響偵測信心過濾——偵測信心過濾一律由 detector.detect() 內部的
+    get_min_conf_thresh()/get_conf_thresh_for_class() 決定，與這裡的 conf 參數無關
+    （這是現行程式碼本來就有的行為，非本次變動）。
+
+    【module/detection/ 整合】原本各腳本手刻的 model = YOLO(model_path) +
+    model.predict(...) + 逐偵測套用 get_conf_thresh_for_class() 過濾，改成呼叫
+    module/detection/detector.py 的 Detector.detect(frame, iou=iou, imgsz=imgsz)
+    （與 track_eval.py 共用同一份偵測+信心過濾邏輯，不再各自重寫）。
+    """
+    from copy import deepcopy
+
+    stem_name = Path(video_path).stem.replace(" 中華三路 民生二路(東北角)_", "_")
+
+    tracker_kwargs = {
+        "track_high_thresh": conf,
+        "track_low_thresh": conf * 0.3,
+    }
+    if tracker_type == "botsort":
+        tracker_kwargs["gmc_method"] = gmc_method
+
+    tracker = create_tracker(
+        tracker_type     = tracker_type,
+        frame_rate       = frame_rate,
+        **tracker_kwargs,
+    )
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video: {video_path}")
+
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_id = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        clean_frame = deepcopy(frame)
+        frame_id += 1
+
+        boxes = detector.detect(frame, iou=iou, imgsz=imgsz)
+
+        if len(boxes) > 0:
+            tracks, _, _ = tracker.update(boxes.cpu().numpy(), frame)
+        else:
+            tracks = np.array([])
+
+        # 儲存 label
+        label_file = labels_path / f"{stem_name}_f{frame_id:06d}.txt"
+        img_file   = images_path / f"{stem_name}_f{frame_id:06d}.jpg"
+        cv2.imwrite(str(img_file), clean_frame)
+
+        with open(label_file, "w") as f:
+            for track in tracks:
+                if len(track) >= 7:
+                    x1, y1, x2, y2 = track[:4]
+                    track_id = int(track[4])
+                    score    = track[5]
+                    cls_id   = int(track[6])
+                    cx = (x1 + x2) / 2 / width
+                    cy = (y1 + y2) / 2 / height
+                    w  = (x2 - x1) / width
+                    h  = (y2 - y1) / height
+                    f.write(f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f} {track_id} {score:.4f}\n")
+
+        if verbose and frame_id % 30 == 0:
+            print(f"      tracking {frame_id}/{total}", end="\r")
+
+    cap.release()
