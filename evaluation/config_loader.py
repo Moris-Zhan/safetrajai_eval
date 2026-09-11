@@ -40,9 +40,10 @@ _DEFAULTS: dict = {
     # paths
     "SOURCE_VIDEO_DIR" :   "./data/",
     "TRACKEVAL_OUT_DIR":  "trackeval_output",
+    "COLLISION_OUT_DIR":  "collision_output",
     "OUTPUT_ROOT"      :  "./runs/track_eval",
     "run_det_eval_dir":      "annotations_all8",
-    "run_track_eval_dir":    "mot_annotations_all8",  
+    "run_track_eval_dir":    "mot_annotations_all8",
 
     # models
     "det_model_path":        "./Yolo/yolo11x-reid-ultra.pt",
@@ -54,9 +55,10 @@ _DEFAULTS: dict = {
     # flags
     "run_det_eval":          False,
     "run_track_eval":        True,
-    # 兩階段主流程開關
+    # 兩階段主流程開關（run_stage3 預設關閉，需在 config 明確開啟，見 collision_detect.yaml）
     "run_stage1":            True,
     "run_stage2":            True,
+    "run_stage3":            False,
     # classes
     "classes_to_run": {
         "person":      0,
@@ -74,6 +76,16 @@ _DEFAULTS: dict = {
     # Re-ID 訓練資料裁切
     "save_reid_crops": False,
     "reid_crop_dir":   "./dataset/reid/crop_dataset",
+    # 碰撞偵測（module/collision/，見 markdown/COLLISION_DETECTION.md）
+    "homography_points_dir":      "config/homography_points",
+    # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/Project.md「Homography 資料」），
+    # resolve_homography() 優先用這份，找不到對應路口才退回 homography_points_dir 的人工點選
+    "homography_matrices_dir":    "models/homography/matrices",
+    "homography_satellite_dir":   "models/homography/satellite_images",
+    "collision_max_ttc_frames":   30,
+    "collision_iou_threshold":    0.8,
+    "collision_lookback_sec":     3.0,
+    "collision_overlap_threshold": 30.0,
 }
 
 
@@ -113,6 +125,9 @@ class AppConfig:
         d["base_dir"]             = str(d["OUTPUT_ROOT"])
         d["trackeval_output_dir"] = str(d["OUTPUT_ROOT"] / d["TRACKEVAL_OUT_DIR"])
 
+        d["COLLISION_OUT_DIR"]    = paths.get("COLLISION_OUT_DIR", d["COLLISION_OUT_DIR"])
+        d["collision_output_dir"] = str(d["OUTPUT_ROOT"] / d["COLLISION_OUT_DIR"])
+
 
         # models 區塊
         models = raw.get("models", {}) or {}
@@ -130,10 +145,21 @@ class AppConfig:
         d["run_det_eval"]   = bool(flags.get("run_det_eval",   d["run_det_eval"]))
         d["run_track_eval"] = bool(flags.get("run_track_eval", d["run_track_eval"]))
 
-        # stages 區塊（兩階段主流程開關；沒有這個區塊時預設兩階段都跑，向後相容）
+        # stages 區塊（兩階段主流程開關；沒有這個區塊時預設 stage1/stage2 都跑、stage3 不跑，向後相容）
         stages = raw.get("stages", {}) or {}
         d["run_stage1"] = bool(stages.get("run_stage1", d["run_stage1"]))
         d["run_stage2"] = bool(stages.get("run_stage2", d["run_stage2"]))
+        d["run_stage3"] = bool(stages.get("run_stage3", d["run_stage3"]))
+
+        # collision 區塊（module/collision/ 的碰撞偵測參數，見 markdown/COLLISION_DETECTION.md）
+        collision = raw.get("collision", {}) or {}
+        d["homography_points_dir"]       = collision.get("homography_points_dir", d["homography_points_dir"])
+        d["homography_matrices_dir"]     = collision.get("homography_matrices_dir", d["homography_matrices_dir"])
+        d["homography_satellite_dir"]    = collision.get("homography_satellite_dir", d["homography_satellite_dir"])
+        d["collision_max_ttc_frames"]    = collision.get("max_ttc_frames",   d["collision_max_ttc_frames"])
+        d["collision_iou_threshold"]     = collision.get("iou_threshold",    d["collision_iou_threshold"])
+        d["collision_lookback_sec"]      = collision.get("lookback_sec",     d["collision_lookback_sec"])
+        d["collision_overlap_threshold"] = collision.get("overlap_threshold", d["collision_overlap_threshold"])
 
         # classes_to_run（直接取頂層 key）
         if "classes_to_run" in raw and raw["classes_to_run"]:

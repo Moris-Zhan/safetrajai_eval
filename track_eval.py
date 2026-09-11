@@ -30,11 +30,18 @@ track_eval.py — YOLO class-aware tracking + TrackEval evaluation pipeline
         det_metrics_<seq>_new.xlsx
         trackeval_metrics_<seq>_MULTI_new.xlsx
 
+第三階段輸出（碰撞偵測結果，需 stages.run_stage3: true，預設關閉，見 config/collision_detect.yaml）:
+  OUTPUT_ROOT/
+    collision_output/              ← collision_output_dir
+      <seq>/
+        ttc_events.json / ttc_events.csv / collision_ttc_log.csv / ttc_collision_heatmap.png
+        pet_events.json / pet_events.csv / collision_pet_log.csv / pet_collision_heatmap.png
+
 架構
 ====
 Detector（module/detection/detector.py）  — YOLO 推論 + 逐類別信心過濾
 VideoSequenceTracker（本檔）        — 單一影片的 class-aware tracking 迴圈（偵測→追蹤→標註→存檔）
-TrackingEvalPipeline（本檔）        — 兩階段主流程（stage1 tracking → stage2 TrackEval 評估）
+TrackingEvalPipeline（本檔）        — 三階段主流程（stage1 tracking → stage2 TrackEval 評估 → stage3 碰撞偵測）
 """
 
 import os
@@ -59,6 +66,7 @@ from module.tracker.config import (
     get_track_config_path,
     load_track_config,
 )
+from module.collision import run_collision_detection_for_sequence
 from utils.visualization import draw_polygon_and_save, save_fst_frame
 from evaluation.mot_format import save_mot_format, make_det_eval_dataset
 from evaluation.pipeline import run_eval_pipeline
@@ -599,8 +607,58 @@ class TrackingEvalPipeline:
 
         run_eval_pipeline(cfg)
 
+    def run_stage3(self):
+        """
+        第三階段：軌跡碰撞偵測（TTC/PET，module/collision/）。
+
+        讀取 stage1 產生的逐類別軌跡檔（annotation_<seq>/trackers/mot_challenge/
+        <benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt，格式見
+        markdown/TRAJECTORY_FORMAT.md 第 1 節），對每支序列跑一次
+        module.collision.run_collision_detection_for_sequence()，輸出寫到
+        cfg.collision_output_dir/<seq_name>/ 底下。
+
+        需要 stage1 先跑過（run_det_eval_dir 下要有 annotation_<seq>/trackers/... 與
+        first_frame_with_box.jpg），若同一次執行 stages.run_stage1 也是 true，
+        會直接讀到本次剛產生的結果；若只想單獨重跑 stage3，把 run_stage1 關掉即可
+        沿用上一次的 stage1 輸出。
+        """
+        cfg = self.cfg
+        det_output_dir = cfg.OUTPUT_ROOT / cfg.run_det_eval_dir
+
+        seq_dirs = sorted(det_output_dir.glob("annotation_*"))
+        if not seq_dirs:
+            print(f"⚠️  No stage1 output found under: {det_output_dir}（stage3 需要先跑過 stage1）")
+            return
+
+        print(f"\n{'='*70}")
+        print(f"  STAGE 3 — Collision Detection (TTC/PET)")
+        print(f"  collision_output   : {cfg.collision_output_dir}")
+        print(f"  homography_points  : {cfg.homography_points_dir}")
+        print(f"{'='*70}\n")
+
+        for seq_dir in seq_dirs:
+            seq_name = seq_dir.stem.replace("annotation_", "")
+            video_path = seq_dir / f"{seq_name}.mp4"
+            if not video_path.exists():
+                print(f"  ⚠️  {seq_name}: 找不到 {video_path}，略過（stage1 是否有跑完？）")
+                continue
+
+            cap = cv2.VideoCapture(str(video_path))
+            fps    = cap.get(cv2.CAP_PROP_FPS) or cfg.frame_rate or 30
+            width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+
+            run_collision_detection_for_sequence(
+                seq_output_dir=seq_dir,
+                cfg=cfg,
+                fps=fps,
+                bounds=(height, width),
+            )
+
     def run(self):
-        """依 config 的 stages.run_stage1 / run_stage2 決定要跑哪幾階段（預設兩階段都跑）。"""
+        """依 config 的 stages.run_stage1 / run_stage2 / run_stage3 決定要跑哪幾階段
+        （stage1/stage2 預設都跑，stage3 預設關閉，需在 config 明確開啟）。"""
         if getattr(self.cfg, "run_stage1", True):
             self.run_stage1()
         else:
@@ -610,6 +668,11 @@ class TrackingEvalPipeline:
             self.run_stage2()
         else:
             print("⏭️  stage2 skipped（config 的 stages.run_stage2: false）")
+
+        if getattr(self.cfg, "run_stage3", False):
+            self.run_stage3()
+        else:
+            print("⏭️  stage3 skipped（config 的 stages.run_stage3: false，預設關閉）")
 
 
 # =============================================================================

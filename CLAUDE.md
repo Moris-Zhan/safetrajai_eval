@@ -16,6 +16,7 @@ CCTV 交通監控的物件偵測＋多物件追蹤（MOT）評估流程：YOLO11
 - `markdown/TEST.md`：手動驗證流程（無自動化測試，改動後照此手動驗證）。
 - `markdown/VERIFY.md`：已驗證過的實驗結論（ReID 開關、GMC 方法比較、FPS 比較等）與資料來源，避免重複測試。
 - `markdown/NEED.md`：已知待辦與落差清單。
+- `markdown/TRAJECTORY_FORMAT.md`：追蹤軌跡輸出格式規格（欄位、座標系統、frame/track_id 語意、已知限制），供跨專案介接（如碰撞偵測模組）參考。
 
 開始改動前先掃過 `markdown/VERIFY.md`，避免重工已驗證過的結論；改完後照 `markdown/TEST.md` 的流程驗證。
 
@@ -56,10 +57,12 @@ module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不
 module/tracker/   — class-aware BoTSORT / ByteTrack（原 trackers/ → tracker/ → module/tracker/）
 module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py，
                      模型架構與訓練腳本說明見 module/reid/HANDOFF.md）
+module/collision/ — 軌跡碰撞偵測（TTC/PET）+ Homography 座標轉換/驗證，2026-08 新增，
+                     見 markdown/TRAJECTORY_FORMAT.md 第 3、4 節
 evaluation/       — DET/TrackEval 共用 pipeline（config_loader、dataset_prep、mot_converter、
                      trackeval_runner、excel_export、mot_format、pipeline）
 utils/            — 通用小工具（visualization.py）+ model.py（見下方「⚠️ pickle 相容性」）
-track_eval.py     — CLI 入口，TrackingEvalPipeline 類別（stage1 tracking → stage2 TrackEval）
+track_eval.py     — CLI 入口，TrackingEvalPipeline 類別（stage1 tracking → stage2 TrackEval → stage3 碰撞偵測）
 trackeval/        — vendored TrackEval 第三方套件本身（不動）
 archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeval_duplicate/、past_track_eval_orign.py
 ```
@@ -73,7 +76,7 @@ archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeva
 
 > **2026-07-24 更新**：`reid_models/`（vendored fast-reid 風格套件）、`SOTA_ReID`（`module/reid/encoders.py`）、`models/reid_model_weights/`（FastReID/TransReID 權重）已全數移除。這是先前用來討論同一個 pickle 相容性限制的第三個範例，現在已不適用；上面只留 `utils/model.py`/`Custom_ReID` 這組還存在的限制。移除原因與過程見 `NEED.md`。
 
-### 設定檔（2026-07-24 統一放進 `config/`，固定 6 個情境檔 + 1 個變體）
+### 設定檔（2026-07-24 統一放進 `config/`，固定 6 個情境檔 + 2 個變體）
 `module/tracker/track_config_*.yaml` 與根目錄 `config.yaml` 已全數移除／併入，改成 `config/` 底下固定 6 個「情境設定檔」，每個都是完整、獨立可用的 config（一般設定 + 內建 `class_tracking:` 章節），不再需要另外指定 `--track-config`：
 
 | 檔案 | 情境 | tracker | ReID | stage1 | stage2 |
@@ -89,11 +92,13 @@ archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeva
 
 **第 7 個變體檔**：`config/botsort_save_reid_crops_video.yaml`（2026-07-24 新增）是情境 3 的變體——來源改成 `video/` 底下不同路口的原始影片（各取前 60 秒放進 `dataset/video_seqs/annotations_video/annotation_<seq>/<seq>.mp4`，符合 stage1 掃描結構），`det_corner` 關閉（不同路口鏡頭，原本的多邊形不適用）。用來補足既有 6 支序列裡 `bus`/`person`/`truck`/`small_truck` 身分數過少的問題。不計入固定的 6 個情境檔，因為只是資料來源不同、其餘設定完全比照情境 3。
 
-**由 `evaluation/config_loader.py::load_config()` 讀取一般設定**（路徑、TrackEval 資料集參數、要評估的類別、偵測區域多邊形 `det_corner`、log 開關、`stages.run_stage1`/`run_stage2` 兩階段開關、`save params.save_reid_crops`/`reid_crop_dir`）。**由 `module/tracker/config.py::load_track_config()` 讀取 `class_tracking:` 章節**（class-aware tracker 的逐類別參數表：`match_thresh`、`track_buffer`、`use_reid` 等），**必須在建立 tracker 之前呼叫**，否則 `CLASS_TRACKING_PARAMS` 是空的（`track_eval.py` 的 CLI 入口已處理好順序，寫新腳本時要照做）。
+**第 8 個變體檔**：`config/collision_detect.yaml`（2026-08 新增）——追蹤參數沿用情境 2（`botsort_noreid.yaml`），`stage1=true / stage2=false / stage3=true`，多一段 `collision:` 區塊放 TTC/PET 固定參數與 Homography 相關路徑。用來跑第三階段軌跡碰撞偵測（`module/collision/`，見 `markdown/TRAJECTORY_FORMAT.md` 第 3、4 節），不需要 TrackEval 評估。不計入固定 6 個情境檔，因為目的（碰撞偵測 vs. 追蹤評估）跟其他 6 個不同。
+
+**由 `evaluation/config_loader.py::load_config()` 讀取一般設定**（路徑、TrackEval 資料集參數、要評估的類別、偵測區域多邊形 `det_corner`、log 開關、`stages.run_stage1`/`run_stage2`/`run_stage3` 三階段開關、`save params.save_reid_crops`/`reid_crop_dir`、`collision:` 區塊的 TTC/PET 參數與 Homography 路徑）。**由 `module/tracker/config.py::load_track_config()` 讀取 `class_tracking:` 章節**（class-aware tracker 的逐類別參數表：`match_thresh`、`track_buffer`、`use_reid` 等），**必須在建立 tracker 之前呼叫**，否則 `CLASS_TRACKING_PARAMS` 是空的（`track_eval.py` 的 CLI 入口已處理好順序，寫新腳本時要照做）。
 
 **CLI 用法**：`--track-config` 預設 `None`——不指定時，`load_track_config(args.track_config or args.config)` 直接讀 `--config` 檔案本身的 `class_tracking:` 章節（6 個情境檔都內建了這個章節）。`module/tracker/config.py::load_track_config()` 內部用 `data.get("class_tracking", data)` 判斷：有 `class_tracking` 鍵就當作合併格式，沒有就當作扁平格式（`archive/track_config_variants/` 底下的舊檔仍是扁平結構，理論上還能用 `--track-config` 指到那裡，但不建議——內容已經跟現在 6 個情境檔不同步）。
 
-**stage1/stage2 開關**：`config/*.yaml` 的 `stages.run_stage1`/`run_stage2`（預設都 `true`）控制 `TrackingEvalPipeline.run()` 要不要跑該階段。情境 3（`botsort_save_reid_crops.yaml`）把 `run_stage2` 設 `false`，只跑 tracking + 裁切蒐集，不跑 TrackEval 評估。
+**stage1/stage2/stage3 開關**：`config/*.yaml` 的 `stages.run_stage1`/`run_stage2`（預設都 `true`）/`run_stage3`（預設 `false`，需明確開啟）控制 `TrackingEvalPipeline.run()` 要不要跑該階段。情境 3（`botsort_save_reid_crops.yaml`）把 `run_stage2` 設 `false`，只跑 tracking + 裁切蒐集，不跑 TrackEval 評估；`collision_detect.yaml` 把 `run_stage2` 設 `false`、`run_stage3` 設 `true`，只跑 tracking + 碰撞偵測。
 
 ### `module/tracker/` — class-aware 追蹤器（核心邏輯，改動前務必先讀 `module/tracker/HANDOFF.md`）
 繼承並改寫 Ultralytics 的 `BYTETracker` / `BOTSORT`。原版所有匹配閾值全域統一，且不同類別的偵測混在一起做匈牙利匹配，可能跨類別誤配（如 person 配到 scooter）。`class_aware_botsort.py` / `class_aware_bytetrack.py` override `update()`，改為**逐類別分組**做三階段匹配（各類別各自的 `match_thresh` / `second_match_thresh` / `unconfirmed_match_thresh`），track buffer、new-track 閾值、ReID 開關（僅 BoTSORT）也都依類別查表覆蓋，查表函式是 `module/tracker/config.py::get_params_for_class()`。
