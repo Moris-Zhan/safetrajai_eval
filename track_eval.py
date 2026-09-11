@@ -487,6 +487,72 @@ class TrackingEvalPipeline:
     def __init__(self, cfg):
         self.cfg = cfg
 
+    def _process_single_video(self, video_path: str, det_output_dir: Path, track_output_dir: Path) -> None:
+        """對單一影片：建立 VideoSequenceTracker → run() → save_mot_format() →
+        make_det_eval_dataset() → 複製 trackers/ 到 stage2 → 複製 SOURCE GT 到 stage2
+        （GT 來源不存在時略過並警告，不中斷整條 pipeline——見本文件 Global Constraints）。
+        """
+        cfg = self.cfg
+
+        print(f"\n{'='*70}")
+        print(f"  VIDEO: {video_path}")
+        print(f"{'='*70}")
+
+        seq_tracker = VideoSequenceTracker(
+            model_path   = cfg.det_model_path,
+            tracker_type = cfg.tracker,
+            conf         = cfg.conf,
+            iou          = cfg.iou,
+            imgsz        = cfg.imgsz,
+            frame_rate   = cfg.frame_rate,
+            gmc_method   = cfg.gmc_method,
+            save         = cfg.save,
+            save_txt     = cfg.save_txt,
+            show         = cfg.show,
+            show_unmatched = cfg.show_unmatched,
+            show_removed   = cfg.show_removed,
+            det_corner    = cfg.det_corner,
+            save_reid_crops = cfg.save_reid_crops,
+            reid_crop_dir   = cfg.reid_crop_dir,
+        )
+        output_path, images_path, labels_path = seq_tracker.run(video_path, det_output_dir)
+
+        # 取影片尺寸（從已複製的來源影片）
+        cap    = cv2.VideoCapture(video_path)
+        width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        # 儲存 MOT 格式（同時在 output_path/trackers/ 下建立 per-class txt）
+        save_mot_format(
+            imgs_path   = images_path,
+            labels_path = labels_path,
+            output_file = output_path / f"{output_path.stem}.txt",
+            img_width   = width,
+            img_height  = height,
+            det_corner  = cfg.det_corner,
+        )
+
+        # 生成 DET data.yaml
+        make_det_eval_dataset(output_path, CLASS_NAMES)
+
+        # 將 trackers/ 由 annotations_all8 複製到 runs/track_eval/mot_annotations_all8/<seq>/trackers/
+        mot_seq_dir = dataset_layout.stage2_seq_dir(track_output_dir, output_path.stem)
+        shutil.copytree(
+            output_path / "trackers",  # annotations_all8/<seq>
+            mot_seq_dir / "trackers",  # mot_annotations_all8/<seq>
+            dirs_exist_ok=True,
+        )
+        # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）。
+        # 並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註，見 config/datasets.yaml），
+        # 來源不存在時略過並警告，不當成錯誤中斷整條 pipeline。
+        gt_src = dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, cfg.run_track_eval_dir, output_path.stem)
+        if gt_src.exists():
+            shutil.copytree(gt_src, mot_seq_dir / "gt", dirs_exist_ok=True)
+        else:
+            print(f"  ⚠️  {output_path.stem}: 找不到 GT 來源 {gt_src}，略過（此 dataset 可能本來就沒有 GT 標註）")
+        print(f"  trackers → {mot_seq_dir / 'trackers'}")
+
     def run_stage1(self) -> Path:
         """
         Returns
@@ -513,64 +579,7 @@ class TrackingEvalPipeline:
         target_mp4s = mp4s[:]   # ← 改這裡控制要跑哪幾支
 
         for video_path in target_mp4s:
-            print(f"\n{'='*70}")
-            print(f"  VIDEO: {video_path}")
-            print(f"{'='*70}")
-
-            seq_tracker = VideoSequenceTracker(
-                model_path   = cfg.det_model_path,
-                tracker_type = cfg.tracker,
-                conf         = cfg.conf,
-                iou          = cfg.iou,
-                imgsz        = cfg.imgsz,
-                frame_rate   = cfg.frame_rate,
-                gmc_method   = cfg.gmc_method,
-                save         = cfg.save,
-                save_txt     = cfg.save_txt,
-                show         = cfg.show,
-                show_unmatched = cfg.show_unmatched,
-                show_removed   = cfg.show_removed,
-                det_corner    = cfg.det_corner,
-                save_reid_crops = cfg.save_reid_crops,
-                reid_crop_dir   = cfg.reid_crop_dir,
-            )
-            output_path, images_path, labels_path = seq_tracker.run(video_path, det_output_dir)
-
-            # 取影片尺寸（從已複製的來源影片）
-            cap    = cv2.VideoCapture(video_path)
-            width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
-
-            # 儲存 MOT 格式（同時在 output_path/trackers/ 下建立 per-class txt）
-            save_mot_format(
-                imgs_path   = images_path,
-                labels_path = labels_path,
-                output_file = output_path / f"{output_path.stem}.txt",
-                img_width   = width,
-                img_height  = height,
-                det_corner  = cfg.det_corner,
-            )
-
-            # 生成 DET data.yaml
-            make_det_eval_dataset(output_path, CLASS_NAMES)
-
-            # 將 trackers/ 由 annotations_all8 複製到 runs/track_eval/mot_annotations_all8/<seq>/trackers/
-            mot_seq_dir = dataset_layout.stage2_seq_dir(track_output_dir, output_path.stem)
-            shutil.copytree(
-                output_path / "trackers",  # annotations_all8/<seq>
-                mot_seq_dir / "trackers",  # mot_annotations_all8/<seq>
-                dirs_exist_ok=True,
-            )
-            # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）。
-            # 並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註，見 config/datasets.yaml），
-            # 來源不存在時略過並警告，不當成錯誤中斷整條 pipeline。
-            gt_src = dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, cfg.run_track_eval_dir, output_path.stem)
-            if gt_src.exists():
-                shutil.copytree(gt_src, mot_seq_dir / "gt", dirs_exist_ok=True)
-            else:
-                print(f"  ⚠️  {output_path.stem}: 找不到 GT 來源 {gt_src}，略過（此 dataset 可能本來就沒有 GT 標註）")
-            print(f"  trackers → {mot_seq_dir / 'trackers'}")
+            self._process_single_video(video_path, det_output_dir, track_output_dir)
 
         return det_output_dir
 
