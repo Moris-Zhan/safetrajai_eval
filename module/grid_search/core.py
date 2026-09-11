@@ -170,3 +170,109 @@ def extract_assa_mean(
         print(f"  [score] extract_assa_mean failed: {e}")
 
     return None
+
+
+# =============================================================================
+# 3. GT 處理輔助函式
+# =============================================================================
+
+def _resolve_gt_source_root(cfg, seq_stem: str) -> str | None:
+    """
+    從 cfg 的 run_track_eval_dir 下，找出指定序列的原始 GT 目錄。
+
+    預期結構（無前綴，見 evaluation/dataset_layout.py）：
+      base_dir/mot_annotations_all8/
+        <seq_stem>/
+          gt/
+            gt.txt        ← flat GT（9 columns MOT format）
+          seqinfo.ini     ← 可選
+    """
+    base    = Path(cfg.OUTPUT_ROOT)
+    mot_dir = base / cfg.run_track_eval_dir
+
+    candidate = dataset_layout.stage2_seq_dir(mot_dir, seq_stem)
+    if candidate.exists():
+        return str(candidate)
+
+    # fallback: glob 比對前綴（容許 seq_stem 含特殊字元）
+    matches = sorted(mot_dir.glob(f"{seq_stem[:20]}*"))
+    if matches:
+        return str(matches[0])
+
+    return None
+
+
+def _setup_trial_gt(
+    gt_src_root: str,
+    trial_dir: Path,
+) -> bool:
+    """
+    將 GT 來源目錄中的 flat GT 檔案複製進 trial_dir，
+    使 trial_dir 具備 run_trackeval_mot 所需的完整輸入結構：
+
+      trial_dir/                         ← 作為 trackeval_root
+        gt/
+          gt.txt                         ← 從 gt_src_root/gt/gt.txt 複製
+        seqinfo.ini                      ← 從 gt_src_root/seqinfo.ini 複製（若存在）
+        trackers/...                     ← save_mot_format 已寫入
+
+    prepare_mot_gt_shadow 會在執行時自動將 gt/gt.txt 展開成
+    gt/mot_challenge/<benchmark>-<split>/<seq>/gt/gt.txt 的 shadow layout，
+    因此這裡只需提供 flat 的 gt/gt.txt 即可。
+
+    Returns
+    -------
+    bool
+        True = 成功；False = gt.txt 來源不存在，無法繼續。
+    """
+    src_root = Path(gt_src_root)
+
+    # ── GT txt ────────────────────────────────────────────────────────────────
+    src_gt = src_root / "gt" / "gt.txt"
+    if not src_gt.exists():
+        print(f"  [setup_gt] gt.txt not found: {src_gt}")
+        return False
+
+    dst_gt_dir = trial_dir / "gt"
+    dst_gt_dir.mkdir(parents=True, exist_ok=True)
+    dst_gt = dst_gt_dir / "gt.txt"
+
+    # 每次 trial 都強制覆寫，避免上一次試驗留下被修改過的 GT
+    shutil.copy2(src_gt, dst_gt)
+
+    # ── seqinfo.ini（可選，prepare_mot_gt_shadow 會從影片自動生成） ───────────
+    for candidate in [src_root / "seqinfo.ini", src_root / "gt" / "seqinfo.ini"]:
+        if candidate.exists():
+            shutil.copy2(candidate, trial_dir / "seqinfo.ini")
+            break
+
+    return True
+
+
+def discover_grid_search_videos(
+    cfg,
+    video_glob_override: str | None,
+    max_videos: int,
+) -> list[str]:
+    """
+    收集 grid search 用的影片路徑清單。
+
+    預設來源是 stage1 已產生的輸出樹（OUTPUT_ROOT/run_det_eval_dir/<seq>/<seq>.mp4），
+    不是 SOURCE_VIDEO_DIR——grid search 需要 stage1 已經跑過（trackers/ 與 GT 都已就緒）。
+    video_glob_override 有值時直接 glob，取代預設掃描邏輯。
+    不含「找不到影片」的錯誤處理（呼叫端的 main() 自行檢查回傳的 list 是否為空並印
+    錯誤/sys.exit，維持現行行為）。
+    """
+    import glob as _glob
+
+    if video_glob_override:
+        video_paths = sorted(_glob.glob(video_glob_override, recursive=True))
+    else:
+        det_output_dir = Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
+        video_paths = sorted(
+            str(seq_dir / f"{seq_dir.name}.mp4")
+            for seq_dir in dataset_layout.list_stage1_sequences(det_output_dir)
+            if (seq_dir / f"{seq_dir.name}.mp4").exists()
+        )
+
+    return video_paths[:max_videos]
