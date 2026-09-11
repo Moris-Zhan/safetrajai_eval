@@ -76,6 +76,52 @@ from evaluation import dataset_layout
 # 第一階段：VideoSequenceTracker — 單一影片的 class-aware tracking
 # =============================================================================
 
+class ReidCropCollector:
+    """蒐集 Re-ID 訓練用裁切圖（save_reid_crops=True 時啟用）。
+
+    存到 crop_dir/{class}/{seq_stem}_track{track_id}/{frame_id:06d}.jpg，
+    用「seq_stem_track_id」當身分資料夾，避免不同影片的 track_id 重來
+    （tracker 每支影片重建一次）互相撞名。
+    """
+
+    def __init__(self, crop_dir: Path, det_corner: np.ndarray | None):
+        self.crop_dir = crop_dir
+        self.det_corner = det_corner
+
+    def collect(
+        self,
+        tracks,
+        clean_frame: np.ndarray,
+        seq_stem: str,
+        frame_id: int,
+        width: int,
+        height: int,
+    ) -> None:
+        """對每個 track：多邊形過濾（與 draw/annotate 邏輯一致）→ 裁切 → 存檔。"""
+        for track in tracks:
+            if len(track) >= 7:
+                x1, y1, x2, y2 = track[:4]
+                track_id = int(track[4])
+                cls_id   = int(track[6])
+
+                if self.det_corner is not None and len(self.det_corner) > 0:
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
+                        continue
+
+                xi1, yi1 = max(0, int(x1)), max(0, int(y1))
+                xi2, yi2 = min(width, int(x2)), min(height, int(y2))
+                if xi2 <= xi1 or yi2 <= yi1:
+                    continue
+
+                crop = clean_frame[yi1:yi2, xi1:xi2]
+                cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
+                identity_dir = self.crop_dir / cls_name / f"{seq_stem}_track{track_id}"
+                identity_dir.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(identity_dir / f"{frame_id:06d}.jpg"), crop)
+
+
 class VideoSequenceTracker:
     """
     對單一影片執行 class-aware tracking。
@@ -128,6 +174,11 @@ class VideoSequenceTracker:
         self.det_corner = det_corner
         self.save_reid_crops = save_reid_crops
         self.reid_crop_dir = Path(reid_crop_dir) if reid_crop_dir else None
+        self._reid_collector = (
+            ReidCropCollector(self.reid_crop_dir, det_corner)
+            if save_reid_crops and self.reid_crop_dir is not None
+            else None
+        )
 
     def _annotate_frame(self, frame, tracks, unmatched, removed, frame_id) -> np.ndarray:
         """呼叫 utils.visualization.draw_track_box() 分別處理 matched/unmatched/removed，
@@ -300,33 +351,8 @@ class VideoSequenceTracker:
                                 f" {track_id} {score:.4f}\n"
                             )
 
-            # Re-ID 訓練資料：把每個追蹤到的物件裁切存檔
-            # 存到 reid_crop_dir/{class}/{影片名}_track{track_id}/{frame:06d}.jpg
-            # 用「影片名_track_id」當身分資料夾，避免不同影片的 track_id 重來（tracker 每支影片重建一次）互相撞名
-            if self.save_reid_crops and self.reid_crop_dir is not None:
-                for track in tracks:
-                    if len(track) >= 7:
-                        x1, y1, x2, y2 = track[:4]
-                        track_id = int(track[4])
-                        cls_id   = int(track[6])
-
-                        # 是否落在偵測區域多邊形內（與 draw/annotate 邏輯一致）
-                        if self.det_corner is not None and len(self.det_corner) > 0:
-                            cx = (x1 + x2) / 2
-                            cy = (y1 + y2) / 2
-                            if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
-                                continue
-
-                        xi1, yi1 = max(0, int(x1)), max(0, int(y1))
-                        xi2, yi2 = min(width, int(x2)), min(height, int(y2))
-                        if xi2 <= xi1 or yi2 <= yi1:
-                            continue
-
-                        crop = clean_frame[yi1:yi2, xi1:xi2]
-                        cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
-                        identity_dir = self.reid_crop_dir / cls_name / f"{stem_name}_track{track_id}"
-                        identity_dir.mkdir(parents=True, exist_ok=True)
-                        cv2.imwrite(str(identity_dir / f"{show_frame_id:06d}.jpg"), crop)
+            if self._reid_collector is not None:
+                self._reid_collector.collect(tracks, clean_frame, stem_name, show_frame_id, width, height)
 
             # 繪製標注
             if self.save or self.show:
