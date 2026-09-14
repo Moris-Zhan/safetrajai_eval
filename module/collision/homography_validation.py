@@ -6,14 +6,14 @@ Homography 矩陣驗證：拿獨立於訓練點之外的 check points，套用�
 跟原始程式的差異：
 - 只做像素誤差。原始程式的公尺換算需要每個路口的緯度（Web Mercator 公式），
   來源的 GPS mapping Excel 沒有包在這份快照裡，目前拿不到，見
-  markdown/Project.md「Homography 資料」章節。
+  markdown/ARCHITECTURE.md「Homography 資料」章節。
 - 拿掉互動式選點 fallback（原始 pick_pairs_simple()，cv2/matplotlib 滑鼠事件，
   本專案 headless 環境（無 $DISPLAY）無法用）——check points 一律從
   config/homography_checkpoints/<tag>.yaml 讀，找不到就回傳「未驗證」，不會跳出視窗。
 
 check points 必須是「獨立於訓練點之外」的驗證用點位（不是拿來算 H 的那 4 個訓練點），
 才是有意義的 out-of-sample 驗證；用訓練點驗證會循環論證（誤差趨近於 0，見
-markdown/Project.md 相關章節的說明）。
+markdown/ARCHITECTURE.md 相關章節的說明）。
 
 ⚠️ 本專案能真的產生 check points 的路口只有 6 個（有 CCTV 來源影片可看：C000025、
 C000043、C000054、C000085、C000294、C000297），其餘 20 個既有矩陣路口沒有影片可點選，

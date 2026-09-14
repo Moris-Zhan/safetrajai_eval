@@ -1,12 +1,14 @@
-# USAGE.md
+# GUIDE.md
 
-四大模組（Detection / Tracker / Re-ID / Evaluation）與主要腳本的使用範例。架構總覽見 `Project.md`，逐檔案職責見 `CLAUDE.md`。
+四大模組（Detection / Tracker / Re-ID / Evaluation）與主要腳本的使用範例，以及改動後的手動驗證流程（本專案無自動化測試）。架構總覽見 `ARCHITECTURE.md`，逐檔案職責見 `CLAUDE.md`。
 
 所有指令預設在專案根目錄（`safetrajai_eval/`）下執行。標了 `python -m` 的模組**不能**用 `python evaluation/pipeline.py` 這種直接執行檔案的方式跑，因為它們用絕對 import（`from evaluation.xxx import ...`），只有 `-m` 形式會把根目錄加進 `sys.path`；根目錄的 `track_eval.py` 與 `module/grid_search/*.py` 則自己在檔案開頭做了 `sys.path` 處理，兩種方式都可以直接執行。
 
-## 1. Detection 模組（`module/detection/`）
+## 使用範例
 
-只有一個 `Detector` 類別：包 YOLO 模型 + 逐類別信心過濾（門檻定義在 `module/tracker/config.py` 的 `CLASS_CONF_THRESH`，隨 `load_track_config()` 載入的 YAML 而定）。`module/tracker/config.py` 的 `DEFAULT_TRACK_CONFIG_PATH` 預設指向 `config/bytetrack.yaml`，所以不呼叫 `load_track_config()` 也能跑；要套用其他情境（如含 ReID 欄位的 `botsort_reid.yaml`）就要顯式呼叫（2026-07-24 起：`config.yaml` + `module/tracker/track_config_*.yaml` 已整併成 `config/` 底下 6 個自包含情境檔，見 `CLAUDE.md`「設定檔」）：
+### 1. Detection 模組（`module/detection/`）
+
+只有一個 `Detector` 類別：包 YOLO 模型 + 逐類別信心過濾（門檻定義在 `module/tracker/config.py` 的 `CLASS_CONF_THRESH`，隨 `load_track_config()` 載入的 YAML 而定）。`module/tracker/config.py` 的 `DEFAULT_TRACK_CONFIG_PATH` 預設指向 `config/bytetrack.yaml`，所以不呼叫 `load_track_config()` 也能跑；要套用其他情境（如含 ReID 欄位的 `botsort_reid.yaml`）就要顯式呼叫：
 
 ```python
 from module.tracker.config import load_track_config
@@ -22,11 +24,11 @@ boxes = detector.detect(frame, iou=0.50, imgsz=640)   # 回傳 ultralytics Boxes
 print(boxes.cls, boxes.conf, boxes.xyxy)
 ```
 
-> 目前沒有訓練腳本（YOLO 偵測模型訓練不在本專案範圍內，見 `NEED.md`）。`models/yolo/*.pt` 都是外部訓練好的產物，直接餵路徑即可。
+> 目前沒有訓練腳本（YOLO 偵測模型訓練不在本專案範圍內，見 `ARCHITECTURE.md`「流程缺口」）。`models/yolo/*.pt` 都是外部訓練好的產物，直接餵路徑即可。
 
-## 2. Tracker 模組（`module/tracker/`）
+### 2. Tracker 模組（`module/tracker/`）
 
-對外只有一個工廠函式 `create_tracker()`。同上，`module/tracker/config.py` 預設載入 `config/bytetrack.yaml` 的 `class_tracking:` 章節；若要用其他情境檔，一樣要顯式呼叫 `load_track_config()`，而且**必須在 `create_tracker()` 之前呼叫**——順序反了不會報錯，只是會靜靜地套用錯的類別參數表，最容易漏測的坑（見 `TEST.md` 第 5 項）：
+對外只有一個工廠函式 `create_tracker()`。同上，`module/tracker/config.py` 預設載入 `config/bytetrack.yaml` 的 `class_tracking:` 章節；若要用其他情境檔，一樣要顯式呼叫 `load_track_config()`，而且**必須在 `create_tracker()` 之前呼叫**——順序反了不會報錯，只是會靜靜地套用錯的類別參數表，最容易漏測的坑（見下方「手動驗證流程」第 5 項）：
 
 ```python
 from module.tracker.config import load_track_config
@@ -48,7 +50,7 @@ tracks, unmatched, removed = tracker.update(dets, frame)
 
 實務上很少需要手動這樣逐幀呼叫——`track_eval.py` 的 `VideoSequenceTracker`（見第 6 節）已經包好整個「讀影片 → 偵測 → 追蹤 → 存檔」流程，一般改動只需要調整 `config/*.yaml` 對應情境檔。
 
-### 逐類別 ReID 開關（YAML 設定，不是 Python API）
+#### 逐類別 ReID 開關（YAML 設定，不是 Python API）
 `config/*.yaml` 的 `class_tracking:` 章節裡每個類別可以獨立設定 `use_reid` + `model`，`module/tracker/class_aware_botsort.py` 會依 `model` 路徑字串自動選擇對應的 Re-ID encoder（見 `module/reid/encoders.py`）：
 
 ```yaml
@@ -61,11 +63,11 @@ class_tracking_params:
     model: models/class_reid_weights/scooter/best_full_model.pt   # 路徑含 class_reid_weights → 用 Custom_ReID
 ```
 
-目前預設全部 `use_reid: false`（見 `VERIFY.md`「ReID 開關」段落：對 person 有幫助但會損害 scooter 並增加 IDSW）。
+目前預設全部 `use_reid: false`（見 `EXPERIMENTS.md`「ReID 開關」段落：對 person 有幫助但會損害 scooter 並增加 IDSW）。
 
-> 2026-07-24：原本還有第三條路徑 `SOTA_ReID`（路徑含 `reid_model_weights` → 載入 vendored FastReID/TransReID 權重）已移除，只保留 `ReID` 與 `Custom_ReID` 兩條路徑。詳見 `VERIFY.md`「移除 reid_models」段落。
+> 原本還有第三條路徑 `SOTA_ReID`（路徑含 `reid_model_weights` → 載入 vendored FastReID/TransReID 權重）已移除，只保留 `ReID` 與 `Custom_ReID` 兩條路徑。詳見 `EXPERIMENTS.md`「移除 reid_models」段落。
 
-## 3. Re-ID 模組（`module/reid/`）
+### 3. Re-ID 模組（`module/reid/`）
 
 `module/reid/encoders.py` 的兩個 encoder 類別很少需要手動 new，通常透過上面的 YAML 設定自動建立。若要單獨測試某個 encoder：
 
@@ -80,7 +82,7 @@ embeddings = encoder(img, dets)   # -> list[np.ndarray]，每個偵測框一個�
 
 `module/reid/yolo_reid_trainer.py` 是訓練用的（見第 8 節），`module/reid/training/dataset.py` + `train.py` 是消費它的資料讀取與訓練迴圈（見第 9 節）。
 
-## 4. Evaluation 模組（`evaluation/`）
+### 4. Evaluation 模組（`evaluation/`）
 
 通常由 `track_eval.py`（第 6 節）呼叫，也可以獨立跑（假設 `runs/track_eval/annotations_all8/`、`mot_annotations_all8/` 底下已經有第一階段 tracking 輸出）：
 
@@ -100,7 +102,7 @@ run_eval_pipeline(cfg)   # 讀 cfg.base_dir 下的序列，逐類別跑 TrackEva
 
 `evaluation/` 底下其他檔案（`mot_converter.py`、`trackeval_runner.py`、`excel_export.py`、`mot_format.py`）都是 `pipeline.py` 的內部依賴，一般不需要單獨呼叫。
 
-## 5. `visualize/visualize_gt_on_*.py` — 疊圖視覺化
+### 5. `visualize/visualize_gt_on_*.py` — 疊圖視覺化
 
 兩支都是獨立腳本（不 import `tracker`/`reid`/`evaluation`），可以直接執行：
 
@@ -128,7 +130,7 @@ python visualize/visualize_gt_on_class_video.py \
 
 `visualize_gt_on_video.py` 認的是 `gt/gt.txt`（含 class_id 欄）；`visualize_gt_on_class_video.py` 認的是逐類別分開存的 `trackers/mot_challenge/.../data/<seq>.txt`（無 class_id 欄，class 從資料夾名推斷）——兩者目錄假設不同，不要混用。其餘旗標（`--color_by`、`--no_id`、`--no_class`、`--show_conf`、`--no_legend`、`--bbox_alpha`、`--max_frames`）兩支腳本共用同一組定義。
 
-## 6. `TrackingEvalPipeline`（`track_eval.py`）— 完整流程
+### 6. `TrackingEvalPipeline`（`track_eval.py`）— 完整流程
 
 **CLI（最常用）：**
 
@@ -176,7 +178,7 @@ output_path, images_path, labels_path = seq_tracker.run(
 )
 ```
 
-### Re-ID 訓練資料蒐集（`save_reid_crops`，2026-07-24 新增）
+#### Re-ID 訓練資料蒐集（`save_reid_crops`）
 
 情境檔的 `save params.save_reid_crops`（預設 `false`）打開後，`VideoSequenceTracker.run()` 每一幀會把每個追蹤到的物件裁切存檔到：
 
@@ -211,9 +213,9 @@ seq_tracker = VideoSequenceTracker(
 seq_tracker.run(video_path="./dataset/C000025_clip_10s.mp4", output_dir=Path("./runs/adhoc_test"))
 ```
 
-這個功能只是「蒐集資料」，跟 `dataset/reid/crop_dataset/train/{train,val}/{identity}/` 這個扁平（不分類別）的舊資料結構不是同一套配置——舊資料是否要轉成新的 `{class}/{影片}_track{id}/` 結構、以及後續訓練怎麼讀取，正在重新設計，見 `NEED.md`。
+這個功能只是「蒐集資料」，跟 `dataset/reid/crop_dataset/train/{train,val}/{identity}/` 這個扁平（不分類別）的舊資料結構不是同一套配置——舊資料是否要轉成新的 `{class}/{影片}_track{id}/` 結構、以及後續訓練怎麼讀取，正在重新設計，見 `ARCHITECTURE.md`「Re-ID 訓練資料」。
 
-### `dataset/reid/build_reid_split.py` — 把蒐集到的裁切切成 train/val
+#### `dataset/reid/build_reid_split.py` — 把蒐集到的裁切切成 train/val
 
 蒐集到 `dataset/reid/crop_dataset/{class}/{identity}/*.jpg` 後，用這支腳本依身分（不是依影像）切 train/val：
 
@@ -231,7 +233,7 @@ python dataset/reid/build_reid_split.py --mode category --overwrite --val-ratio 
 
 兩種模式跑完都會在輸出目錄下產生 `numbers.txt`（每身分一行 "張數 相對路徑"）與 `res.txt`（`tree -h` 目錄結構），完整架構說明、目前資料量統計見 `dataset/reid/README.md`。
 
-## 7. Grid Search（`module/grid_search/`）— 追蹤參數超參數搜尋
+### 7. Grid Search（`module/grid_search/`）— 追蹤參數超參數搜尋
 
 三支腳本，介面幾乎相同（`grid_search_botsort_reid.py` 額外把 ReID 相關參數固定在搜尋空間裡，見 `PARAM_GRIDS` 的 `use_reid`）：
 
@@ -257,7 +259,7 @@ python module/grid_search/grid_search_botsort_reid.py --target-class person --dr
 
 > ⚠️ 大規模 grid search 前務必先 `--dry-run` 確認組合數，再抓 1-2 組實際跑一次估算單組耗時，避免整批跑下去才發現要花好幾天（見 `CLAUDE.md`「Grid Search / 大範圍參數掃描前，先確認搜尋空間大小與預估執行時間」）。
 
-## 8. `yolo_reid_trainer`（`module/reid/yolo_reid_trainer.py`）— ReID 訓練工具
+### 8. `yolo_reid_trainer`（`module/reid/yolo_reid_trainer.py`）— ReID 訓練工具
 
 核心是 `ReIDHookManager`：直接在 ultralytics YOLO 原生模型倒數第二層掛 forward hook 取特徵，接一個 `ReIDProjector` 做 metric embedding，不另外包 wrapper nn.Module。訓練出來的權重可以直接被 `module/reid/encoders.py::ReID` 載入（推論期用同一份 `ReIDHookManager`/`load_reid_model` 邏輯重建）。
 
@@ -289,9 +291,9 @@ manager2.eval_mode()
 embed = manager2.embed(imgs)
 ```
 
-⚠️ `save_yolo_reid()` 存檔前會暫時清空每個 submodule 的 `_forward_hooks`/`_forward_pre_hooks`/`_backward_hooks` 以避開無法 pickle 的 hook，2026-07-24 之前這裡誤用 `{}` 清空（型別變成一般 `dict`），會導致存檔內容裡的 hook 容器型別跟著變成 `dict`，之後 `load_reid_model()` 重新 `register_forward_hook()` 時丟 `TypeError: cannot create weak reference to 'dict' object`。已修正為 `OrderedDict()`；此修正只影響用 `save_yolo_reid()` 存檔之後的檔案，舊權重不受影響。
+⚠️ `save_yolo_reid()` 存檔前會暫時清空每個 submodule 的 `_forward_hooks`/`_forward_pre_hooks`/`_backward_hooks` 以避開無法 pickle 的 hook，須用 `OrderedDict()` 清空而非一般 `{}`，否則之後 `load_reid_model()` 重新 `register_forward_hook()` 時會丟 `TypeError: cannot create weak reference to 'dict' object`。
 
-## 9. Re-ID 訓練資料蒐集 + 訓練（`module/reid/training/`，2026-07-24 新增）
+### 9. Re-ID 訓練資料蒐集 + 訓練（`module/reid/training/`）
 
 **資料蒐集**：先用 `track_eval.py` 的 `save_reid_crops` 功能蒐集資料（見第 6 節），或直接跑一次完整 pipeline 累積 `dataset/reid/crop_dataset/{class}/{影片}_track{id}/*.jpg`。
 
@@ -309,7 +311,7 @@ train_loader = DataLoader(train_dataset, batch_sampler=PKSampler(train_dataset.l
 # 每個 batch 固定 8 個身分 × 4 張影像，符合 BatchHardTripletLoss 需要同 batch 內有 positive pair 的假設
 ```
 
-**訓練**（`module/reid/training/train.py`，取代已移除的 `train_utils.py`，只走 YOLO-as-encoder 這條架構，不使用 `utils/model.py` 的 `ReIDNet`）：
+**訓練**（`module/reid/training/train.py`，只走 YOLO-as-encoder 這條架構，不使用 `utils/model.py` 的 `ReIDNet`）：
 
 ```bash
 python module/reid/training/train.py \
@@ -320,9 +322,56 @@ python module/reid/training/train.py \
     --epochs 50 --P 8 --K 4 --lr 1e-4 --val-ratio 0.2 --patience 10
 ```
 
-常用旗標：`--freeze-backbone`（只訓練 projector）、`--img-size`、`--margin`、`--min-images`（身分資料夾影像數低於此值整個捨棄）、`--wandb`（預設關閉，開啟才會呼叫 `wandb.init()`；要用的話先 `wandb login` 或設 `WANDB_MODE=offline`，對應根目錄的 `wandb/` log，見 `Project.md`「資料與輸出目錄」）。一次只練一個類別的模型（呼應 `config/*.yaml` 的 `class_tracking:` 逐類別指定 `model:` 路徑的慣例），要練多個類別就跑多次、換 `--class-name` 和 `--output`。
+常用旗標：`--freeze-backbone`（只訓練 projector）、`--img-size`、`--margin`、`--min-images`（身分資料夾影像數低於此值整個捨棄）、`--wandb`（預設關閉，開啟才會呼叫 `wandb.init()`；要用的話先 `wandb login` 或設 `WANDB_MODE=offline`，對應根目錄的 `wandb/` log，見 `ARCHITECTURE.md`「資料與輸出目錄」）。一次只練一個類別的模型（呼應 `config/*.yaml` 的 `class_tracking:` 逐類別指定 `model:` 路徑的慣例），要練多個類別就跑多次、換 `--class-name` 和 `--output`。
 
-已用實際蒐集的 crop 資料驗證完整流程：蒐集 → 訓練（loss 確實下降）→ 存檔 → `load_reid_model()` 與 `ReID` class 兩條載入路徑皆能正確還原並產生 embedding。
+---
+
+## 手動驗證流程
+
+本專案沒有自動化測試（無 `tests/`、無 pytest 設定）。所有驗證都是**手動跑完整或部分 pipeline，比對輸出**。修改 `module/detection/`、`module/tracker/`、`module/reid/`、`evaluation/`、`track_eval.py` 後，至少要跑過下方對應的手動測試項目再視為完成。
+
+### 1. 完整 pipeline 煙霧測試
+確認第一階段（追蹤）與第二階段（評估）都能跑完、不報錯，且輸出目錄結構符合 `track_eval.py` 頂部 docstring 的描述。
+
+```bash
+python track_eval.py --config config/bytetrack.yaml
+```
+
+檢查點：
+- `runs/track_eval/<run_det_eval_dir>/<seq>/trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt` 有產生且非空（OUTPUT 端目錄不含前綴，見 `evaluation/dataset_layout.py`）
+- `runs/track_eval/trackeval_output/` 下有對應序列的 `det_metrics_*.xlsx` / `trackeval_metrics_*_MULTI_new.xlsx`
+- 若 `config/bytetrack.yaml` 的 `save: true`，`Demo.mp4` 標註影片有正常產生（可開啟播放）
+
+其餘 5 個情境（`config/botsort_noreid.yaml`、`botsort_save_reid_crops.yaml`、`botsort_reid.yaml`、`grid_search_bytetrack.yaml`、`grid_search_botsort.yaml`）改動後也應各跑一次對應腳本；`botsort_save_reid_crops.yaml` 額外檢查 `stages.run_stage2: false` 有沒有正確跳過 stage2、`dataset/reid/crop_dataset/{class}/` 有沒有正確產生裁切影像。
+
+⚠️ **舊格式 `runs/` 殘留清理（2026-09 dataset-path 重構後的一次性遷移）**：OUTPUT 端序列目錄命名從 `annotation_<seq>/` 改成 `<seq>/` 後，重構前留下的舊格式目錄（`runs/track_eval/{annotations_all8,mot_annotations_all8,trackeval_output}/annotation_<seq>/`、`mot_annotation_<seq>/`）不會被自動清掉，且 `dataset_layout.py::list_stage1_sequences()` 沒有過濾機制，會把它們當成額外的「幽靈序列」一併列入——只是恰好在目前 6 支序列的字母排序下不影響結果。若 `runs/` 底下還有重構前的輸出，先手動清掉再驗證：
+```bash
+rm -rf runs/track_eval/annotations_all8/annotation_* runs/track_eval/mot_annotations_all8/mot_annotation_* runs/track_eval/trackeval_output/mot_annotation_*
+```
+
+### 2. 縮小範圍快速驗證
+改動 tracker 邏輯（`module/tracker/class_aware_botsort.py`、`class_aware_bytetrack.py`）時，先用少量序列跑，不要每次都跑全量資料集：
+- 在 `config/*.yaml` 的 `paths:` 底下顯式加 `SOURCE_VIDEO_DIR`（覆蓋 `dataset:` 查表值）縮小來源，或直接改 `eval_flags` 只開 `run_track_eval`
+- 或用 grid search 腳本的 `--dry-run` 先確認參數組合數量，再用 `--max-videos 1` 只跑一支影片
+
+```bash
+python module/grid_search/grid_search_bytetrack.py --target-class scooter --dry-run
+python module/grid_search/grid_search_bytetrack.py --target-class scooter --max-videos 1
+```
+
+### 3. 追蹤參數改動後的迴歸比較
+改 `config/*.yaml` 的 `class_tracking:` 章節或 `module/tracker/config.py` 的類別參數查表邏輯後，跑同一序列前後兩次，比較 Excel 報表中的 `HOTA` / `AssA` / `IDSW`，確認改動方向符合預期（例如：預期 scooter 的 AssA 上升，但 person 沒有明顯下降）。目前沒有腳本自動做這個 diff，需人工開 Excel 比對。
+
+### 4. 視覺化抽查
+數值指標異常時，用疊圖工具實際看畫面，確認是偵測漏檢、track ID 跳號，還是分類錯誤：
+
+```bash
+python visualize/visualize_gt_on_class_video.py --trackeval_root <該序列的 trackeval_output 路徑> --video_path <原始影片> --output_video <輸出路徑>
+```
+
+### 5. 設定檔載入順序
+新增使用 `module.tracker.config` 的腳本時，務必確認 `load_track_config()` 有在建立 tracker（`create_tracker(...)`）之前呼叫，否則 `CLASS_TRACKING_PARAMS` 會是空字典，追蹤會用不到任何類別專屬參數但不會報錯（靜默失敗，最容易漏測）。檢查方式：程式印出的 `Loaded track config: <path>` 訊息是否有出現在建立 tracker 之前。
 
 ## 待補充
-> 以上範例對應目前程式碼實際簽章（2026-07-24 確認，含 `dataset/reid/build_reid_split.py`、`config/botsort_save_reid_crops_video.yaml`、`python -m evaluation.pipeline` 獨立執行路徑）。若函式簽章之後有變動，此檔案要一併更新；若發現範例與實際行為不符，以程式碼為準並回報修正。
+> 目前沒有「預期基準值」（baseline metrics）可供比對合格與否，建議之後在此補上：各序列/各類別的基準 HOTA/AssA 區間，作為迴歸測試的判斷標準（見 `ARCHITECTURE.md`「流程缺口」）。
+> 以上範例對應目前程式碼實際簽章。若函式簽章之後有變動，此檔案要一併更新；若發現範例與實際行為不符，以程式碼為準並回報修正。

@@ -6,7 +6,7 @@ Homography 誤差熱力圖：把 check points 的 reprojection 誤差（像素�
 比照 markdown/reference_results/C000025 中華三路 民生熱力圖/ 的既有產出風格（IDW／
 Linear／RBF 三種內插法各一張，疊在衛星底圖上、標示 check point 位置與誤差值、
 convex hull 外遮罩不上色）。⚠️ 那份的原始產生程式碼已經找不到（見
-markdown/Project.md「Homography 資料」），這裡是依圖面觀察重新設計、獨立實作的版本，
+markdown/ARCHITECTURE.md「Homography 資料」），這裡是依圖面觀察重新設計、獨立實作的版本，
 數學細節（配色、遮罩方式、字型排版）不保證跟原始程式完全一致，只有「三種內插法 + 疊圖 +
 convexhull 遮罩」這個核心概念相同。
 

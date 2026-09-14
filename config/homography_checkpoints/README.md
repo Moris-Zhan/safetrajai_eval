@@ -11,7 +11,7 @@ config/homography_checkpoints/<tag>.yaml
 ⚠️ **這不是拿來算 Homography 矩陣的訓練點**（訓練點是 `models/homography/matrices/
 pts_cctv_<tag>.npy` / `pts_sate_<tag>.npy`，已經算好、不需要也不應該重新點選）。
 check points 必須是額外挑選、跟訓練點不同的點位，才是有意義的 out-of-sample 驗證；
-拿訓練點驗證會循環論證（誤差趨近於 0，見 `markdown/Project.md`「Homography 資料」章節）。
+拿訓練點驗證會循環論證（誤差趨近於 0，見 `markdown/ARCHITECTURE.md`「Homography 資料」章節）。
 
 ## 目前狀態
 

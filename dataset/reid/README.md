@@ -30,7 +30,7 @@ dataset/reid/crop_dataset/
 └── res.txt          舊資料：train/ 子目錄的 tree -h 輸出（見下方說明）
 ```
 
-- 6 個類別資料夾（`bus`/`car`/`person`/`scooter`/`small_truck`/`truck`）底下每個子資料夾是一個身分，命名為 `{影片檔名}_track{track_id}`，由 `track_eval.py` 的 `save_reid_crops` 功能（`config/botsort_save_reid_crops.yaml`，`reid_crop_dir: ./dataset/reid/crop_dataset`）逐幀裁切寫入，詳見 `markdown/USAGE.md` 第 6 節。**`track_id` 是 class-aware tracker 逐類別各自配號**——同一支影片同一個編號在不同類別代表不同物體，不能跨類別直接比對資料夾名稱。
+- 6 個類別資料夾（`bus`/`car`/`person`/`scooter`/`small_truck`/`truck`）底下每個子資料夾是一個身分，命名為 `{影片檔名}_track{track_id}`，由 `track_eval.py` 的 `save_reid_crops` 功能（`config/botsort_save_reid_crops.yaml`，`reid_crop_dir: ./dataset/reid/crop_dataset`）逐幀裁切寫入，詳見 `markdown/GUIDE.md` 第 6 節。**`track_id` 是 class-aware tracker 逐類別各自配號**——同一支影片同一個編號在不同類別代表不同物體，不能跨類別直接比對資料夾名稱。
 - `train/` 子目錄是另一批舊資料（身分資料夾直接命名為 6 碼數字如 `000100`），跟上面 6 個類別資料夾**不是同一套產生流程**，`build_reid_split.py` 不會讀取這個子目錄當來源。
 - 根目錄下既有的 `numbers.txt`／`res.txt` 描述的是這個 **`train/` 子目錄**（444 個身分，`tree -h -L 3` 輸出），**不是** 6 個類別資料夾的統計，不要跟下面兩個輸出目錄裡同名的新檔案搞混。
 

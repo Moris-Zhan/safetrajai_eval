@@ -78,7 +78,7 @@ nn.Sequential(
 
 `ReIDHookManager`、`wandb.watch` 這類工具會在 `nn.Module` 上掛帶 lambda 的 `forward hook`，這些 hook 物件本身無法被 pickle。`save_yolo_reid()` 存檔前會遍歷 `yolo.model.modules()`，暫存並清空每個 submodule 的 `_forward_hooks`/`_forward_pre_hooks`/`_backward_hooks`，存完再原樣還原。
 
-清空時**必須用 `OrderedDict()` 而不是 `{}`**——這是本專案早期一個真實存在過的 bug：用 `{}` 清空會讓存檔內容裡的 hook 容器型別跟著變成一般 `dict`，之後 `load_reid_model()` 重新呼叫 `register_forward_hook()` 時，PyTorch 內部要對這個容器物件建立 `weakref` 會直接拋 `TypeError: cannot create weak reference to 'dict' object`。已修正為 `OrderedDict()`，此修正只影響修正後才存的檔案，舊權重不受影響（詳見 `markdown/VERIFY.md`）。
+清空時**必須用 `OrderedDict()` 而不是 `{}`**——這是本專案早期一個真實存在過的 bug：用 `{}` 清空會讓存檔內容裡的 hook 容器型別跟著變成一般 `dict`，之後 `load_reid_model()` 重新呼叫 `register_forward_hook()` 時，PyTorch 內部要對這個容器物件建立 `weakref` 會直接拋 `TypeError: cannot create weak reference to 'dict' object`。已修正為 `OrderedDict()`，此修正只影響修正後才存的檔案，舊權重不受影響（詳見 `markdown/EXPERIMENTS.md`）。
 
 ### 3.3 讀取（`load_reid_model`）
 
@@ -197,8 +197,8 @@ optimizer = torch.optim.Adam([
 
 訓練出的權重（`models/yolo-reid/{class}_reid.pt`）直接被 `encoders.py::ReID` 載入——`ReID.__init__` 用 ultralytics `YOLO(model_path)` 讀權重，走的是 ultralytics 自己的 `embed=` 推論參數（不是本文件的 `ReIDHookManager`），但因為存檔時 backbone 權重本來就在同一個 `.pt` 裡，數值上是一致的（`reid_projector` 這個附掛屬性不會影響 ultralytics 自己的推論路徑，只有透過 `load_reid_model()` 明確讀取才會用到）。`module/tracker/class_aware_botsort.py` 依 `class_tracking:` 裡 `model:` 路徑字串判斷走哪條 encoder（不含 `class_reid_weights` → `ReID`）。
 
-`encoders.py::Custom_ReID` 是完全不同的另一條路徑：載入 `utils/model.py` 定義的 `ReIDNet`（`torch.save()` 整物件序列化，pickle 相容性限制見 `CLAUDE.md`「架構」章節），權重是外部訓練好的產物，**本專案沒有它的訓練程式碼**，不在本文件範圍內，也不在目前的重新設計計畫裡（見 `markdown/NEED.md`）。
+`encoders.py::Custom_ReID` 是完全不同的另一條路徑：載入 `utils/model.py` 定義的 `ReIDNet`（`torch.save()` 整物件序列化，pickle 相容性限制見 `CLAUDE.md`「架構」章節），權重是外部訓練好的產物，**本專案沒有它的訓練程式碼**，不在本文件範圍內，也不在目前的重新設計計畫裡（見 `markdown/ARCHITECTURE.md`）。
 
 ## 七、已驗證
 
-用 `scooter` 類別（`dataset/reid/crop_dataset/scooter/`）跑過 smoke test（5 epoch、`--freeze-backbone`）：loss 穩定下降，`save_yolo_reid()` 存檔後，`load_reid_model()` 與 `encoders.py::ReID` 兩條讀取路徑都能正確還原並產生 L2-normalized embedding。實際數據與完整驗證記錄見 `markdown/VERIFY.md`。
+用 `scooter` 類別（`dataset/reid/crop_dataset/scooter/`）跑過 smoke test（5 epoch、`--freeze-backbone`）：loss 穩定下降，`save_yolo_reid()` 存檔後，`load_reid_model()` 與 `encoders.py::ReID` 兩條讀取路徑都能正確還原並產生 L2-normalized embedding。實際數據與完整驗證記錄見 `markdown/EXPERIMENTS.md`。

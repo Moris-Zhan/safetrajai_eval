@@ -78,7 +78,7 @@ _DEFAULTS: dict = {
     "reid_crop_dir":   "./dataset/reid/crop_dataset",
     # 碰撞偵測（module/collision/，見 markdown/COLLISION_DETECTION.md）
     "homography_points_dir":      "config/homography_points",
-    # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/Project.md「Homography 資料」），
+    # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/ARCHITECTURE.md「Homography 資料」），
     # resolve_homography() 優先用這份，找不到對應路口才退回 homography_points_dir 的人工點選
     "homography_matrices_dir":    "models/homography/matrices",
     "homography_satellite_dir":   "models/homography/satellite_images",

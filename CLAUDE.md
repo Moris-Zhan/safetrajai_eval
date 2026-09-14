@@ -11,14 +11,12 @@ CCTV 交通監控的物件偵測＋多物件追蹤（MOT）評估流程：YOLO11
 專案已依 Detection / Tracker / Re-ID / grid_search 四個模組重組並統一放進 `module/`（2026-07），詳見下方「架構」。
 
 ## 專案文件（`markdown/`）
-- `markdown/Project.md`：專案總覽、範圍、核心流程圖、已知限制。
-- `markdown/USAGE.md`：四大模組（Detection/Tracker/Re-ID/Evaluation）+ `TrackingEvalPipeline`、grid search、`visualize_gt_on_*.py`、`yolo_reid_trainer` 的實際使用範例。
-- `markdown/TEST.md`：手動驗證流程（無自動化測試，改動後照此手動驗證）。
-- `markdown/VERIFY.md`：已驗證過的實驗結論（ReID 開關、GMC 方法比較、FPS 比較等）與資料來源，避免重複測試。
-- `markdown/NEED.md`：已知待辦與落差清單。
+- `markdown/ARCHITECTURE.md`：專案總覽、範圍、核心流程圖、已知限制 + 已知待辦與落差清單。
+- `markdown/GUIDE.md`：四大模組（Detection/Tracker/Re-ID/Evaluation）+ `TrackingEvalPipeline`、grid search、`visualize_gt_on_*.py`、`yolo_reid_trainer` 的實際使用範例 + 手動驗證流程（無自動化測試，改動後照此手動驗證）。
+- `markdown/EXPERIMENTS.md`：已驗證過的實驗結論（ReID 開關、GMC 方法比較、FPS 比較等）與資料來源，避免重複測試。
 - `markdown/TRAJECTORY_FORMAT.md`：追蹤軌跡輸出格式規格（欄位、座標系統、frame/track_id 語意、已知限制），供跨專案介接（如碰撞偵測模組）參考。
 
-開始改動前先掃過 `markdown/VERIFY.md`，避免重工已驗證過的結論；改完後照 `markdown/TEST.md` 的流程驗證。
+開始改動前先掃過 `markdown/EXPERIMENTS.md`，避免重工已驗證過的結論；改完後照 `markdown/GUIDE.md` 的流程驗證。
 
 ## 常用指令
 
@@ -50,10 +48,10 @@ python visualize/visualize_gt_on_class_video.py --trackeval_root <path> --video_
 
 ## 架構
 
-專案依 **Detection / Tracker / Re-ID / grid_search** 四個模組重組，2026-07-23 再次搬移統一放進 `module/` 底下、彼此同一層。另有一個橫跨 Detection eval 與 Tracker eval 的共用 `evaluation/` 模組（不屬於這四者之一，故不在 `module/` 底下，留在根目錄）。詳細架構圖見 `markdown/Project.md`。
+專案依 **Detection / Tracker / Re-ID / grid_search** 四個模組重組，2026-07-23 再次搬移統一放進 `module/` 底下、彼此同一層。另有一個橫跨 Detection eval 與 Tracker eval 的共用 `evaluation/` 模組（不屬於這四者之一，故不在 `module/` 底下，留在根目錄）。詳細架構圖見 `markdown/ARCHITECTURE.md`。
 
 ```
-module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不在本專案範圍，見 markdown/NEED.md。
+module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不在本專案範圍，見 markdown/ARCHITECTURE.md。
 module/tracker/   — class-aware BoTSORT / ByteTrack（原 trackers/ → tracker/ → module/tracker/）
 module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py，
                      模型架構與訓練腳本說明見 module/reid/HANDOFF.md）
