@@ -69,8 +69,12 @@ def apply_moves(moves: list[dict], quarantine_root: Path, confirm_csv: Path) -> 
         if not src.is_file():
             print(f"警告：來源檔案不存在，略過：{src}")
             continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst))
+        except OSError as e:
+            print(f"警告：搬移失敗，略過：{src} -> {dst}（{e}）")
+            continue
         quarantined_identity_dirs.add(src.parent)
         manifest_entries.append({"class": m["class"], "identity": m["identity"], "image": m["image"], "src": str(src), "dst": str(dst)})
 
