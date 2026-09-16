@@ -58,14 +58,25 @@ def is_dsec_identity(identity_dir: Path) -> bool:
 def embed_crop(reid: ReID, crop: np.ndarray) -> np.ndarray:
     """對單張已裁切影像抽取 L2-normalized embedding。
 
-    ReID.__call__(img, dets) 設計上吃「完整畫面 + bbox」，內部呼叫 save_one_box 裁切；
-    這裡把整張裁切圖當成 img，dets 給一個涵蓋全圖的 bbox（xywh），save_one_box 預設的
-    gain=1.02/pad=10 會被裁切邊界夾回原圖範圍，等於把整張裁切圖原封不動傳回去。
+    繞過 ReID.__call__()：目前環境（ultralytics==8.4.147）下，Model.predict() 每次呼叫
+    都會用 custom={"embed": None, ...} 蓋掉沒有明確重複傳入的 embed 參數，導致 ReID.__call__()
+    退化成回傳一般偵測結果而非特徵向量——這是 module/reid/encoders.py 共用程式碼在此環境下的
+    既有限制（見 design.md），本次變更範圍內不修復共用程式碼，只在這支腳本內繞過。
+    改為直接呼叫底層 reid.model()，每次都明確帶 embed=，複製 ReID.__init__ 算 layer index
+    的同一套邏輯（len(reid.model.model.model) - 2，對應 .pt 權重）。
+
+    輸入沿用原本 BGR（cv2.imread 直接讀出，不手動轉 RGB）——比照 module/detection/detector.py
+    ::Detector.detect() 把 BGR frame 直接餵給同一套 self.model.predict() pipeline 的既有作法，
+    前處理交給 ultralytics 內部處理。
+
+    經驗證（見 task-1b-report.md「Fix round 1」）：reid.model(crop, embed=[idx], verbose=False)
+    回傳 list[torch.Tensor]（shape (1280,), float32），不是 ndarray，需要 .cpu().numpy()。
     """
-    h, w = crop.shape[:2]
-    dets = np.array([[w / 2.0, h / 2.0, w, h]], dtype=np.float32)
-    feats = reid(crop, dets)
-    vec = np.asarray(feats[0], dtype=np.float32).reshape(-1)
+    embed_idx = len(reid.model.model.model) - 2
+    result = reid.model(crop, embed=[embed_idx], verbose=False)
+    raw = result[0]
+    vec = raw.cpu().numpy() if hasattr(raw, "cpu") else np.asarray(raw)
+    vec = vec.astype(np.float32).reshape(-1)
     norm = np.linalg.norm(vec)
     return vec / norm if norm > 0 else vec
 
