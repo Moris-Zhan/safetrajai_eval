@@ -163,6 +163,222 @@ if __name__ == "__main__":
 - [ ] 1.3 小規模驗證（先跑資料量最小的類別，對應 `design.md` Migration Plan 第 2 步）：執行 `python dataset/reid/check_class_consistency.py --classes small_truck`，確認：(a) 終端機輸出的 `n_dsec` 對 `small_truck` 應為 0（`small_truck` 目前沒有 DSEC 來源身分，見 README 資料來源說明）；(b) `dataset/reid/class_consistency_flags.csv` 與 `_identities.csv` 兩份檔案都有產生且非空；(c) 打開 `_identities.csv`，依 `agreement_rate` 排序最前面（最低）的 3-5 個身分，用檔案總管或圖片檢視器打開該身分資料夾內的圖片，人工確認 agreement_rate 低是否真的對應「歸錯類別」或「局部污染」，記錄下這幾筆的目視判斷結果（供 1.4 決定門檻參考，若判斷理由站不住腳要回頭檢查 1.2 的邏輯或考慮 crop 在偵測器上的行為是否如預期）。
 - [ ] 1.4 依 1.3 的人工核對結果，在 `design.md` 的 Open Questions 段落填入實際採用的 agreement_rate 參考門檻（例如「低於 0.5 建議整身分複核」），若核對結果顯示訊號不可靠（人工看起來沒問題的身分卻被排到最前面），記錄下原因並評估是否需要調整 1.2 的推論邏輯（如信心門檻、`imgsz`），而非直接假設分數可用。
 
+## 1b. Task 1 改用 embedding 取代偵測器（推翻 1.1-1.4 的原始實作方案，見 `design.md` Decision 1（修訂版））
+
+> **觸發原因**：對全部 6 類別分批執行 4.1-4.3 時，`person` 類別（1082 張裁切）用原本的偵測器方案出現嚴重訊號退化——83% 身分 agreement_rate 為 0.0，拆解發現 78%（849/1082）裁切偵測器完全輸出不了任何框。根因是偵測器設計上要在完整場景圖裡「定位＋分類」，套用在已裁切、脫離場景脈絡的單一小圖上先天不合；且 person 沒有像 car/small_truck/truck 那樣可歸群的相近類別，`VEHICLE_GROUP` 放寬對 person 無效。使用者選擇直接換成 embedding＋最近類別中心點方案，取代重跑偵測器。
+>
+> **範圍**：只改 `check_class_consistency.py` 內部「怎麼判定 predicted_class」的機制；Task 2（`generate_identity_review.py`）、Task 3（`quarantine_flagged.py`）完全不受影響——兩者都只消費 `class_consistency_flags_identities.csv`（`class,identity,n_images,agreement_rate,skipped_reason`），這個 schema 不變。
+>
+> **已知影響**：Task 4 先前用舊版偵測器方案對 `person`／`truck` 兩類跑過的 `class_consistency_flags.csv`／`_identities.csv`／`identity_review/identity_review_{person,truck}_page1.html` 已過期，1b 完成驗證後需要重新產生（見 1b.4）。Tier 2（`filter_crop_dataset.py`／`generate_quality_report.py`）的既有輸出不受影響（不依賴 Task 1 的腳本）。
+
+- [ ] 1b.1 確認 `module/reid/encoders.py::ReID` 的介面沒有 drift：`ReID.__init__(model_path)` 用 `ultralytics.YOLO(model_path)` 載入並以 `embed=[...]` 做一次空 forward；`ReID.__call__(img, dets)` 中 `dets` 為 `(N,4+)` 的 xywh 陣列，內部經 `xywh2xyxy` + `save_one_box(gain=1.02, pad=10, save=False)` 裁切後丟給模型，回傳 `list[np.ndarray]`（長度對應 `dets.shape[0]`）。若簽章已變動，以下程式碼要跟著調整。
+- [ ] 1b.2 重寫 `dataset/reid/check_class_consistency.py`（保留 `discover_identities`/`list_images`/`is_dsec_identity`/CLI 參數/輸出 CSV 檔名不變，只替換核心推論邏輯與新增 `--reid-model` 參數）：
+
+```python
+#!/usr/bin/env python3
+"""
+dataset/reid/crop_dataset/ 身分跨類別一致性稽核（Tier 3，embedding 版）。
+
+對每個 CCTV 來源身分逐張裁切抽取特徵向量（embedding，透過 encoders.py::ReID 包裝既有
+偵測權重 models/yolo/yolo11x_dennis.pt 當通用特徵抽取器），與各類別中心點（該類別全部
+非略過身分的平均 embedding）比較距離，取距離最近的類別當作該影像的判定類別，記錄與資料夾
+所屬類別是否一致。只標記、不刪除／搬移任何原始影像檔案，對應
+openspec/changes/reid-crop-identity-audit/specs/reid/identity-class-consistency/spec.md。
+
+本檔原採「重跑偵測器比對類別」設計；因偵測器對已裁切、脫離場景脈絡的小圖定位能力不足
+（person 類別 78% 裁切完全偵測不到任何框）而改採此版，理由見 design.md Decision 1（修訂版）。
+
+DSEC 來源身分（資料夾名稱前綴 dsecdet_）一律略過——不計分、也不參與任何類別中心點的計算。
+
+用法：
+    python dataset/reid/check_class_consistency.py
+    python dataset/reid/check_class_consistency.py --classes person small_truck
+    python dataset/reid/check_class_consistency.py --reid-model models/yolo/yolo11x_dennis.pt \
+        --out dataset/reid/class_consistency_flags.csv
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+from module.reid.encoders import ReID
+
+CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
+IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
+DSEC_PREFIX = "dsecdet_"
+REID_MODEL_PATH = "models/yolo/yolo11x_dennis.pt"
+
+
+def discover_identities(class_dir: Path) -> list[Path]:
+    return sorted(p for p in class_dir.iterdir() if p.is_dir())
+
+
+def list_images(identity_dir: Path) -> list[Path]:
+    return sorted(p for p in identity_dir.iterdir() if p.suffix.lower() in IMG_SUFFIXES)
+
+
+def is_dsec_identity(identity_dir: Path) -> bool:
+    return identity_dir.name.startswith(DSEC_PREFIX)
+
+
+def embed_crop(reid: ReID, crop: np.ndarray) -> np.ndarray:
+    """對單張已裁切影像抽取 L2-normalized embedding。
+
+    ReID.__call__(img, dets) 設計上吃「完整畫面 + bbox」，內部呼叫 save_one_box 裁切；
+    這裡把整張裁切圖當成 img，dets 給一個涵蓋全圖的 bbox（xywh），save_one_box 預設的
+    gain=1.02/pad=10 會被裁切邊界夾回原圖範圍，等於把整張裁切圖原封不動傳回去。
+    """
+    h, w = crop.shape[:2]
+    dets = np.array([[w / 2.0, h / 2.0, w, h]], dtype=np.float32)
+    feats = reid(crop, dets)
+    vec = np.asarray(feats[0], dtype=np.float32).reshape(-1)
+    norm = np.linalg.norm(vec)
+    return vec / norm if norm > 0 else vec
+
+
+def compute_class_centroids(crop_root: Path, classes: list[str], reid: ReID):
+    """兩件事一次做完：(1) 每個類別的中心點；(2) 每個身分逐張影像的 embedding 快取
+    （避免中心點算完後，逐影像判定階段要重複抽一次特徵）。
+
+    中心點＝該類別全部非 DSEC 身分的「身分平均 embedding」再平均（不是全部影像直接平均），
+    避免張數多的身分主導中心點。
+    """
+    per_class_identity_means: dict[str, list[np.ndarray]] = {c: [] for c in classes}
+    embedding_cache: dict[tuple[str, str], dict[str, np.ndarray]] = {}
+
+    for cls in classes:
+        class_dir = crop_root / cls
+        if not class_dir.is_dir():
+            continue
+        for identity_dir in discover_identities(class_dir):
+            if is_dsec_identity(identity_dir):
+                continue
+            per_image: dict[str, np.ndarray] = {}
+            for img_path in list_images(identity_dir):
+                img = cv2.imread(str(img_path))
+                if img is None:
+                    continue
+                per_image[str(img_path)] = embed_crop(reid, img)
+            embedding_cache[(cls, identity_dir.name)] = per_image
+            if per_image:
+                identity_mean = np.mean(list(per_image.values()), axis=0)
+                per_class_identity_means[cls].append(identity_mean)
+
+    centroids = {
+        cls: np.mean(means, axis=0)
+        for cls, means in per_class_identity_means.items()
+        if means
+    }
+    return centroids, embedding_cache
+
+
+def nearest_class(embedding: np.ndarray, centroids: dict[str, np.ndarray]) -> str | None:
+    best_cls, best_dist = None, None
+    for cls, centroid in centroids.items():
+        dist = float(np.linalg.norm(embedding - centroid))
+        if best_dist is None or dist < best_dist:
+            best_cls, best_dist = cls, dist
+    return best_cls
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--crop-root", default="dataset/reid/crop_dataset")
+    parser.add_argument("--classes", nargs="+", default=CLASSES, choices=CLASSES)
+    parser.add_argument("--reid-model", default=REID_MODEL_PATH)
+    parser.add_argument("--out", default="dataset/reid/class_consistency_flags.csv")
+    args = parser.parse_args()
+
+    crop_root = Path(args.crop_root)
+    reid = ReID(args.reid_model)
+
+    print("Pass 1/2: 抽 embedding、計算各類別中心點...")
+    centroids, embedding_cache = compute_class_centroids(crop_root, args.classes, reid)
+    for cls in args.classes:
+        print(f"  {cls}: 中心點 {'OK' if cls in centroids else '無有效身分，略過'}")
+
+    print("Pass 2/2: 逐影像判定...")
+    all_rows: list[dict] = []
+    identity_summaries: list[dict] = []
+
+    for cls in args.classes:
+        class_dir = crop_root / cls
+        if not class_dir.is_dir():
+            print(f"skip {cls}: {class_dir} not found")
+            continue
+        identity_dirs = discover_identities(class_dir)
+        n_dsec = 0
+        for identity_dir in identity_dirs:
+            if is_dsec_identity(identity_dir):
+                n_dsec += 1
+                identity_summaries.append({
+                    "class": cls, "identity": identity_dir.name,
+                    "n_images": len(list_images(identity_dir)),
+                    "agreement_rate": "", "skipped_reason": "dsec_source",
+                })
+                continue
+            per_image = embedding_cache.get((cls, identity_dir.name), {})
+            rows = []
+            for img_path_str, embedding in per_image.items():
+                predicted_class = nearest_class(embedding, centroids)
+                dist_to_own = float(np.linalg.norm(embedding - centroids[cls])) if cls in centroids else None
+                agree = predicted_class == cls
+                rows.append({
+                    "class": cls, "identity": identity_dir.name, "image": img_path_str,
+                    "predicted_class": predicted_class or "",
+                    "distance": round(dist_to_own, 4) if dist_to_own is not None else "",
+                    "agree": agree,
+                })
+            all_rows.extend(rows)
+            n = len(rows)
+            n_agree = sum(1 for r in rows if r["agree"])
+            identity_summaries.append({
+                "class": cls, "identity": identity_dir.name, "n_images": n,
+                "agreement_rate": round(n_agree / n, 4) if n else "",
+                "skipped_reason": "",
+            })
+        print(f"  {cls}: {len(identity_dirs)} identities scanned ({n_dsec} DSEC skipped)")
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["class", "identity", "image", "predicted_class", "distance", "agree"])
+        writer.writeheader()
+        writer.writerows(all_rows)
+
+    summary_path = out_path.with_name(out_path.stem + "_identities.csv")
+    with open(summary_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["class", "identity", "n_images", "agreement_rate", "skipped_reason"])
+        writer.writeheader()
+        scored = [r for r in identity_summaries if r["agreement_rate"] != ""]
+        skipped = [r for r in identity_summaries if r["agreement_rate"] == ""]
+        scored.sort(key=lambda r: r["agreement_rate"])
+        writer.writerows(scored + skipped)
+
+    n_mismatch = sum(1 for r in all_rows if not r["agree"])
+    print(
+        f"\ndone: scanned {len(all_rows)} images across {len(identity_summaries)} identities, "
+        f"{n_mismatch} image-level mismatches -> {out_path}\n"
+        f"identity summary (sorted by agreement_rate) -> {summary_path}"
+    )
+    print("只標記，未刪除／搬移任何原始檔案。")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**注意**：per-image CSV 的欄位名稱把原本的 `confidence`（偵測信心值，越高越好）改成 `distance`（與判定類別中心點的距離，越低越好）——語意方向相反，沿用舊欄位名會誤導。這個欄位改名**不影響** Task 2／Task 3，兩者只讀 `_identities.csv`（`class,identity,n_images,agreement_rate,skipped_reason`），從不讀per-image 檔案的這個欄位。
+
+驗證：`python -c "import ast; ast.parse(open('dataset/reid/check_class_consistency.py').read())"` 確認語法正確；`python dataset/reid/check_class_consistency.py --help` 確認 CLI 可執行、新增的 `--reid-model` 參數存在。
+
+- [ ] 1b.3 小規模驗證（比照原 1.3 的方法論，改跑剛失敗的 `person`）：執行 `python dataset/reid/check_class_consistency.py --classes person`，確認：(a) `dataset/reid/class_consistency_flags.csv`／`_identities.csv` 兩份都有產生且非空；(b) 統計新的 agreement_rate 分佈（0.0／中段／1.0 各自身分數與比例），跟舊版偵測器方案的「83% 卡在 0.0」比較，是否不再退化；(c) 打開排序最前面（最低）與最後面（最高）的各 3-5 個身分，用圖片檢視器核對目視判斷是否與分數方向一致；(d) 誠實記錄結果——若新分佈依然退化或目視核對對不上，不要美化，回報給協調者決定下一步（可能是換一個 embedding 抽取層、或接受此方案對 person 也不理想的結論），不要自行放寬判定邏輯掩蓋問題。
+- [ ] 1b.4 依 1b.3 驗證結果更新 `design.md` 的 Open Questions 段落（「新的待驗證項目」那條），記錄實際驗證結果與（如果有）採用的門檻；若驗證通過，重新對 `person`／`truck` 執行 4.2／4.3（見任務群組 4），取代已過期的舊版偵測器輸出。
+
 ## 2. 全量互動審查報告（`dataset/reid/generate_identity_review.py`）
 
 > 對應 `specs/reid/crop-review-report/spec.md`；設計依據見 `design.md` Decision 3/5/6。

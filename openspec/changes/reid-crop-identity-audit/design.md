@@ -14,12 +14,22 @@
 - 不為 DSEC 來源身分產生任何自動信心分數（原因見下方 Decision 2），這部分純人工審查。
 - 不修改 Tier 1（`ReidCropCollector`）／Tier 2（`filter_crop_dataset.py`）既有邏輯或閾值。
 - 不在本次變更中重新訓練或調整 YOLO／ReID 模型權重。
-- 不採用 ReID embedding 做跨類別聚類（即先前討論的 A2 方案）——已與使用者確認排除。
+- 不重新訓練或微調任何 ReID 模型；只把既有偵測權重 `models/yolo/yolo11x_dennis.pt` 透過 `encoders.py::ReID` 當成現成的特徵抽取器使用（見 Decision 1（修訂版）），不引入 `models/yolo-reid/`／`models/class_reid_weights/` 底下任何逐類別微調過的權重。
 
 ## Decisions
 
-**1. 用重跑既有 YOLO `Detector` 做一致性檢查，而非 ReID embedding。**
-Rationale：直接複用專案既有依賴與模型，邏輯是單純的自我一致性檢查（同一顆偵測器、同一批 CCTV 視角資料）；`module/reid/encoders.py` 的 `ReID`／`Custom_ReID` 主要為「同類別內辨識身分」設計，沒有驗證過跨類別語意分離能力，拿來做跨類別離群判斷風險較高，且會引入額外的推論管線與依賴。已考慮的替代方案：ReID embedding 聚類（A2）——使用者已選擇不採用。
+**1.（已修訂，見下方修訂版）用重跑既有 YOLO `Detector` 做一致性檢查，而非 ReID embedding。**
+~~Rationale：直接複用專案既有依賴與模型，邏輯是單純的自我一致性檢查（同一顆偵測器、同一批 CCTV 視角資料）；`module/reid/encoders.py` 的 `ReID`／`Custom_ReID` 主要為「同類別內辨識身分」設計，沒有驗證過跨類別語意分離能力，拿來做跨類別離群判斷風險較高，且會引入額外的推論管線與依賴。已考慮的替代方案：ReID embedding 聚類（A2）——使用者已選擇不採用。~~
+
+**推翻原因**：Task 1 完成後對全部類別實跑，發現 `person` 類別的訊號嚴重退化（1082 張裁切中 849 張／78% 偵測器完全輸出不了任何框，agreement_rate 91% 集中在 0.0）。根因是偵測器（`Detector`）設計上要在一張完整場景圖裡「定位＋分類」多個物體，套用在已經裁切好、脫離場景脈絡的單一小圖上先天不合——這跟 small_truck 當初的「語意邊界模糊」問題性質不同（small_truck 是偵測得到框但分類邊界模糊，person 是連框都生不出來），且 person 沒有像 car/small_truck/truck 那樣可以歸群的相近類別，`VEHICLE_GROUP` 放寬對 person 無效。使用者判斷應改用不需要「定位」、只需要對整張已裁切小圖抽特徵的方法，經討論後選擇 embedding 方案。
+
+**1.（修訂版）用 `encoders.py::ReID` 包裝既有偵測權重 `models/yolo/yolo11x_dennis.pt` 當通用特徵抽取器，取最近類別中心點決定 `predicted_class`，取代重跑 `Detector`。**
+Rationale：
+- 排除的替代權重：`models/yolo-reid/`（YOLO-as-encoder ReID）與 `models/class_reid_weights/`（`Custom_ReID`）底下的權重都是**逐類別各自訓練**的（`module/reid/HANDOFF.md`：「一次只練一個類別的模型...要練多個類別就跑多次、換 `--class-name` 和 `--output`」；`models/class_reid_weights/` 目錄下也只有 `person`／`scooter` 兩個類別有權重）。不同類別的模型輸出向量不在同一個特徵空間，物理上不能拿來跨類別比距離，直接排除。
+- 選擇 `yolo11x_dennis.pt`（本專案本來就在用的偵測權重，`config/botsort_noreid.yaml` 的 `det_model_path`）當 encoder 輸入：這是唯一橫跨全部 6 類別訓練過的單一模型，backbone 為了做偵測分類，本來就要學會辨別這 6 類別的視覺差異，其中間層特徵理論上天生具備跨類別分離能力，比任何逐類別微調的 metric-learning 模型更適合做「跨類別」比較。
+- 介面銜接：`ReID.__call__(img, dets)` 設計上吃「完整畫面＋bbox」（內部呼叫 `save_one_box` 裁切），但這裡只有已經存檔的裁切小圖、沒有原始畫面。做法是把整張裁切圖當成 `img`，`dets` 給一個涵蓋全圖的 bbox（xywh 格式：`[W/2, H/2, W, H]`）——已確認 `save_one_box` 預設的 `gain=1.02, pad=10` 會被裁切邊界限制夾回原圖範圍，等於把整張裁切圖原封不動傳回去，複用既有、已在 tracking pipeline 裡用過的程式路徑，不修改 `encoders.py` 本身。
+- 演算法：對每個非 DSEC 身分的每張裁切抽 embedding → 每個類別的「中心點」＝該類別全部身分的平均 embedding（先算每個身分的平均、再對身分平均取平均，避免張數多的身分主導）→ 每張裁切改成「離哪個類別中心最近」當作 `predicted_class`（取代原本的偵測器判斷）。`agree`／身分聚合／DSEC 排除／CSV schema 全部不變，`VEHICLE_GROUP` 特例整個移除（中心點距離判斷不會有偵測器「完全看不到框」那種問題，不需要手動放寬車輛群組）。
+- 已考慮的替代方案：維持偵測器＋對小裁切先放大再推論（方案 B/C）——改動幅度最小，但只能處理「裁切太小」這個根因，car/small_truck/truck 那種「裁切夠大依然誤判」的語意邊界問題不會被放大解決；使用者選擇直接換成 embedding 方案（方案 A），一次處理兩種根因。
 
 **2. DSEC 來源身分用資料夾名稱前綴 `dsecdet_` 識別並直接排除評分，而非嘗試建立替代信心指標。**
 Rationale：`reid-training-data-pipeline` 的 pilot 已證實本專案偵測器在 DSEC 視角對 `bus` 系統性誤判，任何用同一顆偵測器對 DSEC 裁切算出的信心分數都不可信；與其產生一個看似量化、實際上不可信的數字，不如明確標示「無自動分數，純人工審查」，避免人工複核時被誤導性數字帶偏。
@@ -38,7 +48,8 @@ Rationale：報告是本機檔案而非透過 Artifact 發佈，不受 sandbox �
 
 ## Risks / Trade-offs
 
-- [風險] `Detector` 原本針對 full-frame 推論設計，套用在已裁切、可能佔滿畫面的 crop 上，anchor／scale 假設可能不成立，導致大量偽陽性或偽陰性一致性分數 → Mitigation：分數僅作排序線索、不自動決定刪除；tasks 中安排一次小規模抽樣驗證（如單一資料量最小的類別）確認分數與人工判斷的相關性，再套用到全量資料。
+- [風險，已發生並促成 Decision 1 修訂] `Detector` 原本針對 full-frame 推論設計，套用在已裁切、可能佔滿畫面的 crop 上，anchor／scale 假設可能不成立，導致大量偽陽性或偽陰性一致性分數 → 對 small_truck 用 `VEHICLE_GROUP` 放寬緩解，但對 person（無相近類別可歸群、78% 完全無偵測）緩解無效 → Mitigation（修訂後）：改用 `ReID` 包裝既有偵測權重抽 embedding、取最近類別中心點，不再依賴偵測器的定位能力；同樣先在小規模類別（如剛失敗的 person）驗證訊號是否真的不再退化，不假設一定成功再套用到全量。
+- [風險，embedding 方案本身] `ReID.__call__` 唯一驗證過的用途是「同一段影片內的同身分追蹤比對」，「不同類別之間視覺上是否分得開」從未實測過；且 `ReID.__call__` 內部依賴 ultralytics `embed=` 的隱性 predictor 狀態（`__init__` 用一次空 forward 設定，後續 `__call__` 不再顯式傳 `embed=`），行為依賴既有、已在生產環境用過的程式路徑，但仍是間接證據非直接證明 → Mitigation：小規模驗證時同時記錄「新分佈是否不再退化」與「目視核對排序最低的幾個身分是否真的可疑」兩項證據，兩者都要有才算訊號可用，不能只看分佈形狀。
 - [風險] 全量掃描 38000+ 張 crop 逐張跑一次 YOLO 推論屬耗時批次作業 → Mitigation：腳本比照既有 Tier 2／grid search 腳本慣例支援 `--classes`／範圍縮小旗標，允許分批執行。
 - [風險] 人工審查 300+ 身分的 contact sheet 仍是體力活，排序只能減少無效瀏覽、不保證覆蓋完整 → Mitigation：報告產生時明確統計「已產生縮圖／略過」身分數，避免遺漏未被納入報告的身分。
 - [風險] 隔離操作的 manifest 若遺失，後續無法回溯還原 → Mitigation：manifest 寫入隔離目錄本身（與被搬移的檔案放在一起），不寫到臨時或容易被清除的路徑。
@@ -59,22 +70,25 @@ Rollback：整個流程中唯一會異動 `crop_dataset/` 的操作是隔離腳�
 ```
 check_class_consistency.py          generate_identity_review.py         quarantine_flagged.py
 ─────────────────────────           ─────────────────────────           ─────────────────────
-逐身分/逐張重跑 Detector             讀 check_class_consistency 的CSV      讀人工匯出的CSV
-比對 predicted vs assigned           + crop_dataset 縮圖                  --dry-run（預設）/ --apply
-略過 dsecdet_ 前綴身分                產出「本機 HTML」報告：                身分或單張兩種粒度
-輸出 CSV：                            - 依 agreement_rate 由低到高排序      搬到 crop_dataset_quarantine/
-class,identity,image,                - DSEC 身分獨立區塊（無分數）          寫入 manifest.json（時間、
-predicted_class,confidence,agree      - 每個身分縮圖旁勾選框                 來源清單、每筆原路徑→目的路徑）
-                                       - 頁面「產生確認清單」按鈕
-                                       （前端 JS Blob+download，
+逐身分/逐張抽 ReID embedding         讀 check_class_consistency 的CSV      讀人工匯出的CSV
+（ReID 包裝 yolo11x_dennis.pt）      + crop_dataset 縮圖                  --dry-run（預設）/ --apply
+算各類別中心點，取最近中心點           產出「本機 HTML」報告：                身分或單張兩種粒度
+當 predicted_class                  - 依 agreement_rate 由低到高排序      搬到 crop_dataset_quarantine/
+略過 dsecdet_ 前綴身分                - DSEC 身分獨立區塊（無分數）          寫入 manifest.json（時間、
+輸出 CSV（schema 不變）：             - 每個身分縮圖旁勾選框                 來源清單、每筆原路徑→目的路徑）
+class,identity,image,                - 頁面「產生確認清單」按鈕
+predicted_class,confidence,agree      （前端 JS Blob+download，
                                        匯出符合 quarantine_flagged.py
                                        schema 的 CSV）
 ```
 
-- `check_class_consistency.py`：CLI 比照現有 Tier2 慣例，支援 `--classes`、`--crop-root`、`--out`；DSEC 身分在輸出裡標 `skipped_reason=dsec_source`，不進 agreement 統計。
+（Task 2／Task 3 不受這次 Decision 1 修訂影響——CSV schema、報告格式、隔離機制完全不變，只有 Task 1 內部「怎麼決定 predicted_class」的機制從重跑偵測器換成 embedding 最近中心點。）
+
+- `check_class_consistency.py`：CLI 比照現有 Tier2 慣例，支援 `--classes`、`--crop-root`、`--out`；DSEC 身分在輸出裡標 `skipped_reason=dsec_source`，不進 agreement 統計、也不參與各類別中心點的計算（避免用不可信的資料污染中心點）。
 - `generate_identity_review.py`（新檔，不擴充現有 `generate_quality_report.py`——兩者輸入 schema、輸出格式（Markdown vs 互動 HTML）都不同，混在同一支腳本會違反單一職責，比照專案既有「一支腳本一個關注點」慣例分開）：每類別一個 HTML 檔（或依 `--page-size` 分頁），每個身分卡片含縮圖、身分名稱、agreement_rate（DSEC 區塊不顯示）、勾選框；「產生確認清單」按鈕把目前頁面勾選狀態序列化成 CSV 下載。
 - `quarantine_flagged.py`：CLI 讀確認清單 CSV，`identity`+`image` 皆有值→單張；`image` 空白→整身分；單張搬移後若身分資料夾清空，一併移除空資料夾（對應 `reid/crop-quarantine` spec 的「不留空資料夾」要求）。
 
 ## Open Questions
 
-- `agree` 判定改採「vehicle-group 放寬」：`car`/`small_truck`/`truck` 三者互判為一致（`VEHICLE_GROUP`），只有跨到 `bus`/`person`/`scooter` 或完全無偵測才算不一致。原因是 car/small_truck/truck 邊界對本專案偵測器而言是能力上限，不是程式錯誤——small_truck 小規模驗證中，全 class 最大裁切（131×255px，目視明確是小貨卡）仍被判成 `car`（conf 0.55），在放寬前導致 91% 身分 agreement_rate 為 0.0、訊號完全無鑑別力；放寬後 small_truck 的 183 個身分分布為 72 個 0.0、57 個 1.0、54 個落在中間（mean 0.45、median 0.33），才變成可用的排序訊號。已知限制：這個訊號**抓不到** car/small_truck/truck 彼此之間的誤判（例如身分整個歸錯在 car 和 small_truck 之間），這類錯誤仍要靠 Task 2 的全量人工 contact-sheet 審查抓；也抓不到「裁切太小完全無偵測」拖低分數但實際上沒有跨類別混入的情況（例如 395 張裁切裡 212 張因解析度太低而無偵測、但有偵測到的全部正確判為同組，agreement_rate 仍只有 0.46）——這種情況的低分不代表身分歸錯類別。
+- **（已過期，Decision 1 修訂後不再適用）** 原本記錄的「`agree` 判定改採 vehicle-group 放寬（`car`/`small_truck`/`truck` 三者互判為一致）」——這是重跑偵測器方案下針對 small_truck 的緩解措施，改用 embedding＋最近中心點後，`VEHICLE_GROUP` 特例已整個移除（不需要手動放寬，中心點距離判斷天然涵蓋所有類別，不會有偵測器「完全看不到框」的問題）。保留這段記錄供追溯：small_truck 小規模驗證中，全 class 最大裁切（131×255px，目視明確是小貨卡）仍被偵測器判成 `car`（conf 0.55），嚴格比對會讓 91% 身分 agreement_rate 為 0.0；後續發現 `person` 類別（無相近類別可歸群）用同一套偵測器方案也退化（78% 完全無偵測），兩者共同促成改用 embedding 方案。
+- **新的待驗證項目**：embedding＋最近中心點方案尚未做過任何小規模驗證（即將對 `person` 執行，比照 Task 1 原本的 small_truck 驗證方法論：檢視新的 agreement_rate 分佈是否不再退化、目視核對排序最低的幾個身分是否真的可疑）。驗證結果與最終採用的門檻（若有）待驗證完成後補充於此。
