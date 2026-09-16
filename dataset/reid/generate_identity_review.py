@@ -148,13 +148,15 @@ def render_identity_card(cls: str, identity: str, crop_root: Path, assets_dir: P
     rep_img = imgs[len(imgs) // 2] if imgs else None
     rep_thumb = thumb_name(cls, identity, rep_img) if rep_img else ""
     if rep_img:
-        make_thumbnail(rep_img, assets_dir / rep_thumb)
+        if not make_thumbnail(rep_img, assets_dir / rep_thumb):
+            print(f"warn: failed to read {rep_img}")
     assets_rel = assets_dir.name
 
     image_thumbs = []
     for img_path in imgs:
         t_name = thumb_name(cls, identity, img_path)
-        make_thumbnail(img_path, assets_dir / t_name)
+        if not make_thumbnail(img_path, assets_dir / t_name):
+            print(f"warn: failed to read {img_path}")
         image_thumbs.append(IMAGE_THUMB_TEMPLATE.format(
             image_name=html.escape(img_path.name), assets_rel=assets_rel, thumb=t_name,
         ))
