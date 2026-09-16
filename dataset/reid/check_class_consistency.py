@@ -40,6 +40,19 @@ CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
 IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
 DSEC_PREFIX = "dsecdet_"
 
+# car/small_truck/truck 外觀相近，偵測器對這三者邊界的判斷力弱（見 task-1-report.md 的
+# small_truck 小規模驗證：全 class 最大裁切 131x255 仍被判成 car，conf 0.55）。放寬為
+# 「同組視為一致」，讓 agreement_rate 只對「明顯歸錯大類別」（如混入 bus/person/scooter）
+# 有鑑別力；car/small_truck/truck 彼此間的模糊誤判仍要靠 Task 2 的全量人工審查抓，不是
+# 這個自動化訊號的強項。
+VEHICLE_GROUP = {"car", "small_truck", "truck"}
+
+
+def in_same_group(predicted_class: str | None, assigned_class: str) -> bool:
+    if predicted_class is None:
+        return False
+    return predicted_class == assigned_class or {predicted_class, assigned_class} <= VEHICLE_GROUP
+
 
 def discover_identities(class_dir: Path) -> list[Path]:
     return sorted(p for p in class_dir.iterdir() if p.is_dir())
@@ -71,7 +84,7 @@ def check_identity(identity_dir: Path, assigned_class: str, detector: Detector, 
         if img is None:
             continue
         predicted_class, conf = predicted_class_for_crop(detector, img, iou, imgsz)
-        agree = predicted_class == assigned_class
+        agree = in_same_group(predicted_class, assigned_class)
         rows.append({
             "class": assigned_class,
             "identity": identity_dir.name,

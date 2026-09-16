@@ -77,4 +77,4 @@ predicted_class,confidence,agree      - 每個身分縮圖旁勾選框          
 
 ## Open Questions
 
-- agreement_rate 的具體門檻（例如低於多少視為「建議整身分複核」）留待小規模驗證結果出來後再定，不影響本次 spec 與 task 的結構本身。
+- `agree` 判定改採「vehicle-group 放寬」：`car`/`small_truck`/`truck` 三者互判為一致（`VEHICLE_GROUP`），只有跨到 `bus`/`person`/`scooter` 或完全無偵測才算不一致。原因是 car/small_truck/truck 邊界對本專案偵測器而言是能力上限，不是程式錯誤——small_truck 小規模驗證中，全 class 最大裁切（131×255px，目視明確是小貨卡）仍被判成 `car`（conf 0.55），在放寬前導致 91% 身分 agreement_rate 為 0.0、訊號完全無鑑別力；放寬後 small_truck 的 183 個身分分布為 72 個 0.0、57 個 1.0、54 個落在中間（mean 0.45、median 0.33），才變成可用的排序訊號。已知限制：這個訊號**抓不到** car/small_truck/truck 彼此之間的誤判（例如身分整個歸錯在 car 和 small_truck 之間），這類錯誤仍要靠 Task 2 的全量人工 contact-sheet 審查抓；也抓不到「裁切太小完全無偵測」拖低分數但實際上沒有跨類別混入的情況（例如 395 張裁切裡 212 張因解析度太低而無偵測、但有偵測到的全部正確判為同組，agreement_rate 仍只有 0.46）——這種情況的低分不代表身分歸錯類別。
