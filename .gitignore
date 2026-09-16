@@ -16,6 +16,7 @@ dataset/reid/*
 !dataset/reid/build_reid_split.py
 !dataset/reid/check_class_consistency.py
 !dataset/reid/generate_identity_review.py
+!dataset/reid/quarantine_flagged.py
 
 # Python
 __pycache__/
