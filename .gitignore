@@ -14,6 +14,7 @@ video/
 dataset/reid/*
 !dataset/reid/README.md
 !dataset/reid/build_reid_split.py
+!dataset/reid/check_class_consistency.py
 
 # Python
 __pycache__/
