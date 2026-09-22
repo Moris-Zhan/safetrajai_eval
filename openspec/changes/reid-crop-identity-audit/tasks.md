@@ -379,6 +379,89 @@ if __name__ == "__main__":
 - [ ] 1b.3 小規模驗證（比照原 1.3 的方法論，改跑剛失敗的 `person`）：執行 `python dataset/reid/check_class_consistency.py --classes person`，確認：(a) `dataset/reid/class_consistency_flags.csv`／`_identities.csv` 兩份都有產生且非空；(b) 統計新的 agreement_rate 分佈（0.0／中段／1.0 各自身分數與比例），跟舊版偵測器方案的「83% 卡在 0.0」比較，是否不再退化；(c) 打開排序最前面（最低）與最後面（最高）的各 3-5 個身分，用圖片檢視器核對目視判斷是否與分數方向一致；(d) 誠實記錄結果——若新分佈依然退化或目視核對對不上，不要美化，回報給協調者決定下一步（可能是換一個 embedding 抽取層、或接受此方案對 person 也不理想的結論），不要自行放寬判定邏輯掩蓋問題。
 - [ ] 1b.4 依 1b.3 驗證結果更新 `design.md` 的 Open Questions 段落（「新的待驗證項目」那條），記錄實際驗證結果與（如果有）採用的門檻；若驗證通過，重新對 `person`／`truck` 執行 4.2／4.3（見任務群組 4），取代已過期的舊版偵測器輸出。
 
+## 1c. 距離度量改成對角化標準化距離（推翻 1b 的原始歐氏距離，見 `design.md` Decision 1 第二次修訂）
+
+> **觸發原因**：全量 6 類別實跑（584,114 張，非小批次驗證）後，scooter/small_truck/truck 三類明顯劣化，逐影像分析發現大量誤判指向 `bus`（scooter 33.5%）。目視核對 5 張被誤判的 scooter 裁切確認是真正的機車/速可達，不是視覺上真的像公車——是 embedding 空間統計缺陷。根因：car/scooter 身分數暴增到 7021/5386（vs bus 的 57），原始歐氏距離在類別樣本數量級差異極大時失準。
+>
+> **範圍**：只改 `check_class_consistency.py` 的距離計算，不動 Task 2/3。CSV schema 不變（`distance` 欄位語意再度演進：從「歐氏距離」變成「對角化標準化距離」，數值不再跟舊版直接可比，但欄位名稱與型別不變）。
+
+- [ ] 1c.1 修改 `compute_class_centroids()`：额外回傳每個類別的**維度變異數**（用跟算中心點同一批「身分平均 embedding」樣本算，不是逐張影像算——直接對應「類別身分間的視覺多樣性」這個根因假設）：
+
+```python
+def compute_class_centroids(crop_root: Path, classes: list[str], reid: ReID):
+    per_class_identity_means: dict[str, list[np.ndarray]] = {c: [] for c in classes}
+    embedding_cache: dict[tuple[str, str], dict[str, np.ndarray]] = {}
+
+    for cls in classes:
+        class_dir = crop_root / cls
+        if not class_dir.is_dir():
+            continue
+        for identity_dir in discover_identities(class_dir):
+            if is_dsec_identity(identity_dir):
+                continue
+            per_image: dict[str, np.ndarray] = {}
+            for img_path in list_images(identity_dir):
+                img = cv2.imread(str(img_path))
+                if img is None:
+                    continue
+                per_image[str(img_path)] = embed_crop(reid, img)
+            embedding_cache[(cls, identity_dir.name)] = per_image
+            if per_image:
+                identity_mean = np.mean(list(per_image.values()), axis=0)
+                per_class_identity_means[cls].append(identity_mean)
+
+    centroids = {
+        cls: np.mean(means, axis=0)
+        for cls, means in per_class_identity_means.items()
+        if means
+    }
+    # 對角化變異數：每個維度各自的變異數（不是完整共變異數矩陣，樣本數不夠估計那個）。
+    # 身分數 < 2 時無法估計變異數，該類別退回原始歐氏距離（nearest_class 內處理）。
+    variances = {
+        cls: np.var(np.stack(means), axis=0)
+        for cls, means in per_class_identity_means.items()
+        if len(means) >= 2
+    }
+    return centroids, variances, embedding_cache
+```
+
+- [ ] 1c.2 修改 `nearest_class()`，改用對角化標準化距離（`Σ(x-μ)²/σ²`），變異數不存在（樣本數 < 2）時退回原始歐氏距離平方：
+
+```python
+VARIANCE_FLOOR = 1e-6  # 避免某個維度變異數趨近 0 導致除法爆炸
+
+
+def nearest_class(embedding: np.ndarray, centroids: dict[str, np.ndarray], variances: dict[str, np.ndarray]) -> str | None:
+    best_cls, best_dist = None, None
+    for cls, centroid in centroids.items():
+        diff_sq = (embedding - centroid) ** 2
+        var = variances.get(cls)
+        if var is not None:
+            dist = float(np.sum(diff_sq / np.maximum(var, VARIANCE_FLOOR)))
+        else:
+            dist = float(np.sum(diff_sq))
+        if best_dist is None or dist < best_dist:
+            best_cls, best_dist = cls, dist
+    return best_cls
+```
+
+- [ ] 1c.3 更新 `main()`：`compute_class_centroids()` 現在回傳 3 個值（`centroids, variances, embedding_cache`），呼叫端要跟著解包；`nearest_class(embedding, centroids)` 呼叫改成 `nearest_class(embedding, centroids, variances)`；`dist_to_own` 的計算也要改成同一套標準化距離公式（保持跟 `nearest_class` 內部邏輯一致，不要一個標準化一個沒標準化）：
+
+```python
+                predicted_class = nearest_class(embedding, centroids, variances)
+                if cls in centroids:
+                    diff_sq = (embedding - centroids[cls]) ** 2
+                    var = variances.get(cls)
+                    dist_to_own = float(np.sum(diff_sq / np.maximum(var, VARIANCE_FLOOR))) if var is not None else float(np.sum(diff_sq))
+                else:
+                    dist_to_own = None
+```
+
+驗證：`python -c "import ast; ast.parse(open('dataset/reid/check_class_consistency.py').read())"`；`python dataset/reid/check_class_consistency.py --help`。
+
+- [ ] 1c.4 小規模驗證（**只能確認程式碼邏輯正確，驗證不了 scooter→bus 問題是否真的解決**——這正是 1b→1c 這次教訓：小規模測試會誤導，問題只在全量規模才浮現。用 `--classes person truck small_truck` 這種小組合純粹確認程式跑得動、不 crash、輸出格式正確，不要用這一步的結果判斷「有沒有修好」）。
+- [ ] 1c.5 全量重跑（**這步才是真正的驗證**，由協調者在確認 GPU 資源後執行，非本任務範圍內的小規模驗證能取代）：`python dataset/reid/check_class_consistency.py`（不加 `--classes`），比較 scooter/small_truck/truck 三類新舊分佈與逐影像混淆分佈（尤其 scooter→bus 的比例是否顯著下降），誠實記錄是否真的改善，不要調整門檻掩蓋沒改善的結果。
+
 ## 2. 全量互動審查報告（`dataset/reid/generate_identity_review.py`）
 
 > 對應 `specs/reid/crop-review-report/spec.md`；設計依據見 `design.md` Decision 3/5/6。
