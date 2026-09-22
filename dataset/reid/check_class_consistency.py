@@ -114,13 +114,28 @@ def compute_class_centroids(crop_root: Path, classes: list[str], reid: ReID):
         for cls, means in per_class_identity_means.items()
         if means
     }
-    return centroids, embedding_cache
+    # 對角化變異數：每個維度各自的變異數（不是完整共變異數矩陣，樣本數不夠估計那個）。
+    # 身分數 < 2 時無法估計變異數，該類別退回原始歐氏距離（nearest_class 內處理）。
+    variances = {
+        cls: np.var(np.stack(means), axis=0)
+        for cls, means in per_class_identity_means.items()
+        if len(means) >= 2
+    }
+    return centroids, variances, embedding_cache
 
 
-def nearest_class(embedding: np.ndarray, centroids: dict[str, np.ndarray]) -> str | None:
+VARIANCE_FLOOR = 1e-6  # 避免某個維度變異數趨近 0 導致除法爆炸
+
+
+def nearest_class(embedding: np.ndarray, centroids: dict[str, np.ndarray], variances: dict[str, np.ndarray]) -> str | None:
     best_cls, best_dist = None, None
     for cls, centroid in centroids.items():
-        dist = float(np.linalg.norm(embedding - centroid))
+        diff_sq = (embedding - centroid) ** 2
+        var = variances.get(cls)
+        if var is not None:
+            dist = float(np.sum(diff_sq / np.maximum(var, VARIANCE_FLOOR)))
+        else:
+            dist = float(np.sum(diff_sq))
         if best_dist is None or dist < best_dist:
             best_cls, best_dist = cls, dist
     return best_cls
@@ -138,7 +153,7 @@ def main() -> None:
     reid = ReID(args.reid_model)
 
     print("Pass 1/2: 抽 embedding、計算各類別中心點...")
-    centroids, embedding_cache = compute_class_centroids(crop_root, args.classes, reid)
+    centroids, variances, embedding_cache = compute_class_centroids(crop_root, args.classes, reid)
     for cls in args.classes:
         print(f"  {cls}: 中心點 {'OK' if cls in centroids else '無有效身分，略過'}")
 
@@ -165,8 +180,13 @@ def main() -> None:
             per_image = embedding_cache.get((cls, identity_dir.name), {})
             rows = []
             for img_path_str, embedding in per_image.items():
-                predicted_class = nearest_class(embedding, centroids)
-                dist_to_own = float(np.linalg.norm(embedding - centroids[cls])) if cls in centroids else None
+                predicted_class = nearest_class(embedding, centroids, variances)
+                if cls in centroids:
+                    diff_sq = (embedding - centroids[cls]) ** 2
+                    var = variances.get(cls)
+                    dist_to_own = float(np.sum(diff_sq / np.maximum(var, VARIANCE_FLOOR))) if var is not None else float(np.sum(diff_sq))
+                else:
+                    dist_to_own = None
                 agree = predicted_class == cls
                 rows.append({
                     "class": cls, "identity": identity_dir.name, "image": img_path_str,
