@@ -6,6 +6,7 @@ runs.zip
 models/
 wandb/
 video/
+PaperSurvey/
 
 # Python
 __pycache__/
