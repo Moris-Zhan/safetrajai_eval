@@ -2,14 +2,14 @@
 
 ## 1. Phase 0：回歸防線（在舊結構上完成，不搬任何程式碼）
 
-- [ ] 1.1 從 `master` 開分支 `refactor/project-structure`，驗證 `git branch --show-current` 輸出該分支名
-- [ ] 1.2 在 `track_eval` env 安裝 `pytest`，驗證 `pip list` 中 `torch`、`ultralytics` 版本與安裝前相同
-- [ ] 1.3 建立 `tests/golden/configs/` 下 5 份情境 config（bytetrack、botsort_noreid、botsort_reid、collision_detect、botsort_save_reid_crops），與 `config/` 原檔相比只有 `OUTPUT_ROOT` 不同；以 `diff` 驗證差異僅此一行
-- [ ] 1.4 撰寫 `tests/golden/run_all.sh <run>`：依序跑 5 個情境、grid search（`--max-videos 1`＋單組 `--params-subset`＋獨立 `--result-csv`）、homography 驗證，輸出全部落在 `runs/refactor_golden/<run>/`；以 `--dry-run` 或 echo 模式驗證不會寫到 `runs/refactor_golden/` 以外
-- [ ] 1.5 撰寫 `tests/golden/compare.py <runA> <runB>`（MOT txt 逐行＋數值欄位最大絕對誤差、TrackEval 摘要與 grid search CSV 指標、ttc/pet events 逐筆比對、Re-ID crops 相對路徑集合）；以同一個 run 自比驗證輸出全為 0 差異
-- [ ] 1.6 撰寫 `tests/test_smoke.py`（舊結構版）：import 全部專案模組、對 `config/*.yaml` 呼叫 `load_config()`／`load_track_config()`；記錄基準 commit hash 到 `tests/golden/BASE_COMMIT`；以 `pytest tests/test_smoke.py` 通過驗證
-- [ ] 1.7 commit Phase 0 工具（在任何搬移之前），驗證 `git log -1 --stat` 只含 `tests/` 檔案
-- [ ] 1.8 以舊程式碼執行 `run_all.sh before1`、`run_all.sh before2`，並以 `compare.py before1 before2` 產出容忍度報告存成 `tests/golden/TOLERANCE.md`；驗證報告涵蓋全部比對項目
+- [x] 1.1 從 `master` 開分支 `refactor/project-structure`，驗證 `git branch --show-current` 輸出該分支名
+- [x] 1.2 在 `track_eval` env 安裝 `pytest`，驗證 `pip list` 中 `torch`、`ultralytics` 版本與安裝前相同（另依使用者決定安裝 `scikit-learn`：`utils/model.py` 頂層 import sklearn，原 env 缺它導致 `best_full_model.pt` 無法 unpickle；安裝後 torch／ultralytics／numpy／scipy／opencv 版本不變）
+- [x] 1.3 建立 `tests/golden/configs/` 下 5 份情境 config（bytetrack、botsort_noreid、botsort_reid、collision_detect、botsort_save_reid_crops），與 `config/` 原檔相比只有 `OUTPUT_ROOT` 與 `reid_crop_dir` 不同（`reid_crop_dir` 預設寫入正式資料集 `dataset/reid/crop_dataset`，必須一併導向 run 目錄）；以 `diff` 驗證差異僅此兩行
+- [x] 1.4 撰寫 `tests/golden/run_all.sh <run>`：依序跑 5 個情境、grid search（`--max-videos 1`＋單組 `--params-subset`＋獨立 `--result-csv`）、homography 驗證，輸出全部落在 `runs/refactor_golden/<run>/`；以 `--dry-run` 或 echo 模式驗證不會寫到 `runs/refactor_golden/` 以外
+- [x] 1.5 撰寫 `tests/golden/compare.py <runA> <runB>`（MOT txt 逐行＋數值欄位最大絕對誤差、TrackEval 摘要與 grid search CSV 指標、ttc/pet events 逐筆比對、Re-ID crops 相對路徑集合）；以同一個 run 自比驗證輸出全為 0 差異
+- [x] 1.6 撰寫 `tests/test_smoke.py`（舊結構版）：import 全部專案模組、對 `config/*.yaml` 呼叫 `load_config()`／`load_track_config()`；記錄基準 commit hash 到 `tests/golden/BASE_COMMIT`；以 `pytest tests/test_smoke.py` 通過驗證
+- [x] 1.7 commit Phase 0 工具（在任何搬移之前），驗證 `git log -1 --stat` 只含 `tests/` 檔案
+- [x] 1.8 以舊程式碼執行 `run_all.sh before1`、`run_all.sh before2`，並以 `compare.py before1 before2` 產出容忍度報告存成 `tests/golden/TOLERANCE.md`；驗證報告涵蓋全部比對項目
 
 ## 2. Phase 1：清理（仍在舊結構上）
 
@@ -21,7 +21,7 @@
 
 - [ ] 3.1 建立 `pyproject.toml`（setuptools、`package-dir` 對應 `src/` 與 `third_party/`、額外頂層 package `utils`、依賴宣告、dev 依賴 pytest）與空的 `src/safetrajai/__init__.py`；以最小原型驗證 setuptools 83 editable 模式可同時 import `safetrajai`、`trackeval.metrics`、`trackeval.datasets`，失敗則改用 design D2 備案
 - [ ] 3.2 `git mv trackeval third_party/trackeval`（內容不變），執行 `pip install -e . --no-deps`；在 `/tmp` 下啟動 Python 驗證 `trackeval.__file__` 指向 `third_party/trackeval/`，且 `git diff --stat -M` 顯示純 rename
-- [ ] 3.3 純搬移 commit：`git mv` `module/{detection,tracker→tracking,reid,grid_search/core.py,collision}`、`evaluation/`、`utils/visualization.py→visualization/` 到 `src/safetrajai/`，`homography_*` 收進 `collision/homography/`，`utils/model.py` 實作移到 `safetrajai/reid/model.py`；驗證 `git show --stat -M` 全部被辨識為 rename
+- [ ] 3.3 純搬移 commit：`git mv` `module/{detection,tracker→tracking,reid,grid_search/core.py,collision}`、`evaluation/`、`utils/visualization.py→visualization/` 到 `src/safetrajai/`，`homography_*` 收進 `collision/homography/`（`homography.py` 成為該子套件的 `__init__.py`，見 design D5b），`utils/model.py` 實作移到 `safetrajai/reid/model.py`；驗證 `git show --stat -M` 全部被辨識為 rename
 - [ ] 3.4 純搬移 commit：CLI 腳本 `git mv` 到 `scripts/`（grid_search_*、validate_homography、train_reid、`reid_data/*`＋README、`visualize_gt_*`），`evaluation/pipeline.py::main()` 抽到 `scripts/run_evaluation.py`；驗證 rename 偵測
 - [ ] 3.5 新增 `safetrajai/paths.py`（`PROJECT_ROOT`），取代全部 `parents[N]`、`DEFAULT_TRACK_CONFIG_PATH`、`_DATASETS_YAML_PATH`；以 `grep -rn "parents\[" src scripts` 只剩 `paths.py` 驗證
 - [ ] 3.6 改寫全部 import 為 `safetrajai.*`、刪除所有 `sys.path` 修改（含 `track_eval.py` 加入 repo 上一層的那行）；以 `grep -rn "sys.path" src scripts utils track_eval.py` 無結果驗證

@@ -54,6 +54,10 @@
 - 其他 CLI 直接搬到 `scripts/`，不保留 wrapper。
 - `scripts/` 本身不是 package，每支腳本只 import `safetrajai`，不自行處理 path。
 
+### D5b：`collision/homography/` 子套件
+`module/collision/homography.py` 的內容整檔搬為 `safetrajai/collision/homography/__init__.py`，其餘 5 支 `homography_*.py` 搬進同一子套件（`run_homography_validation.py` 則移到 `scripts/`）。如此 `from . import homography as homography_mod`、`homography_mod.compute_homography()` 等既有呼叫不必改寫，子套件內原本的 `from .homography import ...` 改為 `from . import ...`。
+- 替代方案：改名為 `homography/core.py`，呼叫端全部要跟著改，import 改動較多，不採用。
+
 ### D8：Phase 3 拆分 `track_eval.py`
 | 新位置 | 內容 |
 |---|---|
