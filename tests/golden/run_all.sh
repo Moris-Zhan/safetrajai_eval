@@ -9,6 +9,10 @@
 #   PIPELINE_CMD       (default: "python track_eval.py")
 #   GRID_SEARCH_CMD    (default: "python module/grid_search/grid_search_bytetrack.py")
 #   HOMOGRAPHY_SCRIPT  (default: "module/collision/run_homography_validation.py")
+#
+# Steps run in parallel (the pipelines are CPU-bound on a single core each);
+# grid search starts once the bytetrack pipeline has produced its stage1 output.
+# Set GOLDEN_PARALLEL=0 to run the steps one at a time.
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
@@ -35,6 +39,7 @@ SCENARIOS=(bytetrack botsort_noreid botsort_reid collision_detect botsort_save_r
 PIPELINE_CMD="${PIPELINE_CMD:-python track_eval.py}"
 GRID_SEARCH_CMD="${GRID_SEARCH_CMD:-python module/grid_search/grid_search_bytetrack.py}"
 HOMOGRAPHY_SCRIPT="${HOMOGRAPHY_SCRIPT:-module/collision/run_homography_validation.py}"
+PARALLEL="${GOLDEN_PARALLEL:-1}"
 
 if [[ $DRY_RUN -eq 0 && -e "$OUT" ]]; then
     echo "refusing to overwrite existing $OUT" >&2
@@ -63,36 +68,51 @@ for scenario in "${SCENARIOS[@]}"; do
     done < <(grep -E '^\s*(OUTPUT_ROOT|reid_crop_dir):' "$CFG_DIR/$scenario.yaml" | awk '{print $2}')
 done
 
-run_step() {
+declare -A STEP_PIDS=()
+FAILED=0
+
+wait_step() {
+    local name="$1"
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    local pid="${STEP_PIDS[$name]}"
+    unset "STEP_PIDS[$name]"
+    wait "$pid" || FAILED=1
+}
+
+start_step() {
     local name="$1"; shift
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "[dry-run] $name: $*"
         return
     fi
-    echo "=== $name"
-    local started=$SECONDS
-    "$@" > "$OUT/logs/$name.log" 2>&1
-    echo "    done in $((SECONDS - started))s (log: $OUT/logs/$name.log)"
+    echo "=== start $name"
+    (
+        set +e
+        started=$SECONDS
+        "$@" > "$OUT/logs/$name.log" 2>&1
+        rc=$?
+        if [[ $rc -eq 0 ]]; then
+            echo "    $name done in $((SECONDS - started))s"
+        else
+            echo "    $name FAILED (exit $rc) after $((SECONDS - started))s (log: $OUT/logs/$name.log)"
+        fi
+        exit $rc
+    ) &
+    STEP_PIDS[$name]=$!
+    if [[ $PARALLEL -eq 0 ]]; then
+        wait_step "$name"
+    fi
 }
+
+trap 'kill $(jobs -p) 2>/dev/null' INT TERM
 
 for scenario in "${SCENARIOS[@]}"; do
     # shellcheck disable=SC2086
-    run_step "pipeline_$scenario" $PIPELINE_CMD --config "$CFG_DIR/$scenario.yaml"
+    start_step "pipeline_$scenario" $PIPELINE_CMD --config "$CFG_DIR/$scenario.yaml"
 done
 
-# Grid search reuses the bytetrack stage1 output (videos + GT) as its source.
-# shellcheck disable=SC2086
-run_step grid_search $GRID_SEARCH_CMD \
-    --config "$CFG_DIR/bytetrack.yaml" \
-    --target-class scooter \
-    --tracker bytetrack \
-    --max-videos 1 \
-    --params-subset fuse_score \
-    --output-root "$OUT/grid_search" \
-    --result-csv "$OUT/grid_search/result.csv"
-
 # The validation script hard-codes OUTPUT_DIR; load it as a module and redirect it.
-run_step homography_validation python -c '
+start_step homography_validation python -c '
 import importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("golden_homography_validation", sys.argv[1])
@@ -102,6 +122,32 @@ module.OUTPUT_DIR = Path(sys.argv[2])
 module.run_all()
 ' "$HOMOGRAPHY_SCRIPT" "$OUT/homography_validation"
 
+# Grid search reuses the bytetrack stage1 output (videos + GT) as its source.
+if [[ -n "${STEP_PIDS[pipeline_bytetrack]:-}" ]]; then
+    wait_step pipeline_bytetrack
+fi
+if [[ $FAILED -eq 0 ]]; then
+    # shellcheck disable=SC2086
+    start_step grid_search $GRID_SEARCH_CMD \
+        --config "$CFG_DIR/bytetrack.yaml" \
+        --target-class scooter \
+        --tracker bytetrack \
+        --max-videos 1 \
+        --params-subset fuse_score \
+        --output-root "$OUT/grid_search" \
+        --result-csv "$OUT/grid_search/result.csv"
+else
+    echo "    grid_search skipped: pipeline_bytetrack failed"
+fi
+
+for name in "${!STEP_PIDS[@]}"; do
+    wait_step "$name"
+done
+
+if [[ $FAILED -ne 0 ]]; then
+    echo "one or more steps failed under $OUT" >&2
+    exit 1
+fi
 if [[ $DRY_RUN -eq 0 ]]; then
     echo "all outputs under $OUT"
 fi
