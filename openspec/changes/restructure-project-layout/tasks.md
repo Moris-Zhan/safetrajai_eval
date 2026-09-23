@@ -34,9 +34,9 @@
 
 ## 4. Phase 3：拆分主入口
 
-- [ ] 4.1 將 `track_eval.py` 內容逐字拆到 `safetrajai/pipeline/{reid_crops,video_io,sequence_tracker,tracking_pipeline}.py` 與 `safetrajai/cli/run_pipeline.py`（argparse＋`main()`），只調整 import；以 AST 比對各類別／函式本體與拆分前相同驗證
-- [ ] 4.2 新增 `scripts/run_pipeline.py` 呼叫 `safetrajai.cli.run_pipeline.main`；根目錄 `track_eval.py` 改為 wrapper，未安裝時印出安裝指令並 `sys.exit(1)`；在未安裝的暫時 env（或 `pip uninstall` 後）驗證提示訊息與非零狀態，再重新安裝
-- [ ] 4.3 跑 smoke 測試與 `run_all.sh after_p3`（經 `python track_eval.py` 入口）＋`compare.py before1 after_p3`，驗證差異在容忍度內；commit Phase 3
+- [x] 4.1 將 `track_eval.py` 內容逐字拆到 `safetrajai/pipeline/{reid_crops,video_io,sequence_tracker,tracking_pipeline}.py` 與 `safetrajai/cli/run_pipeline.py`（argparse＋`main()`），只調整 import；以 AST 比對各類別／函式本體與拆分前相同驗證
+- [x] 4.2 新增 `scripts/run_pipeline.py` 呼叫 `safetrajai.cli.run_pipeline.main`；根目錄 `track_eval.py` 改為 wrapper，未安裝時印出安裝指令並 `sys.exit(1)`；在未安裝的暫時 env（或 `pip uninstall` 後）驗證提示訊息與非零狀態，再重新安裝
+- [x] 4.3 跑 smoke 測試與 `run_all.sh after_p3`（經 `python track_eval.py` 入口）＋`compare.py before1 after_p3`，驗證差異在容忍度內；commit Phase 3
 
 ## 5. 文件同步
 
