@@ -31,7 +31,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
+from safetrajai.classes import CLASS_NAMES
+
+CLASSES = sorted(CLASS_NAMES.values())
 IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
 
 

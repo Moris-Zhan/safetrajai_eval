@@ -17,23 +17,19 @@ python module/reid/training/train.py --class-name person \
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from module.reid.training.dataset import (
+from safetrajai.reid.training.dataset import (
     ReIDCropDataset,
     PKSampler,
     discover_identities,
     split_identities,
 )
-from module.reid.yolo_reid_trainer import (
+from safetrajai.reid.yolo_reid_trainer import (
     ReIDHookManager,
     BatchHardTripletLoss,
     save_yolo_reid,

@@ -34,18 +34,18 @@ if not hasattr(np, "int"):
 from ultralytics import YOLO
 
 # ---- 各功能模組 ----
-from evaluation.utils import print_file_probe, ensure_parent
-from evaluation.excel_export import (
+from safetrajai.evaluation.utils import print_file_probe, ensure_parent
+from safetrajai.evaluation.excel_export import (
     export_det_metrics_to_excel_openpyxl,
     export_trackeval_results_multi_to_excel,
     print_eval_summary,
 )
-from evaluation.trackeval_runner import (
+from safetrajai.evaluation.trackeval_runner import (
     build_trackeval_paths,
     verify_gt_basic,
     run_trackeval_mot,
 )
-from evaluation.dataset_prep import (
+from safetrajai.evaluation.dataset_prep import (
     discover_sequences,
     ensure_det_yaml_for_seq,
     fix_det_labels_to_5cols,

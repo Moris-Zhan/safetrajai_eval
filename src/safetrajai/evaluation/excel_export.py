@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from openpyxl import Workbook
 
-from evaluation.utils import (
+from safetrajai.evaluation.utils import (
     _safe_float, _to_list, _excel_safe,
     _ws_append_row, _autosize_columns,
 )

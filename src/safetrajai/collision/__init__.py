@@ -24,7 +24,7 @@ import cv2
 
 from . import detection_core
 from . import homography as homography_mod
-from . import homography_points
+from .homography import points as homography_points
 from . import output as collision_output
 from .trajectory_adapter import add_homography_fields, load_sequence_tracks
 

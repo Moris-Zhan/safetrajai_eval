@@ -2,15 +2,9 @@ import cv2
 import numpy as np
 from pathlib import Path
 
+from safetrajai.classes import CLASS_NAMES
 
-NAMES = {
-        0: "person",
-        1: "car",
-        2: "scooter",
-        3: "small_truck",
-        4: "bus",
-        5: "truck",
-    }
+NAMES = CLASS_NAMES
 
 
 def save_mot_format(imgs_path, labels_path, output_file, img_width: int, img_height: int,

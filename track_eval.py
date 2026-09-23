@@ -45,7 +45,6 @@ TrackingEvalPipeline（本檔）        — 三階段主流程（stage1 tracking
 """
 
 import os
-import sys
 import time
 import shutil
 import argparse
@@ -57,20 +56,18 @@ import cv2
 import numpy as np
 from ultralytics.utils.plotting import Annotator, colors
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from module.detection.detector import Detector
-from module.tracker import create_tracker, CLASS_NAMES
-from module.tracker.config import (
+from safetrajai.detection.detector import Detector
+from safetrajai.tracking import create_tracker, CLASS_NAMES
+from safetrajai.tracking.config import (
     get_track_config_path,
     load_track_config,
 )
-from module.collision import run_collision_detection_for_sequence
-from utils.visualization import draw_polygon_and_save, save_fst_frame, draw_track_box
-from evaluation.mot_format import save_mot_format, make_det_eval_dataset
-from evaluation.pipeline import run_eval_pipeline
-from evaluation.config_loader import load_config
-from evaluation import dataset_layout
+from safetrajai.collision import run_collision_detection_for_sequence
+from safetrajai.visualization.drawing import draw_polygon_and_save, save_fst_frame, draw_track_box
+from safetrajai.evaluation.mot_format import save_mot_format, make_det_eval_dataset
+from safetrajai.evaluation.pipeline import run_eval_pipeline
+from safetrajai.evaluation.config_loader import load_config
+from safetrajai.evaluation import dataset_layout
 
 
 # =============================================================================

@@ -7,8 +7,8 @@
 # All outputs land in runs/refactor_golden/<run>/. Entry points can be overridden
 # per phase via environment variables:
 #   PIPELINE_CMD       (default: "python track_eval.py")
-#   GRID_SEARCH_CMD    (default: "python module/grid_search/grid_search_bytetrack.py")
-#   HOMOGRAPHY_SCRIPT  (default: "module/collision/run_homography_validation.py")
+#   GRID_SEARCH_CMD    (default: "python scripts/grid_search_bytetrack.py")
+#   HOMOGRAPHY_SCRIPT  (default: "scripts/validate_homography.py")
 #
 # Steps run in parallel (the pipelines are CPU-bound on a single core each);
 # grid search starts once the bytetrack pipeline has produced its stage1 output.
@@ -37,8 +37,8 @@ OUT="$GOLDEN_ROOT/$RUN"
 SCENARIOS=(bytetrack botsort_noreid botsort_reid collision_detect botsort_save_reid_crops)
 
 PIPELINE_CMD="${PIPELINE_CMD:-python track_eval.py}"
-GRID_SEARCH_CMD="${GRID_SEARCH_CMD:-python module/grid_search/grid_search_bytetrack.py}"
-HOMOGRAPHY_SCRIPT="${HOMOGRAPHY_SCRIPT:-module/collision/run_homography_validation.py}"
+GRID_SEARCH_CMD="${GRID_SEARCH_CMD:-python scripts/grid_search_bytetrack.py}"
+HOMOGRAPHY_SCRIPT="${HOMOGRAPHY_SCRIPT:-scripts/validate_homography.py}"
 PARALLEL="${GOLDEN_PARALLEL:-1}"
 
 if [[ $DRY_RUN -eq 0 && -e "$OUT" ]]; then

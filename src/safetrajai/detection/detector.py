@@ -8,7 +8,7 @@ Detector — YOLO 偵測封裝。
 import numpy as np
 from ultralytics import YOLO
 
-from module.tracker.config import get_conf_thresh_for_class, get_min_conf_thresh
+from safetrajai.tracking.config import get_conf_thresh_for_class, get_min_conf_thresh
 
 
 class Detector:

@@ -7,8 +7,8 @@ import numpy as np
 from ultralytics.trackers.bot_sort import BOTSORT, BOTrack
 from ultralytics.trackers.byte_tracker import STrack
 from ultralytics.trackers.basetrack import TrackState
-from module.reid.encoders import ReID, Custom_ReID
-from module.tracker import matching
+from safetrajai.reid.encoders import ReID, Custom_ReID
+from safetrajai.tracking import matching
 from ultralytics.trackers.utils.gmc import GMC
 from torchinfo import summary
 

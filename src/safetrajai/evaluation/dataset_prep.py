@@ -12,8 +12,8 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-from evaluation.utils import _assert_exists
-from evaluation import dataset_layout
+from safetrajai.evaluation.utils import _assert_exists
+from safetrajai.evaluation import dataset_layout
 
 # =========================================================
 # 序列探索

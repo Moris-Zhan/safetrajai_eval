@@ -26,7 +26,9 @@ from pathlib import Path
 
 import cv2
 
-CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
+from safetrajai.classes import CLASS_NAMES
+
+CLASSES = sorted(CLASS_NAMES.values())
 IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
 THUMB_MAX_SIDE = 160
 

@@ -4,7 +4,7 @@
 設定檔載入器。
 
 用法：
-    from evaluation.config_loader import load_config, AppConfig
+    from safetrajai.evaluation.config_loader import load_config, AppConfig
 
     cfg = load_config()                          # 預設讀 config/bytetrack.yaml
     cfg = load_config("config/botsort_reid.yaml") # 指定路徑
@@ -117,7 +117,7 @@ class AppConfig:
         dataset_id = paths.get("dataset")
         registry_entry: dict = {}
         if dataset_id is not None:
-            from evaluation.dataset_layout import load_dataset_registry
+            from safetrajai.evaluation.dataset_layout import load_dataset_registry
             registry = load_dataset_registry()
             if dataset_id not in registry:
                 raise ValueError(

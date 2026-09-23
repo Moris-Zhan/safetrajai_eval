@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 
-from evaluation.utils import (
+from safetrajai.evaluation.utils import (
     labels_dir_fingerprint,
     get_video_wh,
     yolo_xywhn_to_xywh_px,

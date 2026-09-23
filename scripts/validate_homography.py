@@ -27,9 +27,9 @@ from typing import Any, Dict, List
 
 import cv2
 
-from module.collision.homography_pick_aid import USABLE_INTERSECTIONS
-from module.collision.homography_points import list_available_tags
-from module.collision.homography_validation import validate_tag
+from safetrajai.collision.homography.pick_aid import USABLE_INTERSECTIONS
+from safetrajai.collision.homography.points import list_available_tags
+from safetrajai.collision.homography.validation import validate_tag
 
 MATRICES_DIR = Path("models/homography/matrices")
 SATELLITE_DIR = Path("models/homography/satellite_images")

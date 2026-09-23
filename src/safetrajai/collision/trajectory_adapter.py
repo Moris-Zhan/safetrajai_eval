@@ -31,7 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from evaluation.mot_format import NAMES as CLASS_NAMES
+from safetrajai.classes import CLASS_NAMES
 
 
 def _read_class_trajectory_file(path: Path) -> Dict[int, List[tuple]]:

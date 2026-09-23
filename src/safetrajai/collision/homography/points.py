@@ -48,7 +48,7 @@ import cv2
 import numpy as np
 import yaml
 
-from .homography import compute_homography, load_homography
+from . import compute_homography, load_homography
 
 _TAG_SUFFIX_RE = re.compile(r"-\d+-\d+-\d+-\d+$")
 

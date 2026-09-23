@@ -23,21 +23,15 @@ from __future__ import annotations
 
 import argparse
 import csv
-import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-# ── 專案根目錄加入 path（比照 module/grid_search/*.py 的慣例：本檔同樣位於 repo 根目錄
-#    下兩層 dataset/reid/，直接執行 `python dataset/reid/check_class_consistency.py` 時
-#    sys.path[0] 是 dataset/reid/ 而非 repo 根目錄，需手動補上才能 import module）──
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
+from safetrajai.classes import CLASS_NAMES
+from safetrajai.reid.encoders import ReID
 
-from module.reid.encoders import ReID
-
-CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
+CLASSES = sorted(CLASS_NAMES.values())
 IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
 DSEC_PREFIX = "dsecdet_"
 REID_MODEL_PATH = "models/yolo/yolo11x_dennis.pt"

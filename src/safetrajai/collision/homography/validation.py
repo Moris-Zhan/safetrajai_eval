@@ -38,7 +38,7 @@ import cv2
 import numpy as np
 import yaml
 
-from .homography import load_homography
+from . import load_homography
 
 
 # =============================================================================
@@ -275,11 +275,11 @@ def validate_tag(
                 cctv_points, sat_points, pred_sat, dist, stats,
                 Path(output_dir) / f"{tag}_stats.xlsx",
             )
-            from .homography_heatmap import save_error_heatmaps
+            from .heatmap import save_error_heatmaps
             save_error_heatmaps(tag, sat_points, dist, satellite_bgr, output_dir)
 
             if cctv_video_path is not None and Path(cctv_video_path).exists():
-                from .homography_compare_video import save_reprojection_compare_video
+                from .compare_video import save_reprojection_compare_video
                 save_reprojection_compare_video(
                     cctv_video_path, satellite_bgr, H, cctv_points, sat_points, pred_sat,
                     Path(output_dir) / f"{tag}_compare.mp4",

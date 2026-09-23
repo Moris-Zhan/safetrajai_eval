@@ -32,12 +32,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from module.detection.detector import Detector
-from module.tracker import create_tracker
-from module.tracker import config as tracker_config_module
-from evaluation import dataset_layout
-from evaluation.mot_format import save_mot_format
-from evaluation.trackeval_runner import run_trackeval_mot
+from safetrajai.detection.detector import Detector
+from safetrajai.tracking import create_tracker
+from safetrajai.tracking import config as tracker_config_module
+from safetrajai.evaluation import dataset_layout
+from safetrajai.evaluation.mot_format import save_mot_format
+from safetrajai.evaluation.trackeval_runner import run_trackeval_mot
 
 
 # =============================================================================

@@ -19,26 +19,21 @@ import cv2
 import trackeval
 
 # from evaluation.utils import config_loader
-from evaluation.utils import (
+from safetrajai.evaluation.utils import (
     _assert_exists,
     file_md5,
     get_video_wh,
     print_file_probe,
 )
-from evaluation.mot_converter import (
+from safetrajai.evaluation.mot_converter import (
     ul_track_labels_to_mot,
     fix_mot_gt_unique_ids,
     keep_mot_gt_valid_ids
 )
 
-class_name_to_class_id = {
-    'person': 1,
-    'car': 2,
-    'scooter': 3,
-    'small_truck': 4,
-    'bus': 5,
-    'truck': 6,
-}
+from safetrajai.classes import MOT_CLASS_ID
+
+class_name_to_class_id = MOT_CLASS_ID
 
 class_id_to_class_name = {v: k for k, v in class_name_to_class_id.items()}
 

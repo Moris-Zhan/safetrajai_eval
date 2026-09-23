@@ -37,19 +37,15 @@ from pathlib import Path
 
 import numpy as np
 
-# ── 專案根目錄加入 path ─────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from module.tracker import CLASS_NAMES
-from module.tracker import config as tracker_config_module   # 直接操作模組層級 dict
-from module.tracker.config import (
+from safetrajai.tracking import CLASS_NAMES
+from safetrajai.tracking import config as tracker_config_module   # 直接操作模組層級 dict
+from safetrajai.tracking.config import (
     get_min_conf_thresh,
     get_track_config_path,
     load_track_config,
 )
-from evaluation.config_loader import load_config
-from module.grid_search.core import (
+from safetrajai.evaluation.config_loader import load_config
+from safetrajai.grid_search.core import (
     ParameterGrid,
     GridSearchRunner,
     generate_config_patch,

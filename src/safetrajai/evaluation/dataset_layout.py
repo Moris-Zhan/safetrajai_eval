@@ -19,7 +19,9 @@ from pathlib import Path
 
 import yaml
 
-_DATASETS_YAML_PATH = Path(__file__).resolve().parents[1] / "config" / "datasets.yaml"
+from safetrajai.paths import CONFIG_DIR
+
+_DATASETS_YAML_PATH = CONFIG_DIR / "datasets.yaml"
 
 
 def load_dataset_registry(path: Path | str = _DATASETS_YAML_PATH) -> dict[str, dict]:
