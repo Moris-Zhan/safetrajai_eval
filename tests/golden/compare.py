@@ -27,6 +27,8 @@ PATH_ONLY_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".pdf", ".mp4", ".avi",
 IGNORED_CSV_COLUMNS = frozenset({"elapsed_sec"})
 IGNORED_LINE_PATTERN = re.compile(r"^#\s*Generated:")
 TOKEN_SPLIT = re.compile(r"[,\s]+")
+# Outputs may embed their own run directory (e.g. data.yaml `path:`); mask the run name.
+RUN_PREFIX = re.compile(r"runs/refactor_golden/[^/\s\"']+/")
 
 CATEGORY_ORDER = (
     "mot_tracks",
@@ -124,6 +126,9 @@ def compare_scalars(value_a: Any, value_b: Any) -> FileDiff:
         if math.isnan(delta):
             return FileDiff(value_mismatches=1)
         return FileDiff(max_abs_diff=delta, value_mismatches=int(delta > 0))
+    if isinstance(value_a, str) and isinstance(value_b, str):
+        value_a = RUN_PREFIX.sub("runs/refactor_golden/<run>/", value_a)
+        value_b = RUN_PREFIX.sub("runs/refactor_golden/<run>/", value_b)
     return FileDiff(value_mismatches=int(value_a != value_b))
 
 
