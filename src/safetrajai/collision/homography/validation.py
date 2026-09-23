@@ -233,7 +233,7 @@ def validate_tag(
             沒有 CCTV 影片的 20 個）就不畫 overlay，只回傳數值統計（若有 check points 的話）。
         output_dir: 提供時把 overlay/熱力圖/Excel/比對影片存到這個目錄下。
         cctv_video_path: 該路口來源影片的完整路徑。提供時（且 output_dir 也提供）會額外產生
-            `<tag>_compare.mp4`（見 module/collision/homography_compare_video.py），逐幀把
+            `<tag>_compare.mp4`（見 safetrajai/collision/homography/compare_video.py），逐幀把
             整支影片 warp 到衛星座標系跟底圖疊合，跟原始影片並排存成影片，比單張 overlay
             更能看出整支影片時間軸上的對齊狀況。這支影片較耗時，沒有影片路徑就跳過。
 

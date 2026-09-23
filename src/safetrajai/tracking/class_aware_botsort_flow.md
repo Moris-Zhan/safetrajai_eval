@@ -7,7 +7,7 @@
 1. 呼叫 `super().__init__()`，沿用 BOTSORT 原生初始化（Kalman filter、`proximity_thresh`/`appearance_thresh` 等全域參數）。
 2. **Kalman filter 依 fps 重新縮放**：原版 Kalman 轉移矩陣的速度項係數預設對應 30fps（`dt=1`）。若實際 `frame_rate` 不是 30，計算 `dt_scale = 30.0 / frame_rate`，把 `kf._motion_mat` 對角線上代表速度的 4 個係數（`(0,4) (1,5) (2,6) (3,7)`）乘上 `dt_scale`。frame_rate 越低，每幀間隔時間越長，同樣像素位移對應的「每幀速度」應該放大，否則 Kalman 預測位置會落後實際物體。
 3. 建 `self.gmc = GMC(method=args.gmc_method)`（BoTSORT 專屬，ByteTrack 沒有這行）。
-4. **逐類別建立 ReID encoder**（`self.cls_encoder: dict[cls_id, encoder|None]`）：對每個 `CLASS_TRACKING_PARAMS` 裡的類別查 `use_reid`，若為 `True` 才建立對應 encoder，否則該類別的 `cls_encoder[cls_id] = None`。依 `model` 路徑字串判斷用哪個 encoder 類別（見 `module/reid/encoders.py`）：
+4. **逐類別建立 ReID encoder**（`self.cls_encoder: dict[cls_id, encoder|None]`）：對每個 `CLASS_TRACKING_PARAMS` 裡的類別查 `use_reid`，若為 `True` 才建立對應 encoder，否則該類別的 `cls_encoder[cls_id] = None`。依 `model` 路徑字串判斷用哪個 encoder 類別（見 `safetrajai/reid/encoders.py`）：
    - 路徑含 `reid_model_weights` → `SOTA_ReID`
    - 路徑含 `class_reid_weights` → `Custom_ReID`
    - 其餘 → `ReID`（YOLO 本身當 encoder）
@@ -135,4 +135,4 @@ flowchart TD
 - `track_buffer: 2.0` 在 BoTSORT → `2.0 × 30 = 60` 幀（2 秒）
 - `track_buffer: 2.0` 在 ByteTrack → `(30/30) × 2.0 = 2` 幀（約 0.07 秒）
 
-`module/tracker/track_config.yaml`（base 版）裡每個類別都設了 `track_buffer: 2.0`～`3.0`（原本是給 BoTSORT 用的設計值），如果直接拿去跑 ByteTrack，lost track 幾乎立即被清除，等同完全沒有 buffer——**這不是本次重組造成的問題，是既有程式碼的既有落差**，切換 tracker 類型或共用 track_config 檔案時要特別注意，換算前務必先確認是哪個 tracker 在讀這個值。已記錄進 `NEED.md`。
+`safetrajai/tracking/track_config.yaml`（base 版）裡每個類別都設了 `track_buffer: 2.0`～`3.0`（原本是給 BoTSORT 用的設計值），如果直接拿去跑 ByteTrack，lost track 幾乎立即被清除，等同完全沒有 buffer——**這不是本次重組造成的問題，是既有程式碼的既有落差**，切換 tracker 類型或共用 track_config 檔案時要特別注意，換算前務必先確認是哪個 tracker 在讀這個值。已記錄進 `NEED.md`。

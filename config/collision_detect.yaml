@@ -7,7 +7,7 @@
 # 追蹤產生的軌跡檔（見 markdown/TRAJECTORY_FORMAT.md），不需要 TrackEval 評估，
 # 所以關閉 stage2、開啟 stage3。
 #
-# stage3（TrackingEvalPipeline.run_stage3()，見 track_eval.py / module/collision/）
+# stage3（TrackingEvalPipeline.run_stage3()，見 track_eval.py / safetrajai/collision/）
 # 讀取 stage1 產生的逐類別軌跡檔，計算 TTC（Time-To-Collision）/ PET
 # （Post-Encroachment Time）碰撞事件，輸出到 collision: 區塊指定的目錄。
 # =============================================================================
@@ -40,11 +40,11 @@ eval_flags:
 
 
 # -----------------------------------------------------------------------------
-# 碰撞偵測參數（module/collision/，見 markdown/COLLISION_DETECTION.md）
+# 碰撞偵測參數（safetrajai/collision/，見 markdown/COLLISION_DETECTION.md）
 # -----------------------------------------------------------------------------
 collision:
   # 序列名.yaml 若存在於這個目錄下，該序列就會啟用 Homography 座標轉換；
-  # 不存在則該序列退回原始像素座標（見 module/collision/homography_points.py）
+  # 不存在則該序列退回原始像素座標（見 safetrajai/collision/homography/points.py）
   homography_points_dir: config/homography_points
 
   # TTC（Time-To-Collision）參數，見 COLLISION_DETECTION.md 第 2 節

@@ -1,12 +1,12 @@
 """
-module/grid_search/ 三支腳本（bytetrack/botsort/botsort_reid）共用邏輯。
+scripts/grid_search_*.py 三支腳本（bytetrack/botsort/botsort_reid）共用邏輯。
 
 三支腳本各自只保留 PARAM_GRIDS 常數 + main()（各自 argparse 定義與預設值），
 其餘 90% 以上逐字重複的邏輯（ParameterGrid、scoring、GT 處理、GridSearchRunner）
 全部收斂到這裡。詳見 docs/superpowers/specs/2026-09-03-grid-search-dedup-design.md。
 
-【module/detection/ 整合】score_params()/_run_tracking_for_video() 的偵測邏輯
-改呼叫 module/detection/detector.py::Detector，取代原本三支腳本各自手刻的
+【safetrajai/detection/ 整合】score_params()/_run_tracking_for_video() 的偵測邏輯
+改呼叫 safetrajai/detection/detector.py::Detector，取代原本三支腳本各自手刻的
 model.predict() + 逐偵測套用類別門檻過濾（與 Detector.detect() 內容逐字重複）。
 詳見 docs/superpowers/specs/2026-09-03-detection-module-design.md。
 
@@ -309,9 +309,9 @@ def _run_tracking_for_video(
     get_min_conf_thresh()/get_conf_thresh_for_class() 決定，與這裡的 conf 參數無關
     （這是現行程式碼本來就有的行為，非本次變動）。
 
-    【module/detection/ 整合】原本各腳本手刻的 model = YOLO(model_path) +
+    【safetrajai/detection/ 整合】原本各腳本手刻的 model = YOLO(model_path) +
     model.predict(...) + 逐偵測套用 get_conf_thresh_for_class() 過濾，改成呼叫
-    module/detection/detector.py 的 Detector.detect(frame, iou=iou, imgsz=imgsz)
+    safetrajai/detection/detector.py 的 Detector.detect(frame, iou=iou, imgsz=imgsz)
     （與 track_eval.py 共用同一份偵測+信心過濾邏輯，不再各自重寫）。
     """
     from copy import deepcopy

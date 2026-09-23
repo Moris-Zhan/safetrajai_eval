@@ -2,8 +2,8 @@
 # config/botsort_reid.yaml — 情境 4：BoTSORT + ReID 開啟，完整流程
 #                             （stage1 tracking + stage2 TrackEval 評估）
 # 用法：python track_eval.py --config config/botsort_reid.yaml
-# 內容原為 module/tracker/track_config_BotSort_0413.yaml，已合併進本檔。
-# 這是 module/grid_search/grid_search_botsort_reid.py 的 PARAM_GRIDS 固定值
+# 內容原為舊版 tracker 目錄下的 track_config_BotSort_0413.yaml，已合併進本檔。
+# 這是 scripts/grid_search_botsort_reid.py 的 PARAM_GRIDS 固定值
 # 對照的原始版本（該腳本註解明確標示與此版本一致）。
 # =============================================================================
 

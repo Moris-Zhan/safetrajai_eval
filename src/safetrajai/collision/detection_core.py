@@ -2,7 +2,7 @@
 碰撞偵測核心演算法（純運算，無 cv2 繪圖/影片 I/O 依賴）。
 
 移植自 markdown/reference_code/collision_detection_core.py（SafeTrajAI 專案原始碼
-萃取版），邏輯未修改。輸入的 track dict 格式見 module/collision/trajectory_adapter.py
+萃取版），邏輯未修改。輸入的 track dict 格式見 safetrajai/collision/trajectory_adapter.py
 （Layer 2：後處理單軌跡格式）。
 
 包含兩種交通衝突代理安全指標（Surrogate Safety Measures）:

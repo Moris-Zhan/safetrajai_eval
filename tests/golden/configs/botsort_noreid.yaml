@@ -2,7 +2,7 @@
 # config/botsort_noreid.yaml — 情境 2：BoTSORT（ReID 關閉）完整流程
 #                                （stage1 tracking + stage2 TrackEval 評估）
 # 用法：python track_eval.py --config config/botsort_noreid.yaml
-# 內容原為 module/tracker/track_config_BotSort_noreid_0413.yaml，已合併進本檔。
+# 內容原為舊版 tracker 目錄下的 track_config_BotSort_noreid_0413.yaml，已合併進本檔。
 # =============================================================================
 
 

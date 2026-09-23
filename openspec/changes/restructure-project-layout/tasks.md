@@ -40,10 +40,10 @@
 
 ## 5. 文件同步
 
-- [ ] 5.1 更新 CLAUDE.md（架構圖、常用指令、安裝步驟、conda env、`requirement.txt` 非權威來源、`save_mot_format` 等既有限制的新路徑）；開頭加上「術語見 `CONTEXT.md`、關鍵決策見 `docs/adr/`」，並將用語對齊 glossary（碰撞 → 衝突事件、影片 → 序列、tag → 鏡頭）；以 `grep -nE "碰撞偵測|碰撞風險|\btag\b" CLAUDE.md` 只剩刻意說明對應關係的行驗證
-- [ ] 5.2 更新 `.claude/commands/{run-pipeline,tracker-change,tune-config}.md` 與 `.claude/settings.local.json` 的路徑
-- [ ] 5.3 更新 `tracking/HANDOFF.md`、`reid/HANDOFF.md`、`*_flow.md`、`scripts/reid_data/README.md`、`config/homography_*/README.md`，以及 `config/*.yaml` 開頭的用法註解（只改註解）
-- [ ] 5.4 以 `grep -rnE "module/|module\.(tracker|reid|collision|grid_search|detection)|from evaluation|dataset/reid/.*\.py|visualize/" --include=*.md --include=*.yaml --include=*.json --include=*.py .`（排除 vendored／ignored／openspec archive）驗證舊路徑無殘留；commit 文件更新
+- [x] 5.1 更新 CLAUDE.md（架構圖、常用指令、安裝步驟、conda env、`requirement.txt` 非權威來源、`save_mot_format` 等既有限制的新路徑）；開頭加上「術語見 `CONTEXT.md`、關鍵決策見 `docs/adr/`」，並將用語對齊 glossary（碰撞 → 衝突事件、影片 → 序列、tag → 鏡頭）；以 `grep -nE "碰撞偵測|碰撞風險|\btag\b" CLAUDE.md` 只剩刻意說明對應關係的行驗證
+- [x] 5.2 更新 `.claude/commands/{run-pipeline,tracker-change,tune-config}.md` 與 `.claude/settings.local.json` 的路徑
+- [x] 5.3 更新 `tracking/HANDOFF.md`、`reid/HANDOFF.md`、`*_flow.md`、`scripts/reid_data/README.md`、`config/homography_*/README.md`，以及 `config/*.yaml` 開頭的用法註解（只改註解）
+- [x] 5.4 以 `grep -rnE "module/|module\.(tracker|reid|collision|grid_search|detection)|from evaluation|dataset/reid/.*\.py|visualize/" --include=*.md --include=*.yaml --include=*.json --include=*.py .`（排除 vendored／ignored／openspec archive）驗證舊路徑無殘留；commit 文件更新（刻意保留：本 change 的 openspec 文件、`tests/test_smoke.py` 對 `BASE_COMMIT` 舊路徑的引用，以及因同一行出現 `.py` 而被命中的 `dataset/reid/` 資料目錄；`.claude/settings.local.json` 未進版控，移除 18 條舊路徑的一次性權限、homography 驗證改為新路徑）
 
 ## 6. 收尾驗證
 

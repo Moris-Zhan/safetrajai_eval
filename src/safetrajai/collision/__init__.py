@@ -1,7 +1,7 @@
 """
-module/collision — 軌跡碰撞偵測（TTC / PET）對外入口。
+safetrajai.collision — 軌跡碰撞偵測（TTC / PET）對外入口。
 
-流程（見 track_eval.py::TrackingEvalPipeline.run_stage3()）：
+流程（見 safetrajai/pipeline/tracking_pipeline.py::TrackingEvalPipeline.run_stage3()）：
     1. trajectory_adapter.load_sequence_tracks()：讀 stage1 軌跡檔（Layer 1 CSV）
        → Layer 2 track dict 清單
     2. homography_points.load_homography_for_sequence()：該序列有沒有人工填的對應點檔，
@@ -12,7 +12,7 @@ module/collision — 軌跡碰撞偵測（TTC / PET）對外入口。
     4. output.py 寫三種輸出：乾淨 CSV/JSON、比照原始欄位風格的 log CSV、熱區圖 PNG
 
 對外只用 run_collision_detection_for_sequence()，其餘函式各自模組內部使用
-（比照 module/tracker 只曝露 create_tracker() 的慣例）。
+（比照 safetrajai.tracking 只曝露 create_tracker() 的慣例）。
 """
 
 from __future__ import annotations

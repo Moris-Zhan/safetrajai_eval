@@ -4,7 +4,7 @@ Homography（單應性變換）矩陣計算與座標轉換核心運算。
 移植自 markdown/reference_code/homography_core.py（SafeTrajAI 專案原始碼萃取版），
 邏輯未修改。互動選點 GUI（原程式用 cv2 滑鼠事件）與目標標註流程高度相關，不易
 通用，因此不包含在這裡——本專案改用「人工存圖 + 手寫座標到 yaml」的方式取得對應點，
-見 module/collision/homography_points.py。
+見 safetrajai/collision/homography/points.py。
 
 本專案目前沒有真實地圖底圖，"map" 側點位是使用者自行在同一張 CCTV 第一幀畫面上
 定義的校正後座標，因此這裡的轉換實質上是手動透視校正，不是地理座標轉換。

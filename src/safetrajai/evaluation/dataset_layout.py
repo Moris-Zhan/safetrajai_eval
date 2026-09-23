@@ -1,7 +1,7 @@
 # evaluation/dataset_layout.py
 """
 Dataset 路徑組裝：集中 SOURCE 掃描與 OUTPUT 序列目錄命名，供
-track_eval.py、module/grid_search/*.py、module/collision/ 共用。
+track_eval.py、scripts/grid_search_*.py、safetrajai/collision/ 共用。
 
 命名慣例（見 docs/superpowers/specs/2026-09-03-dataset-path-refactor-design.md）：
     SOURCE（唯讀，既有資料，命名不變）：

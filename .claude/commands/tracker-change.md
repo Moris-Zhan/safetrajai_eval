@@ -5,8 +5,8 @@ argument-hint: [需求或檔案路徑]
 
 先閱讀 $ARGUMENTS，並在修改前閱讀：
 
-- `module/tracker/HANDOFF.md`
-- 對應的 `class_aware_botsort_flow.md` 或 `class_aware_bytetrack_flow.md`
+- `src/safetrajai/tracking/HANDOFF.md`
+- 同目錄下對應的 `class_aware_botsort_flow.md` 或 `class_aware_bytetrack_flow.md`
 - 使用中的 `config/*.yaml` 的 `class_tracking` 區塊
 
 整理並說明：

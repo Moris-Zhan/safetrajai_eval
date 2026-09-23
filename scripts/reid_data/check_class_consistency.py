@@ -14,9 +14,9 @@ openspec/changes/reid-crop-identity-audit/specs/reid/identity-class-consistency/
 DSEC 來源身分（資料夾名稱前綴 dsecdet_）一律略過——不計分、也不參與任何類別中心點的計算。
 
 用法：
-    python dataset/reid/check_class_consistency.py
-    python dataset/reid/check_class_consistency.py --classes person small_truck
-    python dataset/reid/check_class_consistency.py --reid-model models/yolo/yolo11x_dennis.pt \
+    python scripts/reid_data/check_class_consistency.py
+    python scripts/reid_data/check_class_consistency.py --classes person small_truck
+    python scripts/reid_data/check_class_consistency.py --reid-model models/yolo/yolo11x_dennis.pt \
         --out dataset/reid/class_consistency_flags.csv
 """
 from __future__ import annotations
@@ -54,12 +54,12 @@ def embed_crop(reid: ReID, crop: np.ndarray) -> np.ndarray:
 
     繞過 ReID.__call__()：目前環境（ultralytics==8.4.147）下，Model.predict() 每次呼叫
     都會用 custom={"embed": None, ...} 蓋掉沒有明確重複傳入的 embed 參數，導致 ReID.__call__()
-    退化成回傳一般偵測結果而非特徵向量——這是 module/reid/encoders.py 共用程式碼在此環境下的
+    退化成回傳一般偵測結果而非特徵向量——這是 safetrajai/reid/encoders.py 共用程式碼在此環境下的
     既有限制（見 design.md），本次變更範圍內不修復共用程式碼，只在這支腳本內繞過。
     改為直接呼叫底層 reid.model()，每次都明確帶 embed=，複製 ReID.__init__ 算 layer index
     的同一套邏輯（len(reid.model.model.model) - 2，對應 .pt 權重）。
 
-    輸入沿用原本 BGR（cv2.imread 直接讀出，不手動轉 RGB）——比照 module/detection/detector.py
+    輸入沿用原本 BGR（cv2.imread 直接讀出，不手動轉 RGB）——比照 safetrajai/detection/detector.py
     ::Detector.detect() 把 BGR frame 直接餵給同一套 self.model.predict() pipeline 的既有作法，
     前處理交給 ultralytics 內部處理。
 

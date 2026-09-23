@@ -1,11 +1,9 @@
-# dataset/reid/ — Re-ID 資料集（原始裁切 + 切分輸出）
+# scripts/reid_data/ — Re-ID 資料集工具（資料位於 dataset/reid/）
 
-本文件說明 `dataset/reid/crop_dataset/`、`dataset/reid/reid_category_dataset/`、`dataset/reid/reid_dataset/` 三個目錄的檔案／目錄架構與彼此關係。切分腳本 `build_reid_split.py` 放在 `dataset/reid/` 底下。
+本文件說明 `dataset/reid/crop_dataset/`、`dataset/reid/reid_category_dataset/`、`dataset/reid/reid_dataset/` 三個目錄的檔案／目錄架構與彼此關係。切分與稽核腳本放在 `scripts/reid_data/`（`build_reid_split.py`、`check_class_consistency.py`、`generate_identity_review.py`、`quarantine_flagged.py`），資料本身仍在 `dataset/reid/`（gitignore）。
 
 ```
 dataset/reid/
-├── build_reid_split.py       切分腳本（讀 crop_dataset，寫 reid_category_dataset / reid_dataset）
-├── README.md                  本文件
 ├── crop_dataset/               原始裁切影像（來源，唯讀）
 ├── reid_category_dataset/      --mode category 輸出
 └── reid_dataset/                --mode flat 輸出
@@ -30,7 +28,7 @@ dataset/reid/crop_dataset/
 ## 2. `dataset/reid/reid_category_dataset/` — `build_reid_split.py --mode category` 輸出
 
 ```bash
-python dataset/reid/build_reid_split.py --mode category
+python scripts/reid_data/build_reid_split.py --mode category
 ```
 
 6 個類別**各自獨立**依身分（資料夾）切一次 train/val（同一身分的照片只會出現在其中一邊），輸出：
@@ -54,7 +52,7 @@ dataset/reid/reid_category_dataset/
 ## 3. `dataset/reid/reid_dataset/` — `build_reid_split.py --mode flat` 輸出
 
 ```bash
-python dataset/reid/build_reid_split.py --mode flat
+python scripts/reid_data/build_reid_split.py --mode flat
 ```
 
 6 個類別的身分**全部混在一起**依身分切一次 train/val（不分類別），輸出：
@@ -87,7 +85,7 @@ dataset/reid/reid_dataset/
 
 ## `save_reid_crops` 蒐集目標（`reid_crop_dir`）
 
-`config/*.yaml` 的 `save params.reid_crop_dir` 現在指向 `./dataset/reid/crop_dataset`——跟這裡的 `crop_dataset/` 是同一個目錄，`track_eval.py` 的 `save_reid_crops` 功能會直接把新蒐集的裁切寫進 `{class}/{影片}_track{id}/*.jpg`，與 `reid_category_dataset/`、`reid_dataset/` 這兩個切分輸出目錄不會互相覆蓋（各自獨立）。`module/reid/training/train.py` 的 `--data-root` 預設也指向這裡（訓練時直接讀 class-organized 的原始裁切，不經過切分輸出）。
+`config/*.yaml` 的 `save params.reid_crop_dir` 現在指向 `./dataset/reid/crop_dataset`——跟這裡的 `crop_dataset/` 是同一個目錄，`track_eval.py` 的 `save_reid_crops` 功能會直接把新蒐集的裁切寫進 `{class}/{影片}_track{id}/*.jpg`，與 `reid_category_dataset/`、`reid_dataset/` 這兩個切分輸出目錄不會互相覆蓋（各自獨立）。`scripts/train_reid.py` 的 `--data-root` 預設也指向這裡（訓練時直接讀 class-organized 的原始裁切，不經過切分輸出）。
 
 ## 共用行為（`build_reid_split.py` 兩種模式都適用）
 

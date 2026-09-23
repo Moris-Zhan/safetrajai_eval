@@ -1,11 +1,11 @@
-# module/reid/ — 自行設計的 Re-ID 模型架構與訓練腳本說明
+# safetrajai/reid/ — 自行設計的 Re-ID 模型架構與訓練腳本說明
 
 本文件只涵蓋**自行設計、有訓練程式碼**的那條路徑：YOLO-as-encoder（`yolo_reid_trainer.py` + `training/`）。`encoders.py` 的 `Custom_ReID`（載入 `utils/model.py` 的 `ReIDNet`）是另一條推論用路徑，權重是外部訓練好的產物，訓練程式碼不在本專案範圍內，只在第六節簡短帶過。
 
 ## 一、模組總覽
 
 ```
-module/reid/
+safetrajai/reid/
 ├── encoders.py              推論期特徵抽取：ReID（本文件訓練出的模型）／Custom_ReID（外部模型，見第六節）
 ├── yolo_reid_trainer.py     模型架構本體：ReIDHookManager、ReIDProjector、BatchHardTripletLoss、
 │                            save_yolo_reid()、load_reid_model()
@@ -14,7 +14,7 @@ module/reid/
     └── train.py               CLI 入口，串起整個訓練流程
 ```
 
-資料來源見 `dataset/reid/README.md`（`track_eval.py` 的 `save_reid_crops` 功能蒐集裁切、`build_reid_split.py` 切 train/val）；本文件只講模型本身怎麼設計、訓練腳本怎麼運作。
+資料來源見 `scripts/reid_data/README.md`（`track_eval.py` 的 `save_reid_crops` 功能蒐集裁切、`build_reid_split.py` 切 train/val）；本文件只講模型本身怎麼設計、訓練腳本怎麼運作。
 
 ## 二、模型架構（`yolo_reid_trainer.py`）
 
@@ -195,7 +195,7 @@ optimizer = torch.optim.Adam([
 
 ## 六、與 `encoders.py::ReID` 的關係、跟 `Custom_ReID` 的差異
 
-訓練出的權重（`models/yolo-reid/{class}_reid.pt`）直接被 `encoders.py::ReID` 載入——`ReID.__init__` 用 ultralytics `YOLO(model_path)` 讀權重，走的是 ultralytics 自己的 `embed=` 推論參數（不是本文件的 `ReIDHookManager`），但因為存檔時 backbone 權重本來就在同一個 `.pt` 裡，數值上是一致的（`reid_projector` 這個附掛屬性不會影響 ultralytics 自己的推論路徑，只有透過 `load_reid_model()` 明確讀取才會用到）。`module/tracker/class_aware_botsort.py` 依 `class_tracking:` 裡 `model:` 路徑字串判斷走哪條 encoder（不含 `class_reid_weights` → `ReID`）。
+訓練出的權重（`models/yolo-reid/{class}_reid.pt`）直接被 `encoders.py::ReID` 載入——`ReID.__init__` 用 ultralytics `YOLO(model_path)` 讀權重，走的是 ultralytics 自己的 `embed=` 推論參數（不是本文件的 `ReIDHookManager`），但因為存檔時 backbone 權重本來就在同一個 `.pt` 裡，數值上是一致的（`reid_projector` 這個附掛屬性不會影響 ultralytics 自己的推論路徑，只有透過 `load_reid_model()` 明確讀取才會用到）。`safetrajai/tracking/class_aware_botsort.py` 依 `class_tracking:` 裡 `model:` 路徑字串判斷走哪條 encoder（不含 `class_reid_weights` → `ReID`）。
 
 `encoders.py::Custom_ReID` 是完全不同的另一條路徑：載入 `utils/model.py` 定義的 `ReIDNet`（`torch.save()` 整物件序列化，pickle 相容性限制見 `CLAUDE.md`「架構」章節），權重是外部訓練好的產物，**本專案沒有它的訓練程式碼**，不在本文件範圍內，也不在目前的重新設計計畫裡（見 `markdown/ARCHITECTURE.md`）。
 

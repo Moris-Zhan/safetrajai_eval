@@ -8,7 +8,7 @@ Homography 矩陣載入：優先用既有已算好的矩陣，沒有對應路口
 `resolve_homography()` 會優先用這份；只有 26 個路口以外的新路口才需要走第 2 節的
 人工點選流程。⚠️ 這 26 個路口裡，只有本專案實際有 CCTV 影片的 6 個（C000025、
 C000043、C000054、C000085、C000294、C000297）才有辦法真的驗證矩陣準確度（見
-module/collision/homography_validation.py）；其餘 20 個只有矩陣本身，沒有 CCTV 影片
+safetrajai/collision/homography/validation.py）；其餘 20 個只有矩陣本身，沒有 CCTV 影片
 可以選 check points，屬於「未驗證」狀態，套用時要留意。
 
 ## 2. 人工點選（fallback：路口不在既有 26 個之列時使用）
@@ -145,7 +145,7 @@ def save_verification_image(
     """把 cctv_points 標在 first_frame 圖上另存一張圖，供人工目視確認座標有沒有標錯位置。
 
     只標 CCTV 側的點——這是給第 2 節「人工點選」流程用的快速檢查；若要對既有矩陣
-    做正式的 reprojection error 驗證，用 module/collision/homography_validation.py。
+    做正式的 reprojection error 驗證，用 safetrajai/collision/homography/validation.py。
     """
     img = cv2.imread(str(first_frame_path))
     if img is None:

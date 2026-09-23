@@ -7,15 +7,15 @@ Class-Aware Tracker 參數調優工具（BoTSORT）
 使用 sklearn-style GridSearchCV 概念，以 HOTA.AssA_mean 作為 scoring function，
 對指定類別的 CLASS_TRACKING_PARAMS 進行窮舉搜尋。
 
-共用邏輯（ParameterGrid、scoring、GridSearchRunner 等）見 module/grid_search/core.py；
+共用邏輯（ParameterGrid、scoring、GridSearchRunner 等）見 safetrajai/grid_search/core.py；
 本檔只保留 PARAM_GRIDS（此腳本專屬的搜尋空間）與 main()（此腳本專屬的 argparse 定義，
 CLI 驅動 `--conf`/`--iou`/`--imgsz`/`--frame_rate`/`--gmc_method`）。
 
 使用方式：
-  python module/grid_search/grid_search_botsort.py --target-class scooter --config config/grid_search_botsort.yaml
+  python scripts/grid_search_botsort.py --target-class scooter --config config/grid_search_botsort.yaml
 
 進階：
-  python module/grid_search/grid_search_botsort.py \\
+  python scripts/grid_search_botsort.py \\
       --target-class scooter \\
       --video-dir ./data/source \\
       --output-root ./runs/track_eval \\

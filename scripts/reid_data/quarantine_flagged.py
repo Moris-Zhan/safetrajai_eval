@@ -14,8 +14,8 @@ confirm CSV 可手動撰寫，或用 generate_identity_review.py 產生的報告
 （欄位 schema 兩者一致）。
 
 用法：
-    python dataset/reid/quarantine_flagged.py --confirm-csv path/to/quarantine_confirm.csv
-    python dataset/reid/quarantine_flagged.py --confirm-csv path/to/quarantine_confirm.csv --apply
+    python scripts/reid_data/quarantine_flagged.py --confirm-csv path/to/quarantine_confirm.csv
+    python scripts/reid_data/quarantine_flagged.py --confirm-csv path/to/quarantine_confirm.csv --apply
 """
 from __future__ import annotations
 

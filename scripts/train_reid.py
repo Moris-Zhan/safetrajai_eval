@@ -2,14 +2,14 @@
 YOLO-as-encoder Re-ID 訓練腳本（單一類別一次）。
 
 資料來源：track_eval.py 的 save_reid_crops 蒐集的 dataset/reid/crop_dataset/{class}/{id}/*.jpg。
-模型架構：module/reid/yolo_reid_trainer.py 的 ReIDHookManager（YOLO 倒數第二層 + projector），
+模型架構：safetrajai/reid/yolo_reid_trainer.py 的 ReIDHookManager（YOLO 倒數第二層 + projector），
          不使用 utils/model.py 的 ReIDNet（那個架構需要 camera ID，訓練程式碼也不在本專案內）。
-訓練出的權重可直接被 module/reid/encoders.py::ReID 載入（走 tracker/class_aware_botsort.py
+訓練出的權重可直接被 safetrajai/reid/encoders.py::ReID 載入（走 safetrajai/tracking/class_aware_botsort.py
 的「非 reid_model_weights、非 class_reid_weights」分支）。
 
 用法
 ----
-python module/reid/training/train.py --class-name person \
+python scripts/train_reid.py --class-name person \
     --yolo-weights models/yolo/yolo11x_dennis.pt \
     --output models/yolo-reid/person_reid.pt
 """

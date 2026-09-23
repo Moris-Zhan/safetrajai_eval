@@ -6,13 +6,13 @@ dataset/reid/crop_dataset/ 全量身分互動審查報告（Tier 3 報告）。
 本機互動 HTML 報告：CCTV 來源身分依 agreement_rate 由低到高排序（越可疑排越前面），
 DSEC 來源身分（無自動分數）獨立呈現在每個類別報告的最後一頁。每個身分卡片可勾選
 「整身分移除」，展開後可對單張影像個別勾選「僅此張移除」；頁面上的「產生確認清單」
-按鈕用純前端 JS 把目前頁面的勾選結果匯出成 dataset/reid/quarantine_flagged.py 可讀的
+按鈕用純前端 JS 把目前頁面的勾選結果匯出成 scripts/reid_data/quarantine_flagged.py 可讀的
 CSV（欄位：class,identity,image,action）。只產生報告與縮圖，不搬移／刪除任何原始
 影像，對應 openspec/changes/reid-crop-identity-audit/specs/reid/crop-review-report/spec.md。
 
 用法：
-    python dataset/reid/generate_identity_review.py
-    python dataset/reid/generate_identity_review.py \
+    python scripts/reid_data/generate_identity_review.py
+    python scripts/reid_data/generate_identity_review.py \
         --identities-csv dataset/reid/class_consistency_flags_identities.csv \
         --out-dir dataset/reid/identity_review --page-size 100
 """

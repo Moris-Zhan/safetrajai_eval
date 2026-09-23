@@ -6,7 +6,7 @@ Layer 1：evaluation/mot_format.py::save_mot_format() 產生的逐類別 MOT CSV
     annotation_<seq>/trackers/mot_challenge/<benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt
     每行：frame,track_id,left,top,w,h,score（像素座標，無 header）
 
-Layer 2：module/collision/detection_core.py 的 compute_ttc_for_pair()/
+Layer 2：safetrajai/collision/detection_core.py 的 compute_ttc_for_pair()/
 compute_pet_for_pair() 需要的單一物件軌跡 dict（定義與衍生規則如下）：
     {
         "Track ID": int,
@@ -174,7 +174,7 @@ def add_homography_fields(
 
     Args:
         tracks: load_sequence_tracks() 回傳的 track dict 清單，會被原地修改並回傳
-        H: 3x3 Homography 矩陣（module/collision/homography.py::compute_homography()）
+        H: 3x3 Homography 矩陣（safetrajai/collision/homography/__init__.py::compute_homography()）
         fps: 影片幀率，用於 Homo_Velocity 換算
 
     Returns:

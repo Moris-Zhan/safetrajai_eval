@@ -19,9 +19,9 @@ val 其中一邊，避免同一身分同時出現在兩邊造成資料外洩。
   - res.txt       tree -h 輸出，顯示到身分資料夾這一層（不展開個別影像）
 
 用法：
-    python dataset/reid/build_reid_split.py --mode category
-    python dataset/reid/build_reid_split.py --mode flat --val-ratio 0.2 --seed 42
-    python dataset/reid/build_reid_split.py --mode category --overwrite   # 清空重建既有輸出
+    python scripts/reid_data/build_reid_split.py --mode category
+    python scripts/reid_data/build_reid_split.py --mode flat --val-ratio 0.2 --seed 42
+    python scripts/reid_data/build_reid_split.py --mode category --overwrite   # 清空重建既有輸出
 """
 from __future__ import annotations
 

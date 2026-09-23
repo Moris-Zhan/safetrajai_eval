@@ -1,5 +1,6 @@
 """
-track_eval.py — YOLO class-aware tracking + TrackEval evaluation pipeline
+safetrajai.pipeline.tracking_pipeline — YOLO class-aware tracking + TrackEval evaluation pipeline
+（入口：python track_eval.py 或 python scripts/run_pipeline.py，CLI 見 safetrajai/cli/run_pipeline.py）
 
 目錄結構設計
 ============
@@ -39,10 +40,11 @@ track_eval.py — YOLO class-aware tracking + TrackEval evaluation pipeline
 
 架構
 ====
-Detector（module/detection/detector.py）  — YOLO 推論 + 逐類別信心過濾
-VideoSequenceTracker（本檔）        — 單一影片的 class-aware tracking 迴圈（偵測→追蹤→標註→存檔）
-TrackingEvalPipeline（本檔）        — 三階段主流程（stage1 tracking → stage2 TrackEval 評估 → stage3 碰撞偵測）
+Detector（safetrajai/detection/detector.py）  — YOLO 推論 + 逐類別信心過濾
+VideoSequenceTracker（safetrajai/pipeline/sequence_tracker.py） — 單一影片的 class-aware tracking 迴圈（偵測→追蹤→標註→存檔）
+TrackingEvalPipeline（本檔）                               — 三階段主流程（stage1 tracking → stage2 TrackEval 評估 → stage3 碰撞偵測）
 """
+
 import shutil
 from pathlib import Path
 
@@ -198,12 +200,12 @@ class TrackingEvalPipeline:
 
     def run_stage3(self):
         """
-        第三階段：軌跡碰撞偵測（TTC/PET，module/collision/）。
+        第三階段：軌跡碰撞偵測（TTC/PET，safetrajai/collision/）。
 
         讀取 stage1 產生的逐類別軌跡檔（annotation_<seq>/trackers/mot_challenge/
         <benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt，格式見
         CLAUDE.md「軌跡格式契約」），對每支序列跑一次
-        module.collision.run_collision_detection_for_sequence()，輸出寫到
+        safetrajai.collision.run_collision_detection_for_sequence()，輸出寫到
         cfg.collision_output_dir/<seq_name>/ 底下。
 
         需要 stage1 先跑過（run_det_eval_dir 下要有 annotation_<seq>/trackers/... 與

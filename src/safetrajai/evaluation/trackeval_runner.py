@@ -18,7 +18,7 @@ import numpy as np
 import cv2
 import trackeval
 
-# from evaluation.utils import config_loader
+# from safetrajai.evaluation.utils import config_loader
 from safetrajai.evaluation.utils import (
     _assert_exists,
     file_md5,

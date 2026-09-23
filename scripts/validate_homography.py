@@ -3,7 +3,7 @@
 方便快速檢視哪些路口已驗證、誤差多大、哪些還缺 check points。
 
 用法：
-    python -m module.collision.run_homography_validation
+    python scripts/validate_homography.py
 
 輸出（models/homography/validation_output/）：
     <tag>_overlay.png                     CCTV warp 疊到衛星圖 + GT/預測點（有 check points 才會產生）

@@ -1,6 +1,6 @@
 # config/homography_points/
 
-`module/collision` 用來啟用 Homography 座標轉換的人工對應點檔案，一個序列一份，
+`safetrajai.collision` 用來啟用 Homography 座標轉換的人工對應點檔案，一個序列一份，
 檔名對應序列名（跟 `annotation_<seq>/` 的 `<seq>` 部分相同）：
 
 ```
@@ -35,7 +35,7 @@ map_points:
 
 `cctv_points` / `map_points` 必須一一對應、順序相同，至少 4 組。
 
-4. 填完建議先用 `module/collision/homography_points.py::save_verification_image()`
+4. 填完建議先用 `safetrajai/collision/homography/points.py::save_verification_image()`
    把 `cctv_points` 標在 `first_frame_with_box.jpg` 上另存一張圖，目視確認座標有沒有標錯位置，
    再讓 `run_stage3()` 真的拿去算 Homography。
 
@@ -43,5 +43,5 @@ map_points:
 
 只有 4 組點時 `cv2.findHomography()` 是「恰好可解」，沒有容錯機制，點位精準度會
 直接反映在轉換結果上；若提供 4 組以上的點，可以在
-`module/collision/homography.py::compute_homography()` 自行加上
+`safetrajai/collision/homography/__init__.py::compute_homography()` 自行加上
 `method=cv2.RANSAC` 提升容錯度（目前保留原始行為，預設不啟用）。

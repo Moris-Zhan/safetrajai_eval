@@ -1,6 +1,6 @@
 # config/homography_checkpoints/
 
-`module/collision/homography_validation.py` 用來驗證既有 Homography 矩陣準確度的
+`safetrajai/collision/homography/validation.py` 用來驗證既有 Homography 矩陣準確度的
 **check points**（獨立於算矩陣用的訓練點之外的驗證點），一個路口一份，檔名對應
 `models/homography/matrices/H_<tag>.npy` 的 `<tag>`：
 
@@ -17,7 +17,7 @@ check points 必須是額外挑選、跟訓練點不同的點位，才是有意�
 
 只有**本專案實際有 CCTV 來源影片**的 6 個路口才有辦法點 check points（其餘 20 個既有
 矩陣路口沒有影片可看，物理上選不了，永遠是「未驗證」狀態，見
-`module/collision/homography_validation.py` 模組說明）：
+`safetrajai/collision/homography/validation.py` 模組說明）：
 
 - `C000025 中華三路 民生二路(東北角)-2-20-1280-1280`
 - `C000043 民族一路 九如一路-2-20-1280-1280`
@@ -50,7 +50,7 @@ sat_points:
 
 `cctv_points` / `sat_points` 必須一一對應、順序相同、數量相等。
 
-4. 填完後跑 `module/collision/homography_validation.py::validate_tag()`（或後續會加的
+4. 填完後跑 `safetrajai/collision/homography/validation.py::validate_tag()`（或後續會加的
    批次驗證腳本）會自動：
    - 算出 reprojection error 統計（像素）：mean/std/median/RMSE/p95/max，
      以及誤差最大的幾個點

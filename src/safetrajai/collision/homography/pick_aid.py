@@ -4,7 +4,7 @@ Homography check points 人工點選輔助圖：CCTV 第一幀與衛星底圖並
 
 不是互動選點工具（本專案 headless 環境沒有 $DISPLAY，無法用 cv2/matplotlib 滑鼠事件），
 只是把兩張圖排好、加上座標格線輔助讀數，實際點位仍由人工判讀後手動填 yaml，
-沿用第一輪決定的「存圖 + 手寫座標」流程（見 module/collision/homography_points.py）。
+沿用第一輪決定的「存圖 + 手寫座標」流程（見 safetrajai/collision/homography/points.py）。
 """
 
 from __future__ import annotations

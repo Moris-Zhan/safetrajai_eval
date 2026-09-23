@@ -2,7 +2,7 @@
 Class-specific tracking parameter configuration (loaded from YAML).
 
 資料來源預設為與本模組同目錄的 ``track_config.yaml``。
-執行 ``track_eval.py`` 或 ``tracker_grid_search_*.py`` 時可用 ``--track-config`` 指定
+執行 ``track_eval.py`` 或 ``scripts/grid_search_*.py`` 時可用 ``--track-config`` 指定
 其他 YAML；請在完整 argparse 之前呼叫 ``reload_track_config_from_cli()``，或於程式內
 呼叫 ``load_track_config(path)``。
 
@@ -66,7 +66,7 @@ def _resolve_yaml_path(path: str | Path) -> Path:
     if pkg_rel.is_file():
         return pkg_rel.resolve()
     raise FileNotFoundError(
-        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、module/tracker/ 目錄）"
+        f"找不到 track config YAML: {path}（已嘗試絕對路徑、CWD、safetrajai/tracking/ 目錄）"
     )
 
 

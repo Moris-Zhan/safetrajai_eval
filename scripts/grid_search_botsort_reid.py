@@ -300,7 +300,7 @@ def main():
     # 現行寫死值（這支腳本現況沒有 --conf/--iou/--imgsz/--frame_rate/--gmc_method CLI flag，
     # 統一簽章後也不新增；gmc_method="sparseOptFlow" 是因為現行 _run_tracking_for_video()
     # 完全沒有把 gmc_method 傳給 create_tracker()，實際落到
-    # module/tracker/__init__.py::DEFAULT_TRACKER_CONFIG['gmc_method'] 的值，
+    # safetrajai/tracking/__init__.py::DEFAULT_TRACKER_CONFIG['gmc_method'] 的值，
     # 不是 "ecc"、也不是 grid_search_botsort.py 的 "sift"）：
     result_csv = Path(args.result_csv) if args.result_csv else None
     runner = GridSearchRunner(
