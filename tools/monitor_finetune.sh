@@ -169,7 +169,7 @@ if [ "${1:-}" = "-w" ] || [ "${1:-}" = "--watch" ]; then
     while true; do
         clear
         snapshot
-        sleep 10
+        sleep 2
     done
 else
     snapshot
