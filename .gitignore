@@ -40,3 +40,7 @@ ignore/
 # Claude Code 技能套件鏡像（工具快取，非專案內容）
 .claude/skills/
 .agents/
+
+# Python packaging
+*.egg-info/
+build/

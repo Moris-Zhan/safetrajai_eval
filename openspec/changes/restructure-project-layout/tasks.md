@@ -19,8 +19,8 @@
 
 ## 3. Phase 2：套件化與搬移
 
-- [ ] 3.1 建立 `pyproject.toml`（setuptools、`package-dir` 對應 `src/` 與 `third_party/`、額外頂層 package `utils`、依賴宣告、dev 依賴 pytest）與空的 `src/safetrajai/__init__.py`；以最小原型驗證 setuptools 83 editable 模式可同時 import `safetrajai`、`trackeval.metrics`、`trackeval.datasets`，失敗則改用 design D2 備案
-- [ ] 3.2 `git mv trackeval third_party/trackeval`（內容不變），執行 `pip install -e . --no-deps`；在 `/tmp` 下啟動 Python 驗證 `trackeval.__file__` 指向 `third_party/trackeval/`，且 `git diff --stat -M` 顯示純 rename
+- [x] 3.1 建立 `pyproject.toml`（setuptools、`package-dir` 對應 `src/` 與 `third_party/`、額外頂層 package `utils`、依賴宣告、dev 依賴 pytest）與空的 `src/safetrajai/__init__.py`；以最小原型驗證 setuptools 83 editable 模式可同時 import `safetrajai`、`trackeval.metrics`、`trackeval.datasets`，失敗則改用 design D2 備案
+- [x] 3.2 `git mv trackeval third_party/trackeval`（內容不變），執行 `pip install -e . --no-deps`；在 `/tmp` 下啟動 Python 驗證 `trackeval.__file__` 指向 `third_party/trackeval/`，且 `git diff --stat -M` 顯示純 rename
 - [ ] 3.3 純搬移 commit：`git mv` `module/{detection,tracker→tracking,reid,grid_search/core.py,collision}`、`evaluation/`、`utils/visualization.py→visualization/` 到 `src/safetrajai/`，`homography_*` 收進 `collision/homography/`（`homography.py` 成為該子套件的 `__init__.py`，見 design D5b），`utils/model.py` 實作移到 `safetrajai/reid/model.py`；驗證 `git show --stat -M` 全部被辨識為 rename
 - [ ] 3.4 純搬移 commit：CLI 腳本 `git mv` 到 `scripts/`（grid_search_*、validate_homography、train_reid、`reid_data/*`＋README、`visualize_gt_*`），`evaluation/pipeline.py::main()` 抽到 `scripts/run_evaluation.py`；驗證 rename 偵測
 - [ ] 3.5 新增 `safetrajai/paths.py`（`PROJECT_ROOT`），取代全部 `parents[N]`、`DEFAULT_TRACK_CONFIG_PATH`、`_DATASETS_YAML_PATH`；以 `grep -rn "parents\[" src scripts` 只剩 `paths.py` 驗證

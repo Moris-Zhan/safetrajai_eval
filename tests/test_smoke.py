@@ -20,7 +20,7 @@ def project_modules() -> list[str]:
     return sorted(
         path[: -len(".py")].replace("/", ".").removesuffix(".__init__")
         for path in tracked
-        if not path.startswith(("trackeval/", "tests/"))
+        if not path.startswith(("third_party/", "src/", "tests/"))
     )
 
 

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safetrajai"
+version = "0.1.0"
+description = "Offline CCTV traffic monitoring evaluation: YOLO11 detection, class-aware tracking, TrackEval, and conflict-event analysis"
+requires-python = ">=3.10"
+# Install with `pip install -e . --no-deps` inside the `track_eval` conda env so pip
+# never replaces the CUDA build of torch. requirement.txt is not authoritative.
+dependencies = [
+    "ultralytics==8.3.141",
+    "torch",
+    "torchvision",
+    "opencv-python",
+    "numpy",
+    "scipy",
+    "openpyxl",
+    "pyyaml",
+    "matplotlib",
+    "pillow",
+    "lap",
+    "numba",
+    "torchinfo",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+train = ["wandb"]
+dev = ["pytest"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+trackeval = "third_party/trackeval"
+utils = "utils"
+
+[tool.setuptools.packages.find]
+where = ["src", "third_party", "."]
+include = ["safetrajai*", "trackeval*", "utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
