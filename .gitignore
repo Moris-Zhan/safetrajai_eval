@@ -30,3 +30,13 @@ __pycache__/
 *.pth
 *.onnx
 *.engine
+
+# 大型素材/子模組/工具索引快取 — 不進版控
+Sub_Module/
+bus_video/
+ignore/
+.codegraph/
+
+# Claude Code 技能套件鏡像（工具快取，非專案內容）
+.claude/skills/
+.agents/
