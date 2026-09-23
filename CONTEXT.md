@@ -7,20 +7,54 @@
 ### 影像來源
 
 **鏡頭（Camera）**：
-一台固定視角的路口 CCTV，以編號加視角描述識別（例如 `C000025 中華三路 民生二路(東北角)-2-20-1280-1280`）。Homography 在領域上屬於鏡頭。
+一台固定視角的路口 CCTV，以編號加視角描述識別（例如 `C000025 中華三路 民生二路(東北角)`）。Homography 與 ROI 在領域上都屬於鏡頭。
 _Avoid_: tag、路口、intersection
+
+**鏡頭編號（Camera ID）**：
+鏡頭的短識別碼，是序列名稱第一個空白之前的字串（例如 `C000025`、`BEV0001`），格式不限於 `C` 加數字。
+_Avoid_: camera tag、路口編號
 
 **序列（Sequence）**：
 某一台鏡頭錄下的一段連續影片（例如 `..._20251209145630_15s_1`），是追蹤、評估與衝突分析的基本單位；序列名稱的前綴對應到它的鏡頭。
 _Avoid_: video、clip、seq（僅限程式碼縮寫）
 
+**道路使用者（Road User）**：
+畫面中一個真實存在、被偵測與追蹤的人或車輛，各屬於一個類別。
+_Avoid_: 物件、object、target、實體
+
 **類別（Class）**：
 固定 6 種道路使用者：person、car、scooter、small_truck、bus、truck，各有固定編號，是跨模組契約。
 _Avoid_: category、label
 
-**偵測區域（Detection Zone）**：
-畫面上的多邊形範圍，偵測框中心點落在區域外的就不納入追蹤輸出。設定檔中的鍵名為 `det_corner`。
-_Avoid_: corner、ROI
+**關注區域（ROI, Region of Interest）**：
+屬於鏡頭的畫面多邊形範圍，界定評估、衝突分析與訓練資料蒐集只考慮的區域；物件是否在區域內以框中心點判斷。追蹤本身不受它限制。
+_Avoid_: 偵測區域、detection zone、det_corner、corner
+
+**忽略區域（Ignore Region）**：
+ROI 以外的範圍；落在其中的人工 GT，以及落在其中或與 ignore GT 匹配、但沒有匹配到 ROI 內 GT 的預測，在評估時都不計分。
+_Avoid_: 過濾區、crop 範圍、限縮範圍
+
+### 資料與模型
+
+**人工 GT（Ground Truth）**：
+由人工標註、作為評估基準的偵測框與軌跡；內容不可修改，範圍限縮只能在評估時進行。
+_Avoid_: 權威 GT、原始 GT、orign、限縮版
+
+**評估資料集（Evaluation Set）**：
+附有人工 GT、只用於評估的序列集合；它涵蓋的鏡頭稱為評估鏡頭。
+_Avoid_: 驗證集、all8
+
+**來源資料集（Source Set）**：
+沒有人工 GT、用來產生訓練資料的序列集合；不得包含任何評估鏡頭。
+_Avoid_: video_seqs、bus_video、raw set
+
+**工具模型（Tool Model）**：
+用來產生衍生資料（Re-ID 裁切、偵測預標）的偵測模型，本身不是訓練或評估的對象。
+_Avoid_: helper model、teacher
+
+**基底模型（Base Model）**：
+fine-tune 的起點權重；同一份權重可以同時是工具模型與基底模型。
+_Avoid_: pretrained model、backbone（backbone 指網路結構的一部分）
 
 ### 追蹤
 
@@ -29,8 +63,8 @@ _Avoid_: corner、ROI
 _Avoid_: trajectory、tracklet
 
 **身分（Identity）**：
-Re-ID 資料集中的一個單位，由單一條軌跡的裁切影像組成；不跨軌跡合併，train／val 依身分互斥切分。
-_Avoid_: ID、person ID
+Re-ID 資料集中的一個單位，由單一條軌跡的裁切影像組成；不跨軌跡合併，train／val 依身分互斥切分。同一個道路使用者可能對應到多個身分，身分之間不保證是不同物體。
+_Avoid_: ID、person ID、虛擬身分、pseudo identity
 
 **情境設定（Scenario Config）**：
 一份自包含的設定檔，完整描述一次實驗要跑哪些階段、用哪個追蹤器與參數。
@@ -66,7 +100,9 @@ _Avoid_: 測試點、GT 點
 
 ## Relationships
 
-- 一台**鏡頭**有多段**序列**；一個 **Homography** 屬於一台**鏡頭**。
+- 一台**鏡頭**有多段**序列**；一個 **Homography** 與一個 **ROI** 各屬於一台**鏡頭**。
+- 一台**鏡頭**要嘛是評估鏡頭、要嘛只出現在**來源資料集**，兩者互斥。
+- 一個道路使用者可對應多個**身分**（跨軌跡、跨序列）。
 - 一段**序列**在每個**類別**下產生零到多條**軌跡**。
 - 一個**身分**恰好來自一條**軌跡**。
 - 一個**衝突事件**涉及同一**序列**內的兩條**軌跡**。
@@ -75,3 +111,4 @@ _Avoid_: 測試點、GT 點
 
 - 人工對應點檔案目前以**序列**為鍵（`config/homography_points/<seq>.yaml`），既有矩陣則以**鏡頭**為鍵；依領域模型應以鏡頭為鍵，這是待另開變更處理的已知落差。
 - 「collision」在程式碼中指**衝突事件**，不是實際碰撞。
+- 既有 Homography 矩陣以完整鏡頭名稱（含視角描述與參數尾碼）為鍵，ROI 以**鏡頭編號**為鍵；兩種鏡頭鍵並存是已知落差。
