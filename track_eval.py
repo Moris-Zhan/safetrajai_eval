@@ -642,7 +642,7 @@ class TrackingEvalPipeline:
 
         讀取 stage1 產生的逐類別軌跡檔（annotation_<seq>/trackers/mot_challenge/
         <benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt，格式見
-        .claude/rules/evaluation.md「軌跡格式契約」），對每支序列跑一次
+        CLAUDE.md「軌跡格式契約」），對每支序列跑一次
         module.collision.run_collision_detection_for_sequence()，輸出寫到
         cfg.collision_output_dir/<seq_name>/ 底下。
 

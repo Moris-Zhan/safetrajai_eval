@@ -2,7 +2,7 @@
 Layer 1（本專案實際輸出）→ Layer 2（碰撞偵測核心運算要的格式）轉換層。
 
 Layer 1：evaluation/mot_format.py::save_mot_format() 產生的逐類別 MOT CSV
-（格式見 .claude/rules/evaluation.md「軌跡格式契約」）：
+（格式見 CLAUDE.md「軌跡格式契約」）：
     annotation_<seq>/trackers/mot_challenge/<benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt
     每行：frame,track_id,left,top,w,h,score（像素座標，無 header）
 
