@@ -2,16 +2,14 @@
 """
 dataset/reid/crop_dataset/ 身分跨類別一致性稽核（Tier 3，embedding 版）。
 
-對每個 CCTV 來源身分逐張裁切抽取特徵向量（embedding，透過 encoders.py::ReID 包裝既有
+對每個身分逐張裁切抽取特徵向量（embedding，透過 encoders.py::ReID 包裝既有
 偵測權重 models/yolo/yolo11x_dennis.pt 當通用特徵抽取器），與各類別中心點（該類別全部
-非略過身分的平均 embedding）比較距離，取距離最近的類別當作該影像的判定類別，記錄與資料夾
+身分的平均 embedding）比較距離，取距離最近的類別當作該影像的判定類別，記錄與資料夾
 所屬類別是否一致。只標記、不刪除／搬移任何原始影像檔案，對應
 openspec/changes/reid-crop-identity-audit/specs/reid/identity-class-consistency/spec.md。
 
 本檔原採「重跑偵測器比對類別」設計；因偵測器對已裁切、脫離場景脈絡的小圖定位能力不足
 （person 類別 78% 裁切完全偵測不到任何框）而改採此版，理由見 design.md Decision 1（修訂版）。
-
-DSEC 來源身分（資料夾名稱前綴 dsecdet_）一律略過——不計分、也不參與任何類別中心點的計算。
 
 用法：
     python scripts/reid_data/check_class_consistency.py
@@ -33,7 +31,6 @@ from safetrajai.reid.encoders import ReID
 
 CLASSES = sorted(CLASS_NAMES.values())
 IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
-DSEC_PREFIX = "dsecdet_"
 REID_MODEL_PATH = "models/yolo/yolo11x_dennis.pt"
 
 
@@ -43,10 +40,6 @@ def discover_identities(class_dir: Path) -> list[Path]:
 
 def list_images(identity_dir: Path) -> list[Path]:
     return sorted(p for p in identity_dir.iterdir() if p.suffix.lower() in IMG_SUFFIXES)
-
-
-def is_dsec_identity(identity_dir: Path) -> bool:
-    return identity_dir.name.startswith(DSEC_PREFIX)
 
 
 def embed_crop(reid: ReID, crop: np.ndarray) -> np.ndarray:
@@ -79,7 +72,7 @@ def compute_class_centroids(crop_root: Path, classes: list[str], reid: ReID):
     """兩件事一次做完：(1) 每個類別的中心點；(2) 每個身分逐張影像的 embedding 快取
     （避免中心點算完後，逐影像判定階段要重複抽一次特徵）。
 
-    中心點＝該類別全部非 DSEC 身分的「身分平均 embedding」再平均（不是全部影像直接平均），
+    中心點＝該類別全部身分的「身分平均 embedding」再平均（不是全部影像直接平均），
     避免張數多的身分主導中心點。
     """
     per_class_identity_means: dict[str, list[np.ndarray]] = {c: [] for c in classes}
@@ -90,8 +83,6 @@ def compute_class_centroids(crop_root: Path, classes: list[str], reid: ReID):
         if not class_dir.is_dir():
             continue
         for identity_dir in discover_identities(class_dir):
-            if is_dsec_identity(identity_dir):
-                continue
             per_image: dict[str, np.ndarray] = {}
             for img_path in list_images(identity_dir):
                 img = cv2.imread(str(img_path))
@@ -161,16 +152,7 @@ def main() -> None:
             print(f"skip {cls}: {class_dir} not found")
             continue
         identity_dirs = discover_identities(class_dir)
-        n_dsec = 0
         for identity_dir in identity_dirs:
-            if is_dsec_identity(identity_dir):
-                n_dsec += 1
-                identity_summaries.append({
-                    "class": cls, "identity": identity_dir.name,
-                    "n_images": len(list_images(identity_dir)),
-                    "agreement_rate": "", "skipped_reason": "dsec_source",
-                })
-                continue
             per_image = embedding_cache.get((cls, identity_dir.name), {})
             rows = []
             for img_path_str, embedding in per_image.items():
@@ -194,9 +176,8 @@ def main() -> None:
             identity_summaries.append({
                 "class": cls, "identity": identity_dir.name, "n_images": n,
                 "agreement_rate": round(n_agree / n, 4) if n else "",
-                "skipped_reason": "",
             })
-        print(f"  {cls}: {len(identity_dirs)} identities scanned ({n_dsec} DSEC skipped)")
+        print(f"  {cls}: {len(identity_dirs)} identities scanned")
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -207,7 +188,7 @@ def main() -> None:
 
     summary_path = out_path.with_name(out_path.stem + "_identities.csv")
     with open(summary_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["class", "identity", "n_images", "agreement_rate", "skipped_reason"])
+        writer = csv.DictWriter(f, fieldnames=["class", "identity", "n_images", "agreement_rate"])
         writer.writeheader()
         scored = [r for r in identity_summaries if r["agreement_rate"] != ""]
         skipped = [r for r in identity_summaries if r["agreement_rate"] == ""]

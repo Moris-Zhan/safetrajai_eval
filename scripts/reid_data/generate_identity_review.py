@@ -3,8 +3,7 @@
 dataset/reid/crop_dataset/ 全量身分互動審查報告（Tier 3 報告）。
 
 讀取 check_class_consistency.py 的身分層級輸出（*_identities.csv），為每個類別產生
-本機互動 HTML 報告：CCTV 來源身分依 agreement_rate 由低到高排序（越可疑排越前面），
-DSEC 來源身分（無自動分數）獨立呈現在每個類別報告的最後一頁。每個身分卡片可勾選
+本機互動 HTML 報告：身分依 agreement_rate 由低到高排序（越可疑排越前面）。每個身分卡片可勾選
 「整身分移除」，展開後可對單張影像個別勾選「僅此張移除」；頁面上的「產生確認清單」
 按鈕用純前端 JS 把目前頁面的勾選結果匯出成 scripts/reid_data/quarantine_flagged.py 可讀的
 CSV（欄位：class,identity,image,action）。只產生報告與縮圖，不搬移／刪除任何原始
@@ -102,7 +101,6 @@ PAGE_TEMPLATE = """<!doctype html>
   .image-item {{ display: flex; flex-direction: column; align-items: center; font-size: 11px; }}
   .image-item img {{ max-height: 60px; }}
   #export-btn {{ position: sticky; top: 0; background: #fff; padding: 8px 0; font-size: 16px; }}
-  section.dsec {{ border-top: 3px solid #999; margin-top: 24px; padding-top: 8px; }}
 </style>
 </head>
 <body>
@@ -188,25 +186,15 @@ def main() -> None:
 
     for cls in args.classes:
         rows = by_class.get(cls, [])
-        scored = [r for r in rows if r["skipped_reason"] != "dsec_source"]
-        dsec = [r for r in rows if r["skipped_reason"] == "dsec_source"]
 
-        pages = [scored[i:i + args.page_size] for i in range(0, len(scored), args.page_size)] or [[]]
+        pages = [rows[i:i + args.page_size] for i in range(0, len(rows), args.page_size)] or [[]]
 
         for page_idx, page_rows in enumerate(pages, start=1):
-            is_last_page = page_idx == len(pages)
             cards = [
                 render_identity_card(cls, r["identity"], crop_root, assets_dir, f"agreement_rate={r['agreement_rate']}")
                 for r in page_rows
             ]
             sections = [f"<section>{''.join(cards)}</section>"]
-
-            if is_last_page and dsec:
-                dsec_cards = [
-                    render_identity_card(cls, r["identity"], crop_root, assets_dir, "DSEC 來源，無自動分數")
-                    for r in dsec
-                ]
-                sections.append(f'<section class="dsec"><h2>DSEC 來源身分（純人工審查）</h2>{"".join(dsec_cards)}</section>')
 
             title = f"{cls} 身分審查（第 {page_idx}/{len(pages)} 頁）"
             html_content = PAGE_TEMPLATE.format(title=html.escape(title), sections="".join(sections))
