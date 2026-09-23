@@ -41,12 +41,6 @@ classes_to_run:
   truck:       5
 
 
-det_corner:
-  - [210, 90]
-  - [580, 100]
-  - [640, 320]
-  - [0,   280]
-
 logging:
   verbose: false
   debug:   false

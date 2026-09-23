@@ -24,7 +24,7 @@ def draw_polygon_and_save(frame, output_path: Path, pts=None, show_coord: bool =
 def draw_track_box(
     annotator,
     box,
-    det_corner,
+    roi,
     color,
     *,
     embed_label: str | None = None,
@@ -35,7 +35,7 @@ def draw_track_box(
     統一的「多邊形過濾 → 畫框 → 標註」邏輯，取代 VideoSequenceTracker.run() 內
     matched/unmatched/removed 三段重複程式碼。
 
-    - det_corner 為 None 時不做多邊形過濾（全部畫）；不為 None 時，只在框中心點落在
+    - roi 為 None 時不做多邊形過濾（全部畫）；不為 None 時，只在框中心點落在
       多邊形內才畫（沿用現行 cv2.pointPolygonTest 判斷）。
     - embed_label：文字直接嵌入 box_label()（matched track 目前的畫法：框內嵌 track_id）。
     - overlay_label + overlay_anchor：額外用 annotator.text() 疊加文字（unmatched/removed
@@ -48,10 +48,10 @@ def draw_track_box(
     """
     x1, y1, x2, y2 = box
 
-    if det_corner is not None and len(det_corner) > 0:
+    if roi is not None and len(roi) > 0:
         cx = (x1 + x2) / 2
         cy = (y1 + y2) / 2
-        if cv2.pointPolygonTest(det_corner, (float(cx), float(cy)), False) < 0:
+        if cv2.pointPolygonTest(roi, (float(cx), float(cy)), False) < 0:
             return
 
     annotator.box_label([x1, y1, x2, y2], embed_label or "", color=color)

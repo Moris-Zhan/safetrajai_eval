@@ -28,10 +28,11 @@ from safetrajai.evaluation.utils import (
 from safetrajai.evaluation.mot_converter import (
     ul_track_labels_to_mot,
     fix_mot_gt_unique_ids,
-    keep_mot_gt_valid_ids
 )
 
 from safetrajai.classes import MOT_CLASS_ID
+from safetrajai.evaluation.ignore_region import apply_ignore_region
+from safetrajai.roi import resolve_roi
 
 class_name_to_class_id = MOT_CLASS_ID
 
@@ -144,7 +145,6 @@ def prepare_mot_gt_shadow(
     split_name: str,
     seq_name: str,
     video_path: str,
-    det_corner: None | List,
     verbose: bool = True,
 ):
     """
@@ -197,27 +197,7 @@ def prepare_mot_gt_shadow(
     # 修正 GT 重複 ID
     fix_mot_gt_unique_ids(tgt_gt_txt, tgt_gt_txt, keep_policy="largest_area", verbose=verbose)
     
-    # 透過 video_path 取得影片解析度
-    W, H = get_video_wh(video_path)
-
-    # 根據 det_corner 決定 polygon
-    if det_corner is not None:
-        polygon = det_corner
-    else:
-        polygon = np.array([
-            [0, 0],
-            [W, 0],
-            [W, H],
-            [0, H],
-        ], dtype=np.float32)
-
-    # 去除不在 polygon 內之GT
-    keep_mot_gt_valid_ids(
-        gt_txt=tgt_gt_txt,
-        polygon=polygon,
-        center_mode="bbox_center",
-        verbose=verbose,
-    )
+    # ROI 範圍限縮不在這裡做，由 run_trackeval_mot() 以忽略區域處理（docs/adr/0005）
 
     # 驗證修正結果
     ok = check_gt_duplicate_ids_per_frame(tgt_gt_txt, verbose_topk=30 if verbose else 0)
@@ -347,9 +327,13 @@ def run_trackeval_mot(
 
     tgt_gt_txt, tgt_seq_ini = prepare_mot_gt_shadow(
         trackeval_root, benchmark_name, split_name, seq_name, video_path=video_path,
-        det_corner=cfg.det_corner,
         verbose=verbose,
     )
+
+    roi = resolve_roi(seq_name, get_video_wh(video_path))
+    ignore_stats = apply_ignore_region(root, split_folder, seq_name, list(tracker_names_to_eval), roi)
+    for class_name, (n_ignored_gt, n_removed_pred) in ignore_stats.items():
+        print(f"  [ignore] {seq_name} {class_name}: ROI 外 GT {n_ignored_gt} 個、移除匹配到它們的預測 {n_removed_pred} 個")
 
     # 檢查 shadow GT 重複 ID（已在 prepare_mot_gt_shadow 內執行，此處僅在 DEBUG 時補充）
     if DEBUG:

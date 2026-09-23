@@ -13,8 +13,8 @@ def make_min_size_quality_filter(min_width: int, min_height: int) -> Callable[[n
     """Tier 1 品質過濾器範例：裁切寬或高小於門檻值就捨棄。
 
     quality_filters 掛載點吃的是 Callable[[np.ndarray], bool]（True=保留），
-    用法：ReidCropCollector(crop_dir, det_corner, quality_filters=[make_min_size_quality_filter(20, 20)])
-    預設（不傳 quality_filters）行為與現行完全相同，見 openspec/changes/reid-training-data-pipeline/。
+    用法：ReidCropCollector(crop_dir, roi, quality_filters=[make_min_size_quality_filter(20, 20)])
+    預設（不傳 quality_filters）不做任何品質過濾。
     """
     def _filter(crop: np.ndarray) -> bool:
         h, w = crop.shape[:2]
@@ -33,11 +33,11 @@ class ReidCropCollector:
     def __init__(
         self,
         crop_dir: Path,
-        det_corner: np.ndarray | None,
+        roi: np.ndarray | None,
         quality_filters: list[Callable[[np.ndarray], bool]] | None = None,
     ):
         self.crop_dir = crop_dir
-        self.det_corner = det_corner
+        self.roi = roi
         self.quality_filters = quality_filters
 
     def collect(
@@ -56,10 +56,10 @@ class ReidCropCollector:
                 track_id = int(track[4])
                 cls_id   = int(track[6])
 
-                if self.det_corner is not None and len(self.det_corner) > 0:
+                if self.roi is not None and len(self.roi) > 0:
                     cx = (x1 + x2) / 2
                     cy = (y1 + y2) / 2
-                    if cv2.pointPolygonTest(self.det_corner, (float(cx), float(cy)), False) < 0:
+                    if cv2.pointPolygonTest(self.roi, (float(cx), float(cy)), False) < 0:
                         continue
 
                 xi1, yi1 = max(0, int(x1)), max(0, int(y1))

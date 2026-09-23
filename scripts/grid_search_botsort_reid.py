@@ -109,7 +109,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "proximity_thresh":         [0.3],
         "appearance_thresh":        [0.1],
         "model": [
-            "models/yolo-reid/yolo11x-reid-ultra.pt"
+            "models/yolo/yolo11x.pt"
         ],
     },
 
@@ -142,8 +142,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "proximity_thresh":         [0.05, 0.1, 0.15],         # 往更低探索
         "appearance_thresh":        [0.05, 0.1, 0.15],         # 往更低探索
         "model": [
-            # "models/yolo/yolo11x.pt",
-            "models/class_reid_weights/person/best_full_model.pt"
+            "models/yolo/yolo11x.pt"
         ],
     },
 
@@ -159,8 +158,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "proximity_thresh":         [0.2, 0.3, 0.4],           # 在最佳值 0.3 附近精搜
         "appearance_thresh":        [0.1],                      # 固定
         "model": [
-            # "models/yolo-reid/yolo11x-reid-ultra.pt",
-            "models/class_reid_weights/scooter/best_full_model.pt"
+            "models/yolo/yolo11x.pt"
         ],
     },
 
@@ -180,7 +178,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],      
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]    
     },

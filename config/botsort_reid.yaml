@@ -41,12 +41,6 @@ classes_to_run:
   truck:       5
 
 
-det_corner:
-  - [210, 90]
-  - [580, 100]
-  - [640, 320]
-  - [0,   280]
-
 logging:
   verbose: false
   debug:   false
@@ -119,7 +113,7 @@ class_tracking:
       use_reid: true
       proximity_thresh: 0.3
       appearance_thresh: 0.1
-      model: models/yolo-reid/yolo11x-reid-ultra.pt
+      model: models/yolo/yolo11x.pt
     truck:
       center_dist_weight: 0.2
       fuse_score: false
@@ -155,7 +149,7 @@ class_tracking:
       use_reid: true
       proximity_thresh: 0.5
       appearance_thresh: 0.1
-      model: models/yolo-reid/yolo11x-reid-ultra.pt
+      model: models/yolo/yolo11x.pt
 
   default_tracking_params:
     match_thresh: 0.80

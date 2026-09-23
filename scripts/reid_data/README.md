@@ -2,6 +2,8 @@
 
 本文件說明 `dataset/reid/crop_dataset/`、`dataset/reid/reid_category_dataset/`、`dataset/reid/reid_dataset/` 三個目錄的檔案／目錄架構與彼此關係。切分與稽核腳本放在 `scripts/reid_data/`（`build_reid_split.py`、`check_class_consistency.py`、`generate_identity_review.py`、`quarantine_flagged.py`），資料本身仍在 `dataset/reid/`（gitignore）。
 
+> **2026-09-23 更新**：下面描述的 `crop_dataset/`、`reid_category_dataset/`、`reid_dataset/` 與稽核報表，都是舊追蹤器產生的無效資料，已整批隔離到 `dataset/reid/temp/`（見該目錄的 `DO_NOT_USE.md`），不可使用。Re-ID 資料會由後續 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建，屆時本文件與這些腳本的輸入會一併更新。
+
 ```
 dataset/reid/
 ├── crop_dataset/               原始裁切影像（來源，唯讀）

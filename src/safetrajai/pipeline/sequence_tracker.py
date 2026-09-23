@@ -15,6 +15,7 @@ from safetrajai.visualization.drawing import draw_polygon_and_save, draw_track_b
 from safetrajai.evaluation import dataset_layout
 from safetrajai.pipeline.reid_crops import ReidCropCollector
 from safetrajai.pipeline.video_io import VideoWriterWithFfmpeg
+from safetrajai.roi import resolve_roi
 
 
 class VideoSequenceTracker:
@@ -40,7 +41,6 @@ class VideoSequenceTracker:
         show: bool = False,
         show_unmatched: bool = False,
         show_removed: bool = False,
-        det_corner: np.ndarray = None,
         save_reid_crops: bool = False,
         reid_crop_dir: str = "./dataset/reid/crop_dataset",
     ):
@@ -66,14 +66,11 @@ class VideoSequenceTracker:
         self.show = show
         self.show_unmatched = show_unmatched
         self.show_removed = show_removed
-        self.det_corner = det_corner
+        # ROI 屬於鏡頭，在 run() 依影片解析（見 safetrajai/roi.py）
+        self.roi: np.ndarray | None = None
         self.save_reid_crops = save_reid_crops
         self.reid_crop_dir = Path(reid_crop_dir) if reid_crop_dir else None
-        self._reid_collector = (
-            ReidCropCollector(self.reid_crop_dir, det_corner)
-            if save_reid_crops and self.reid_crop_dir is not None
-            else None
-        )
+        self._reid_collector: ReidCropCollector | None = None
 
     def _annotate_frame(self, frame, tracks, unmatched, removed, frame_id) -> np.ndarray:
         """呼叫 utils.visualization.draw_track_box() 分別處理 matched/unmatched/removed，
@@ -85,7 +82,7 @@ class VideoSequenceTracker:
                 x1, y1, x2, y2 = track[:4]
                 track_id = int(track[4])
                 draw_track_box(
-                    annotator, (x1, y1, x2, y2), self.det_corner,
+                    annotator, (x1, y1, x2, y2), self.roi,
                     color=colors(track_id, True),
                     embed_label=f"{track_id}",
                 )
@@ -97,7 +94,7 @@ class VideoSequenceTracker:
                     cls_id   = int(track[6])
                     cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
                     draw_track_box(
-                        annotator, (x1, y1, x2, y2), self.det_corner,
+                        annotator, (x1, y1, x2, y2), self.roi,
                         color=(0, 0, 255),
                         overlay_label=f"unmat: {cls_name}",
                         overlay_anchor=(int(x2), int(y2)),
@@ -109,7 +106,7 @@ class VideoSequenceTracker:
                     x1, y1, x2, y2 = track[:4]
                     track_id = int(track[4])
                     draw_track_box(
-                        annotator, (x1, y1, x2, y2), self.det_corner,
+                        annotator, (x1, y1, x2, y2), self.roi,
                         color=(0, 0, 0),
                         overlay_label=f"Rm: {track_id}",
                         overlay_anchor=(int(x1), int(y1)),
@@ -265,7 +262,7 @@ class VideoSequenceTracker:
             clean_frame = deepcopy(frame)
 
             if frame_id == 0:
-                draw_polygon_and_save(clean_frame, output_path, pts=self.det_corner, save_img=True)
+                draw_polygon_and_save(clean_frame, output_path, pts=self.roi, save_img=True)
 
             frame_id += 1
 
@@ -279,7 +276,7 @@ class VideoSequenceTracker:
                     break
 
             if video_writer and annotated_frame is not None:
-                draw_polygon_and_save(annotated_frame, pts=self.det_corner, output_path=None, save_img=False)
+                draw_polygon_and_save(annotated_frame, pts=self.roi, output_path=None, save_img=False)
                 video_writer.write(annotated_frame)
 
     def _print_summary(self) -> None:
@@ -310,6 +307,10 @@ class VideoSequenceTracker:
         """
         cap, fps, width, height, total_frames = self._open_video(video_path)
         output_path, images_path, labels_path = self._prepare_output_dirs(output_dir, video_path)
+
+        self.roi = resolve_roi(dataset_layout.seq_name_from_video_path(video_path), (width, height))
+        if self.save_reid_crops and self.reid_crop_dir is not None:
+            self._reid_collector = ReidCropCollector(self.reid_crop_dir, self.roi)
 
         video_writer = None
         if self.save:

@@ -1,14 +1,26 @@
 # config/datasets.yaml
 # dataset id → 根路徑/子目錄名稱對照表。
-# config/*.yaml 的 paths.dataset 欄位用短 id 取代重複的中文長路徑字面值；
+# config/*.yaml 的 paths.dataset 欄位用短 id 取代重複的長路徑字面值；
 # 詳見 docs/superpowers/specs/2026-09-03-dataset-path-refactor-design.md 第 3.3 節。
+#
+# role：eval（附人工 GT、只用於評估）或 source（無人工 GT、用來產生訓練資料），見 CONTEXT.md。
+#       eval 與 source 的 cameras 不得重疊（tests/test_smoke.py 檢查）。
+# layout：annotated（<root>/<run_det_eval_dir>/annotation_<seq>/<seq>.mp4）
+#         或 raw（<root>/<camera>/<seq>.mp4，只探索 cameras 清單內的鏡頭）。
+# run_det_eval_dir／run_track_eval_dir：annotated 版面的來源子目錄名稱，也是 OUTPUT_ROOT 下的輸出子目錄名稱。
 
 datasets:
   cctv_all8:
-    root: "./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/"
+    root: "./dataset/eval/cctv_all8/"
+    role: eval
+    layout: annotated
+    cameras: [C000025]
     run_det_eval_dir: annotations_all8
     run_track_eval_dir: mot_annotations_all8
-  video_seqs:
-    root: "./dataset/video_seqs/"
+  reid_sources:
+    root: "./dataset/raw/videos/"
+    role: source
+    layout: raw
+    cameras: [C000043, C000054, C000085, C000294, C000297]
     run_det_eval_dir: annotations_video
     run_track_eval_dir: mot_annotations_video

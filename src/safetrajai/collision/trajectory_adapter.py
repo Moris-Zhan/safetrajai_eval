@@ -31,11 +31,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
+
 from safetrajai.classes import CLASS_NAMES
+from safetrajai.roi import is_center_in_roi
 
 
-def _read_class_trajectory_file(path: Path) -> Dict[int, List[tuple]]:
-    """讀一份逐類別 MOT CSV，回傳 {track_id: [(frame, left, top, w, h, score), ...]}。"""
+def _read_class_trajectory_file(path: Path, roi: np.ndarray) -> Dict[int, List[tuple]]:
+    """讀一份逐類別 MOT CSV，回傳 {track_id: [(frame, left, top, w, h, score), ...]}。
+
+    框中心點在 ROI 外的列在分組前就捨棄，軌跡的排列順序因此等於「軌跡在 ROI 內第一次出現」
+    的順序；下游 PET 計算與軌跡順序有關，必須保持這個順序。
+    """
     by_track: Dict[int, List[tuple]] = {}
     if not path.exists():
         return by_track
@@ -51,6 +58,8 @@ def _read_class_trajectory_file(path: Path) -> Dict[int, List[tuple]]:
             frame = int(float(parts[0]))
             track_id = int(float(parts[1]))
             left, top, w, h = (float(x) for x in parts[2:6])
+            if not is_center_in_roi(roi, left + w / 2, top + h / 2):
+                continue
             score = float(parts[6])
             by_track.setdefault(track_id, []).append((frame, left, top, w, h, score))
 
@@ -132,11 +141,15 @@ def build_track(track_id: int, class_id: int, rows: List[tuple], fps: float) -> 
     }
 
 
-def load_sequence_tracks(seq_output_dir: Path, cfg, fps: float) -> List[Dict[str, Any]]:
+def load_sequence_tracks(seq_output_dir: Path, cfg, fps: float, roi: np.ndarray) -> List[Dict[str, Any]]:
     """讀取一個序列 stage1 輸出的六個逐類別軌跡檔，合併成跨類別的 track dict 清單。
+
+    stage1 軌跡不做 ROI 過濾（docs/adr/0005），這裡以框中心點硬過濾：ROI 外的列
+    直接捨棄，過濾後沒有任何列的軌跡也一併捨棄。
 
     Args:
         seq_output_dir: annotation_<seq> 目錄（stage1 輸出，det_output_dir 下）
+        roi: 序列所屬鏡頭的 ROI 多邊形（safetrajai.roi.resolve_roi()）
         cfg: AppConfig，需要 benchmark_name / split_name / tracker_name。
              ⚠️ evaluation/mot_format.py::save_mot_format() 目前把 "CCTV-val" /
              "YOLO11x" 寫死在路徑字串裡，沒有讀 cfg——本專案所有情境檔的
@@ -154,7 +167,7 @@ def load_sequence_tracks(seq_output_dir: Path, cfg, fps: float) -> List[Dict[str
     tracks: List[Dict[str, Any]] = []
     for class_id, class_name in sorted(CLASS_NAMES.items()):
         traj_file = traj_root / f"{cfg.tracker_name}__{class_name}" / "data" / f"{seq_name}.txt"
-        by_track = _read_class_trajectory_file(traj_file)
+        by_track = _read_class_trajectory_file(traj_file, roi)
         for track_id, rows in by_track.items():
             tracks.append(build_track(track_id, class_id, rows, fps))
 

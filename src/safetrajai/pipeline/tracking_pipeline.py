@@ -17,7 +17,6 @@ safetrajai.pipeline.tracking_pipeline — YOLO class-aware tracking + TrackEval 
         images/<seq>/*.jpg
         labels/<seq>/*.txt
         trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt
-        data.yaml
         <seq>.mp4  (原始影片複本)
         Demo.mp4   (標注影片，save=True 時)
     mot_annotations_all8/          ← run_track_eval_dir
@@ -50,9 +49,8 @@ from pathlib import Path
 
 import cv2
 
-from safetrajai.tracking import CLASS_NAMES
 from safetrajai.collision import run_collision_detection_for_sequence
-from safetrajai.evaluation.mot_format import save_mot_format, make_det_eval_dataset
+from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.pipeline import run_eval_pipeline
 from safetrajai.evaluation import dataset_layout
 from safetrajai.pipeline.sequence_tracker import VideoSequenceTracker
@@ -75,7 +73,7 @@ class TrackingEvalPipeline:
 
     def _process_single_video(self, video_path: str, det_output_dir: Path, track_output_dir: Path) -> None:
         """對單一影片：建立 VideoSequenceTracker → run() → save_mot_format() →
-        make_det_eval_dataset() → 複製 trackers/ 到 stage2 → 複製 SOURCE GT 到 stage2
+        複製 trackers/ 到 stage2 → 複製 SOURCE GT 到 stage2
         （GT 來源不存在時略過並警告，不中斷整條 pipeline——見本文件 Global Constraints）。
         """
         cfg = self.cfg
@@ -97,7 +95,6 @@ class TrackingEvalPipeline:
             show         = cfg.show,
             show_unmatched = cfg.show_unmatched,
             show_removed   = cfg.show_removed,
-            det_corner    = cfg.det_corner,
             save_reid_crops = cfg.save_reid_crops,
             reid_crop_dir   = cfg.reid_crop_dir,
         )
@@ -116,11 +113,7 @@ class TrackingEvalPipeline:
             output_file = output_path / f"{output_path.stem}.txt",
             img_width   = width,
             img_height  = height,
-            det_corner  = cfg.det_corner,
         )
-
-        # 生成 DET data.yaml
-        make_det_eval_dataset(output_path, CLASS_NAMES)
 
         # 將 trackers/ 由 annotations_all8 複製到 runs/track_eval/mot_annotations_all8/<seq>/trackers/
         mot_seq_dir = dataset_layout.stage2_seq_dir(track_output_dir, output_path.stem)
@@ -130,7 +123,7 @@ class TrackingEvalPipeline:
             dirs_exist_ok=True,
         )
         # 準備 GT 驗證資料集（SOURCE 端既有命名不變，source_gt_dir() 回傳值已含尾端 /gt）。
-        # 並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註，見 config/datasets.yaml），
+        # 並非所有 dataset 都有 GT（例如 reid_sources 是沒有人工 GT 的來源資料集，見 config/datasets.yaml），
         # 來源不存在時略過並警告，不當成錯誤中斷整條 pipeline。
         gt_src = dataset_layout.source_gt_dir(cfg.SOURCE_VIDEO_DIR, cfg.run_track_eval_dir, output_path.stem)
         if gt_src.exists():
@@ -153,7 +146,9 @@ class TrackingEvalPipeline:
         track_output_dir.mkdir(parents=True, exist_ok=True)
 
         # 搜尋來源影片（跳過 Demo.mp4）
-        mp4s = [str(p) for p in dataset_layout.discover_source_sequences(cfg.SOURCE_VIDEO_DIR, cfg.run_det_eval_dir)]
+        mp4s = [str(p) for p in dataset_layout.discover_source_sequences(
+            cfg.SOURCE_VIDEO_DIR, cfg.run_det_eval_dir, cfg.dataset_layout, cfg.dataset_cameras,
+        )]
 
         if not mp4s:
             print(f"⚠️  No source videos found under: {cfg.SOURCE_VIDEO_DIR / cfg.run_det_eval_dir}")

@@ -47,8 +47,7 @@ python scripts/grid_search_botsort_reid.py --target-class person
 # Homography 驗證（輸出到 models/homography/validation_output/）
 python scripts/validate_homography.py
 
-# Re-ID 訓練（YOLO-as-encoder + projector + batch-hard triplet，PK sampling）與資料工具
-python scripts/train_reid.py --class-name person
+# Re-ID 資料工具（舊的 YOLO-as-encoder 訓練端已移除；新的 timm 訓練由後續 change 處理）
 python scripts/reid_data/build_reid_split.py --mode category|flat
 
 # 在序列影片上疊 GT／追蹤結果
@@ -58,14 +57,16 @@ python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <pa
 ### 測試與回歸驗證
 
 - `pytest`：smoke 測試（`tests/test_smoke.py`），涵蓋全部模組 import、全部 config 載入、類別 ID 契約、tracker override 方法的 AST 不變性、`sys.path` 掃描、`scripts/**/*.py --help`。幾秒內跑完，任何結構調整後都要跑。
-- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 11 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py before1 <run>` 與基準比對。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
+- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 11 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py after1 <run>` 與基準比對（基準於 2026-09-23 由 `before1` 改為 `after1`，原因見 `tests/golden/TOLERANCE.md`）。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
+- **禁止大量 I/O**：`dataset/`、`models/`、`runs/` 位於掛載磁碟，檔案數以百萬計（例如 Re-ID 裁切）。禁止對整個目錄樹逐檔讀取內容，例如全量 `sha256sum`／`md5sum`、全量 `du`、`find … -exec cat`、大範圍 `rsync --checksum`，這類操作容易造成磁碟損壞。需要核對搬移或複製結果時，只比對路徑清單與檔案數（`find -type f | wc -l`、只列路徑不讀內容），同一磁碟內的 `mv` 不需要核對內容；真的需要比對內容時，只針對少數指定檔案（例如單支影片或權重），並先向使用者確認範圍。長時間的背景讀寫任務要先告知使用者。
+- **隔離慣例**：有疑慮、不可使用的權重或資料一律用 `mv` 移到所在目錄下的 `temp/`（不刪除），並在 `temp/DO_NOT_USE.md` 逐項記錄原路徑、日期、原因與還原指令；config 不得引用 `temp/` 內的路徑（smoke 測試檢查）。評估資料集的人工 GT 內容不可修改。
 - 改動演算法時，驗證方式仍是實際跑受影響的 stage 再比對輸出。想縮小範圍時，直接在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列，或調整 `eval_flags.run_det_eval`／`run_track_eval`。全量序列、grid search 和重跑 stage1 都很耗時，也可能覆寫既有輸出，執行前要先確認範圍。
 
 ## 架構
 
 ```
 track_eval.py                相容入口 wrapper → safetrajai.cli.run_pipeline.main()
-scripts/                     CLI：run_pipeline、run_evaluation、grid_search_*、validate_homography、train_reid、
+scripts/                     CLI：run_pipeline、run_evaluation、grid_search_*、validate_homography、
                              visualize_gt_*、reid_data/（Re-ID 資料切分與稽核）
 src/safetrajai/
   paths.py                   唯一的 PROJECT_ROOT／CONFIG_DIR（需要定位 repo 內檔案時一律用它）
@@ -75,21 +76,24 @@ src/safetrajai/
                              reid_crops、video_io
   detection/                 Detector：單幀 YOLO 推論 + 逐類別信心門檻（class_conf_thresh）過濾
   tracking/                  class-aware ByteTrack / BoTSORT（繼承 ultralytics trackers），唯一入口 create_tracker()
-  reid/                      ReID（YOLO 當 encoder）與 Custom_ReID（models/class_reid_weights/）兩條路徑；training/ 為訓練資料讀取
+  reid/                      推論端：ReID（YOLO 當 encoder）與 Custom_ReID（models/class_reid_weights/）兩條路徑
+  roi.py                     以鏡頭為鍵的 ROI 解析（config/roi/<camera>.yaml），stage1 繪製／裁切、stage2、stage3 共用
   grid_search/core.py        grid search 共用邏輯，scripts/grid_search_*.py 只保留 PARAM_GRIDS + argparse
   collision/                 stage3：MOT 軌跡 → TTC/PET 衝突事件、熱區圖；homography/ 子套件負責轉換／點選／驗證
-  evaluation/                stage2 共用：config_loader、dataset_layout（路徑組裝純函式）、mot_converter、trackeval_runner、excel_export
-  visualization/drawing.py   偵測區域與追蹤框繪製
+  evaluation/                stage2 共用：config_loader、dataset_layout（路徑組裝純函式）、mot_converter、trackeval_runner、
+                             ignore_region（TrackEval 前的忽略區域前處理）、dataset_prep（人工 GT 的 detection 評估資料集）、excel_export
+  visualization/drawing.py   ROI 與追蹤框繪製
 utils/model.py               pickle 相容 shim（見下方 Re-ID）
 third_party/trackeval/       vendored TrackEval
-config/                      情境設定檔（每檔自包含）+ datasets.yaml（dataset id 對照表）+ homography_points/checkpoints
+config/                      情境設定檔（每檔自包含）+ datasets.yaml（dataset id 對照表）+ roi/（以鏡頭為鍵的 ROI）+ homography_points/checkpoints
 tests/                       smoke 測試與 golden 比對工具
 ```
 
 ### 設定檔
 
 - 每個 `config/*.yaml` 都是完整、自包含的情境設定：一般設定（`paths`、`models`、`stages`、`eval_flags`、`tracking_params`…）加上 `class_tracking:` 章節。這些區塊名稱是穩定介面，不能改名。新實驗請另外建檔，不要覆寫既有的基準情境。
-- 一般設定由 `safetrajai/evaluation/config_loader.py::load_config()` 讀取；`paths.dataset: <id>` 會去查 `config/datasets.yaml`，取得 `root`／`run_det_eval_dir`／`run_track_eval_dir`，也可以逐欄位顯式覆寫。
+- 一般設定由 `safetrajai/evaluation/config_loader.py::load_config()` 讀取；`paths.dataset: <id>` 會去查 `config/datasets.yaml`，取得 `root`／`run_det_eval_dir`／`run_track_eval_dir`，也可以逐欄位顯式覆寫。每個資料集還有 `role`（`eval`：附人工 GT、只用於評估；`source`：用來產生訓練資料）、`layout`（`annotated` 是 `annotation_<seq>/` 結構，`raw` 是 `dataset/raw/videos/<camera>/` 平放影片）與 `cameras`；eval 與 source 的鏡頭不得重疊，評估鏡頭（目前是 C000025）不能進任何訓練資料，smoke 測試會檢查。
+- ROI（關注區域）屬於鏡頭，定義在 `config/roi/<camera>.yaml`（`camera`、`image_size`、`polygon`），依序列名稱第一個空白前的鏡頭編號查找；沒有檔案時以整張影像為 ROI，`image_size` 與影片不符時報錯。情境 config 不再支援頂層 `det_corner`，出現會直接報錯。
 - `class_tracking:` 由 `safetrajai/tracking/config.py::load_track_config()` 讀取，寫入模組層級的 `CLASS_TRACKING_PARAMS`。**這個函式必須在 `create_tracker()`／`Detector` 建立之前呼叫**；順序錯了不會報錯，只會悄悄用到空的或舊的參數。`--track-config` 不指定時，會直接讀 `--config` 檔本身的 `class_tracking:`。
 - `stages.run_stage1/2/3` 控制要跑哪幾個階段；`eval_flags.run_det_eval/run_track_eval` 只控制 stage2 裡面的子工作，兩者語意不要混用。
 
@@ -100,7 +104,8 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 ### 軌跡格式契約（stage1 → stage2／stage3）
 
 - 穩定的下游輸入是 `trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt`：每行 7 欄、無 header，`frame,track_id,left,top,w,h,score`，像素座標、以左上角為原點，`frame` 從 1 開始。檔案內沒有 class 欄，類別看資料夾名稱決定。
-- 6 個類別都必須產生檔案，沒有結果時建立 0-byte 空檔。偵測區域（`det_corner` 多邊形）會在 MOT 輸出階段依 bbox 中心點過濾掉區域外的偵測。
+- 6 個類別都必須產生檔案，沒有結果時建立 0-byte 空檔。stage1 軌跡**不依 ROI 過濾**，保留全部追蹤結果；限縮範圍由下游自行套用（見 `docs/adr/0005`）：stage3 與 Re-ID 裁切以框中心點硬過濾，stage2 以忽略區域處理（UA-DETRAC 式）——ROI 外的人工 GT 標為 ignore，預測與全部 GT 做 IoU ≥ 0.5 的一對一匹配；匹配到 ROI 內 GT 的預測保留，其餘預測中匹配到 ignore GT 或中心點在 ROI 外者移除，再移除 ignore GT，所以 FP 只來自 ROI 內（代價與風險見 `specs/evaluation-roi-filtering`）。這一步在 TrackEval 之前、只改 stage2 輸出目錄中的副本（原始 tracker 副本備份在 `trackers_raw/`），不修改 vendored TrackEval。
+- stage2 的 detection 評估以評估資料集的人工 GT 為基準（在 `OUTPUT_ROOT/det_eval/<seq>/` 組出資料集），不再使用 stage1 的追蹤標籤；目前不套用 ROI，報表會標示「ROI：未套用（全畫面）」。
 - `track_id` 只在單一序列、單一類別內唯一（每段序列都新建 tracker，而且是逐類別配號），跨序列要用「序列名＋track_id」當鍵。
 - GT 有 class 欄，但只給 TrackEval 比對用；stage3 和其他下游分析一律讀 tracker 輸出，不讀 GT。
 - 已知限制：`safetrajai/evaluation/mot_format.py::save_mot_format()` 用 `C000025_*` 做 glob，換成非預設資料集時可能靜默輸出全空的軌跡。修好之前，不要把空檔解讀成沒有偵測到東西。
@@ -117,6 +122,7 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 
 - **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：`models/class_reid_weights/*/best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。
+- 舊的 Re-ID 資料（`dataset/reid/` 全部內容）與權重（`models/yolo-reid/*`、`models/class_reid_weights/*`）已確認無效，隔離在各自的 `temp/`，將由後續 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建；不要引用或拿來訓練。
 - Crop 資料集結構是 `dataset/reid/crop_dataset/{class}/{seq}_track{id}/*.jpg`（由 `save_reid_crops` 產生），train／val 要依身分（identity）互斥切分；`--mode category` 和 `--mode flat` 是兩種不同的資料集，不能混用。資料切分與稽核腳本（`build_reid_split.py`、`check_class_consistency.py`、`generate_identity_review.py`、`quarantine_flagged.py`）在 `scripts/reid_data/`，用法見 `scripts/reid_data/README.md` 與各腳本開頭的 docstring；資料本身仍在 `dataset/reid/`。
 
 ### Grid search

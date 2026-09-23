@@ -27,6 +27,7 @@ from . import homography as homography_mod
 from .homography import points as homography_points
 from . import output as collision_output
 from .trajectory_adapter import add_homography_fields, load_sequence_tracks
+from safetrajai.roi import resolve_roi
 
 
 def _reproject_point(pt: Tuple[float, float], H_inv) -> Tuple[float, float]:
@@ -116,7 +117,8 @@ def run_collision_detection_for_sequence(
     """
     seq_name = seq_output_dir.stem
 
-    tracks = load_sequence_tracks(seq_output_dir, cfg, fps)
+    roi = resolve_roi(seq_name, (bounds[1], bounds[0]))
+    tracks = load_sequence_tracks(seq_output_dir, cfg, fps, roi)
 
     tag = homography_points.find_tag_for_sequence(seq_name, cfg.homography_matrices_dir)
     H = homography_points.resolve_homography(

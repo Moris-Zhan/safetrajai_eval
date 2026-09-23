@@ -39,3 +39,14 @@
 | pipeline_botsort_save_reid_crops | 410 | 409 |
 | grid_search | 13 | 14 |
 | homography_validation | 2 | 2 |
+
+## 基準切換：before1 → after1（2026-09-23，change `reorganize-dataset-and-eval-gt`）
+
+評估 GT 改用人工 GT（`annotations_all8(orign)`／`mot_annotations_all8(orign)`）、ROI 改以鏡頭為鍵、stage1 軌跡不再依 ROI 過濾、stage2 改以忽略區域（UA-DETRAC 式）限縮範圍，這些是刻意的評估語意變更，golden 基準因此改為 `after1`。
+
+- 自比：以最終程式碼連跑 `after1`、`after2`，`compare.py after1 after2` 全部為 0 差異，容忍度仍為 0。
+- 與 `before1` 相同：`conflict_events`、`reid_crops`、`homography`、`yolo_labels`。
+- 與 `before1` 不同（預期）：`mot_tracks`（stage1 不再過濾）、`trackeval`（評估語意）、`grid_search`（分數；最佳參數不變）、`other`（移除 stage1 `data.yaml`、新增 `trackers_raw/`）。
+- 逐項說明與指標對照見 `openspec/changes/reorganize-dataset-and-eval-gt/verification.md`。`before1` 與 MOT17 式的 `after1_mot17`、`after2_mot17` 保留供對照。
+
+之後的比對一律使用 `python tests/golden/compare.py after1 <run>`。

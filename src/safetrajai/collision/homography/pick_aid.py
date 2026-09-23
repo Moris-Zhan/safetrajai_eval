@@ -89,7 +89,7 @@ def get_first_frame(video_path: Path) -> np.ndarray:
 _CCTV_ALL8_ROOT = Path(
     load_dataset_registry()
     .get("cctv_all8", {})
-    .get("root", "./dataset/中華三路_民生二路(東北角)yolo驗證用_all8/")
+    .get("root", "./dataset/eval/cctv_all8/")
 )
 
 # (tag, 來源影片路徑) —— tag 需與 models/homography/matrices/H_<tag>.npy 的檔名一致

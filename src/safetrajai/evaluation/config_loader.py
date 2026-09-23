@@ -13,7 +13,6 @@
     print(cfg.base_dir)
     print(cfg.det_model_path)
     print(cfg.classes_to_run)   # dict
-    print(cfg.det_corner)       # list[list[int]] 或 None
 
     # 也可當 dict 存取
     print(cfg["benchmark_name"])
@@ -25,7 +24,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
-import numpy as np
 
 try:
     import yaml
@@ -68,8 +66,6 @@ _DEFAULTS: dict = {
         "bus":         4,
         "truck":       5,
     },
-    # det corner (None = disabled)
-    "det_corner": None,
     # logging
     "verbose": True,   # False = 關掉 GT 處理過程的詳細 log
     "debug":   False,  # True  = 開啟 TrackEval tracker 檔案逐項檢查 log
@@ -131,6 +127,8 @@ class AppConfig:
 
         d["run_det_eval_dir"]     = paths.get("run_det_eval_dir", registry_entry.get("run_det_eval_dir", d["run_det_eval_dir"]))
         d["run_track_eval_dir"]   = paths.get("run_track_eval_dir", registry_entry.get("run_track_eval_dir", d["run_track_eval_dir"]))
+        d["dataset_layout"]       = registry_entry.get("layout", "annotated")
+        d["dataset_cameras"]      = list(registry_entry.get("cameras", []) or [])
         d["TRACKEVAL_OUT_DIR"]    = paths.get("TRACKEVAL_OUT_DIR", d["TRACKEVAL_OUT_DIR"])
         
         d["OUTPUT_ROOT"]          = paths.get("OUTPUT_ROOT",    d["OUTPUT_ROOT"])
@@ -181,14 +179,12 @@ class AppConfig:
         if "classes_to_run" in raw and raw["classes_to_run"]:
             d["classes_to_run"] = {str(k): int(v) for k, v in raw["classes_to_run"].items()}
 
-        # det_corner（可為 null / 省略）
-        corner_raw = raw.get("det_corner", None)
-        if corner_raw is not None:
-            d["det_corner"] = [[int(x), int(y)] for x, y in corner_raw]
-            d["det_corner"] = np.array(d["det_corner"], dtype=np.float32)
-        else:
-            d["det_corner"] = None
-        
+        if "det_corner" in raw:
+            raise ValueError(
+                "情境 config 不再支援頂層 det_corner；ROI 改為以鏡頭為鍵，"
+                "請移到 config/roi/<camera>.yaml（見 CONTEXT.md「關注區域」、docs/adr/0005）"
+            )
+
 
         # logging 區塊
         logging = raw.get("logging", {}) or {}

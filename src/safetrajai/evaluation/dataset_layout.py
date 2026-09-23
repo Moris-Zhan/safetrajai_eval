@@ -40,15 +40,35 @@ def seq_name_from_video_path(video_path: str | Path) -> str:
     return Path(video_path).stem
 
 
-def discover_source_sequences(source_video_dir: Path, run_det_eval_dir: str) -> list[Path]:
-    """掃描 SOURCE_VIDEO_DIR/<run_det_eval_dir>/annotation_*/**/*.mp4，跳過 Demo.mp4。
-    取代舊版 track_eval.py 的 glob + 補幀相關檔名過濾（該過濾邏輯已隨補幀邏輯一併移除，
-    見 spec 第 3.6 節）。"""
-    pattern = str(Path(source_video_dir) / run_det_eval_dir / "annotation_*" / "**" / "*.mp4")
-    return sorted(
-        Path(p) for p in glob.glob(pattern, recursive=True)
-        if not Path(p).stem.startswith("Demo")
-    )
+def camera_id_from_seq_name(seq_name: str) -> str:
+    """鏡頭編號（見 CONTEXT.md）：序列名稱第一個空白之前的字串，不限定格式。"""
+    parts = seq_name.strip().split(maxsplit=1)
+    if len(parts) < 2:
+        raise ValueError(f"無法從序列名稱取得鏡頭編號（名稱中沒有空白）：{seq_name!r}")
+    return parts[0]
+
+
+def discover_source_sequences(
+    source_video_dir: Path,
+    run_det_eval_dir: str,
+    layout: str = "annotated",
+    cameras: list[str] | None = None,
+) -> list[Path]:
+    """依 dataset registry 的 layout 列出來源影片，跳過 Demo.mp4。
+
+    - annotated：SOURCE_VIDEO_DIR/<run_det_eval_dir>/annotation_*/**/*.mp4
+    - raw：SOURCE_VIDEO_DIR/<camera>/*.mp4，只列 cameras 清單內的鏡頭
+    """
+    if layout == "annotated":
+        pattern = str(Path(source_video_dir) / run_det_eval_dir / "annotation_*" / "**" / "*.mp4")
+        candidates = [Path(p) for p in glob.glob(pattern, recursive=True)]
+    elif layout == "raw":
+        if not cameras:
+            raise ValueError("layout: raw 的資料集必須在 datasets.yaml 列出 cameras")
+        candidates = [p for cam in cameras for p in (Path(source_video_dir) / cam).glob("*.mp4")]
+    else:
+        raise ValueError(f"未知的 dataset layout：{layout!r}（只支援 annotated、raw）")
+    return sorted(p for p in candidates if not p.stem.startswith("Demo"))
 
 
 def stage1_seq_dir(det_output_dir: Path, seq_name: str) -> Path:
@@ -66,8 +86,8 @@ def source_gt_dir(source_video_dir: Path, run_track_eval_dir: str, seq_name: str
     （SOURCE 端既有命名不變，此函式只是讀取，不產生新命名。回傳值已含尾端 /gt。
     <run_track_eval_dir> 來自 dataset registry 該筆的 run_track_eval_dir 欄位，
     不同 dataset 可能是不同子目錄名稱（例：cctv_all8 是 mot_annotations_all8，
-    video_seqs 是 mot_annotations_video）——呼叫端不可再硬編碼 "mot_annotations_all8"。
-    注意：並非所有 dataset 都有 GT（例如 video_seqs 本來就沒有標註），回傳的路徑
+    reid_sources 是 mot_annotations_video）——呼叫端不可再硬編碼 "mot_annotations_all8"。
+    注意：並非所有 dataset 都有 GT（例如 reid_sources 是沒有人工 GT 的來源資料集），回傳的路徑
     不保證存在，呼叫端需自行判斷是否要略過。）"""
     return Path(source_video_dir) / run_track_eval_dir / f"mot_annotation_{seq_name}" / "gt"
 

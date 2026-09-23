@@ -73,7 +73,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     #     "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],   
     #     "model": [
     #         'models/yolo/yolo11x_dennis.pt',
-    #         'models/yolo-reid/yolo11x-reid-ultra.pt',
+    #         'models/yolo/yolo11x.pt',
     #         'models/yolo/yolo11x.pt',        
     #     ]     
     # },
@@ -92,7 +92,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     #     "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],     
     #     "model": [
     #         'models/yolo/yolo11x_dennis.pt',
-    #         'models/yolo-reid/yolo11x-reid-ultra.pt',
+    #         'models/yolo/yolo11x.pt',
     #         'models/yolo/yolo11x.pt',        
     #     ]     
     # },
@@ -110,7 +110,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     #     "appearance_thresh":        [0.1, 0.5, 0.9],           # 5→3，取低中高
     #     "model": [
     #         'models/yolo/yolo11x_dennis.pt',
-    #         # 'models/yolo-reid/yolo11x-reid-ultra.pt',
+    #         # 'models/yolo/yolo11x.pt',
     #         # yolo11x base 先排除，先前分析顯示與低分相關
     #     ]
     # },
@@ -127,7 +127,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [0.1],                      # 固定
         "model": [
             'models/yolo/yolo11x_dennis.pt',                   # 固定
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',                    # 固定
         ]
     },
@@ -146,7 +146,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     #     "appearance_thresh":        [0.1, 0.5, 0.9],           # 5→3
     #     "model": [
     #         'models/yolo/yolo11x_dennis.pt',
-    #         # 'models/yolo-reid/yolo11x-reid-ultra.pt',
+    #         # 'models/yolo/yolo11x.pt',
     #         # yolo11x base 先排除
     #     ]
     # },
@@ -165,7 +165,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [0.05, 0.1, 0.15],         # 往更低探索
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',                    # 固定
         ]
     },
@@ -184,7 +184,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],    
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]     
     },    
@@ -203,7 +203,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],    
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]      
     },
@@ -222,7 +222,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],  
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]        
     },
@@ -241,7 +241,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],       
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]    
     },    
@@ -261,7 +261,7 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
         "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],      
         "model": [
             'models/yolo/yolo11x_dennis.pt',
-            'models/yolo-reid/yolo11x-reid-ultra.pt',
+            'models/yolo/yolo11x.pt',
             'models/yolo/yolo11x.pt',        
         ]    
     },

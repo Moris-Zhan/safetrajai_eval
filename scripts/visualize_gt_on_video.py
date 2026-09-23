@@ -502,10 +502,10 @@ def main():
     )
 
     parser.add_argument("--trackeval_root", 
-                        default="dataset/中華三路_民生二路(東北角)yolo驗證用_all8/mot_annotations_all8/mot_annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1",
+                        default="dataset/eval/cctv_all8/mot_annotations_all8/mot_annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1",
                         help="mot_annotation_<seq> 根目錄")
     parser.add_argument("--video_path",     
-                        default="dataset/中華三路_民生二路(東北角)yolo驗證用_all8/annotations_all8/annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1",
+                        default="dataset/eval/cctv_all8/annotations_all8/annotation_C000025 中華三路 民生二路(東北角)_20251209145630_15s_1",
                         help="來源影片路徑（可自動偵測）")
     parser.add_argument("--output_video",   
                         default="./runs/gt_viz/C000025_gt.mp4",
@@ -535,7 +535,7 @@ def main():
 
     
 
-    SOURCE_VIDEO_DIR = Path("dataset/中華三路_民生二路(東北角)yolo驗證用_all8")
+    SOURCE_VIDEO_DIR = Path("dataset/eval/cctv_all8")
     run_det_eval_dir = Path("annotations_all8")
 
     mp4_pattern = str(SOURCE_VIDEO_DIR / run_det_eval_dir / "annotation_*" / "**" / "*.mp4")

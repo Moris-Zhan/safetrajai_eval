@@ -46,11 +46,22 @@ from safetrajai.evaluation.trackeval_runner import (
     run_trackeval_mot,
 )
 from safetrajai.evaluation.dataset_prep import (
+    build_det_eval_dataset,
     discover_sequences,
-    ensure_det_yaml_for_seq,
-    fix_det_labels_to_5cols,
     # run_ultralytics_track_to_labels,  # ← 若需自動生成追蹤標籤則啟用
 )
+
+DET_ROI_NOTE = "ROI：未套用（全畫面）"
+
+
+def _annotate_det_roi_status(xlsx_path: Path) -> None:
+    from openpyxl import load_workbook
+
+    wb = load_workbook(xlsx_path)
+    ws = wb.create_sheet("ROI", 0)
+    ws["A1"] = DET_ROI_NOTE
+    ws["A2"] = "detection 評估以人工 GT 為基準，ROI 外的偵測與 GT 都計入。"
+    wb.save(xlsx_path)
 
 def run_eval_pipeline(cfg):
     """
@@ -84,33 +95,20 @@ def run_eval_pipeline(cfg):
     for i, item in enumerate(seqs[:6], 1):
         seq_name = item["seq_name"]
         video_path = item["video_path"]
-        det_yaml = item["det_yaml"]
         trackeval_root = item["trackeval_root"]
 
         video_path = str(Path(video_path).resolve())
-        det_yaml = str(Path(det_yaml).resolve())
         trackeval_root = str(Path(trackeval_root).resolve())
 
         print("\n" + "=" * 90)
         print(f"[{i}/{len(seqs)}] SEQ = {seq_name}")
         if verbose:
             print("video_path    :", Path(video_path).resolve())
-            print("det_yaml      :", Path(det_yaml).resolve())
             print("trackeval_root:", Path(trackeval_root).resolve())
         print("=" * 90)
 
-        if run_det_eval and not Path(det_yaml).exists():
-            print(f"⚠️ DET yaml missing, skip DET: {Path(det_yaml).resolve()}")
-
         if run_track_eval and not Path(trackeval_root).exists():
             print(f"⚠️ trackeval_root missing, skip TRACK: {Path(trackeval_root).resolve()}")
-
-        if (
-            (run_det_eval and not Path(det_yaml).exists())
-            and (run_track_eval and not Path(trackeval_root).exists())
-        ):
-            print("⚠️ Both DET yaml and trackeval_root missing -> SKIP this seq.")
-            continue
 
         trackeval_output = Path(trackeval_output_dir) / Path(trackeval_root).stem
         out_base = Path(trackeval_output)
@@ -143,57 +141,27 @@ def run_eval_pipeline(cfg):
             out_root = None
 
         if run_det_eval:
-            det_yaml_p = Path(det_yaml)
-            det_root = det_yaml_p.parent
-
-            def _yaml_has_train_val(p: Path) -> bool:
-                if not p.exists():
-                    return False
-                txt = p.read_text(encoding="utf-8", errors="ignore")
-                return ("train:" in txt) and ("val:" in txt)
-
-            if (not det_yaml_p.exists()) or (not _yaml_has_train_val(det_yaml_p)):
-                try:
-                    ensure_det_yaml_for_seq(
-                        det_root=det_root,
-                        seq_name=seq_name,
-                        names=det_model.names,
-                        yaml_path=det_yaml_p,
-                        overwrite=True,
-                    )
-                    print(f"✅ DET yaml fixed/generated: {det_yaml_p.resolve()}")
-                except Exception as e:
-                    print(f"⚠️ DET yaml auto-fix failed -> skip DET: {det_yaml_p.resolve()}")
-                    print("   reason:", repr(e))
-                    det_yaml_p = None
-
-            if det_yaml_p is None or (not det_yaml_p.exists()):
-                print("⏭️ DET skipped.")
+            # detection 評估以人工 GT 為基準，不使用 stage1 的追蹤標籤；目前不套用 ROI（全畫面）
+            det_yaml_p = build_det_eval_dataset(cfg, seq_name, det_model.names)
+            if det_yaml_p is None:
+                print(f"⏭️ DET skipped: {seq_name} 沒有人工 detection GT")
             else:
-                try:
-                    fix_det_labels_to_5cols(det_root, seq_name)
-                except Exception as e:
-                    print(f"⚠️ DET label fix failed -> skip DET: {det_root.resolve()}")
-                    print("   reason:", repr(e))
-                    print("⏭️ DET skipped.")
-                    det_yaml_p = None
-
-                if det_yaml_p is not None:
-                    print("\n=== DET val ===")
-                    det_metrics = det_model.val(
-                        data=str(det_yaml_p),
-                        split="val",
-                        batch=8,
-                        imgsz=640,
-                        cache=False,
-                    )
-                    export_det_metrics_to_excel_openpyxl(
-                        det_metrics,
-                        det_model.names,
-                        str(det_xlsx),
-                        include_curves=True,
-                    )
-                    print("✅ DET Excel :", det_xlsx.resolve())
+                print(f"\n=== DET val（{DET_ROI_NOTE}）===")
+                det_metrics = det_model.val(
+                    data=str(det_yaml_p),
+                    split="val",
+                    batch=8,
+                    imgsz=640,
+                    cache=False,
+                )
+                export_det_metrics_to_excel_openpyxl(
+                    det_metrics,
+                    det_model.names,
+                    str(det_xlsx),
+                    include_curves=True,
+                )
+                _annotate_det_roi_status(det_xlsx)
+                print(f"✅ DET Excel : {det_xlsx.resolve()}（{DET_ROI_NOTE}）")
 
         else:
             print("⏭️ DET skipped.")

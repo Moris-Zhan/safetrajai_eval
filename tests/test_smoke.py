@@ -151,3 +151,57 @@ def test_utils_model_is_reexport_shim() -> None:
 
     for name in ("ReIDNet", "CameraEmbedding", "OcclusionRepair"):
         assert getattr(utils.model, name) is getattr(model, name)
+
+
+QUARANTINED_REID_WEIGHT = REPO_ROOT / "models" / "class_reid_weights" / "temp" / "person" / "best_full_model.pt"
+
+
+@pytest.mark.skipif(not QUARANTINED_REID_WEIGHT.exists(), reason="quarantined Re-ID weight not present")
+def test_quarantined_full_model_weight_still_loads_via_shim() -> None:
+    import torch
+
+    reid_model = torch.load(QUARANTINED_REID_WEIGHT, map_location="cpu", weights_only=False)
+    assert type(reid_model).__name__ == "ReIDNet"
+
+
+def camera_role_conflicts(registry: dict[str, dict]) -> set[str]:
+    eval_cameras = {cam for entry in registry.values() if entry.get("role") == "eval" for cam in entry.get("cameras", [])}
+    source_cameras = {cam for entry in registry.values() if entry.get("role") == "source" for cam in entry.get("cameras", [])}
+    return eval_cameras & source_cameras
+
+
+def test_dataset_registry_roles_are_valid_and_cameras_disjoint() -> None:
+    from safetrajai.evaluation.dataset_layout import load_dataset_registry
+
+    registry = load_dataset_registry()
+    assert registry, "config/datasets.yaml has no datasets"
+    for dataset_id, entry in registry.items():
+        assert entry.get("role") in {"eval", "source"}, f"{dataset_id}: role must be eval or source"
+        assert entry.get("cameras"), f"{dataset_id}: cameras must be listed"
+    assert camera_role_conflicts(registry) == set()
+
+
+def test_camera_role_conflict_is_detected() -> None:
+    registry = {
+        "eval_set": {"role": "eval", "cameras": ["C000025"]},
+        "source_set": {"role": "source", "cameras": ["C000054", "C000025"]},
+    }
+    assert camera_role_conflicts(registry) == {"C000025"}
+
+
+def yaml_string_values(node) -> list[str]:
+    if isinstance(node, dict):
+        return [s for value in node.values() for s in yaml_string_values(value)]
+    if isinstance(node, list):
+        return [s for value in node for s in yaml_string_values(value)]
+    return [node] if isinstance(node, str) else []
+
+
+@pytest.mark.parametrize(
+    "config_path",
+    CONFIG_PATHS + sorted((REPO_ROOT / "tests" / "golden" / "configs").glob("*.yaml")),
+    ids=lambda p: str(p.relative_to(REPO_ROOT)),
+)
+def test_config_does_not_reference_quarantined_assets(config_path: Path) -> None:
+    values = yaml_string_values(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {})
+    assert [v for v in values if "/temp/" in v or v.startswith("temp/")] == []

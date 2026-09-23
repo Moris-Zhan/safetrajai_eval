@@ -8,6 +8,8 @@
 - 執行 Ultralytics tracking 生成標籤（run_ultralytics_track_to_labels）
 """
 
+import os
+import shutil
 from pathlib import Path
 
 from ultralytics import YOLO
@@ -27,7 +29,6 @@ def discover_sequences(base_dir: str, cfg):
         annotations_all8/
           <seq_name>/
             <seq_name>.mp4
-            data.yaml
         mot_annotations_all8/
           <seq_name>/
             (TrackEval GT 資料)
@@ -58,7 +59,6 @@ def discover_sequences(base_dir: str, cfg):
             continue
         mp4 = mp4s[0].resolve()
 
-        det_yaml = (seq_dir / "data.yaml").resolve()
         trackeval_root = dataset_layout.stage2_seq_dir(
             base / run_track_eval_dir, seq_name
         ).resolve()
@@ -67,7 +67,6 @@ def discover_sequences(base_dir: str, cfg):
             seqs.append({
                 "seq_name": seq_name,
                 "video_path": str(mp4),
-                "det_yaml": str(det_yaml),
                 "trackeval_root": str(trackeval_root),
             })
 
@@ -76,6 +75,48 @@ def discover_sequences(base_dir: str, cfg):
             f"No sequence mp4 found under: {det_output_dir}/<seq>/*.mp4"
         )
     return seqs
+
+
+# =========================================================
+# DET 評估資料集（人工 GT，唯讀來源）
+# =========================================================
+def build_det_eval_dataset(cfg, seq_name: str, names: dict) -> Path | None:
+    """在 OUTPUT_ROOT/det_eval/<seq>/ 組出 detection 評估用資料集並回傳 data.yaml 路徑。
+
+    images/<seq> 內是來源人工 GT 影像的 hardlink（跨磁碟時退回複製），labels/<seq> 是來源 5 欄
+    label 的複本。不能用 symlink：ultralytics 會解析 symlink，改從來源目錄推 label 路徑並把
+    .cache 寫進來源。來源沒有人工 GT 時回傳 None。
+    """
+    source_dir = Path(cfg.SOURCE_VIDEO_DIR) / cfg.run_det_eval_dir / f"annotation_{seq_name}"
+    src_images = source_dir / "images" / seq_name
+    src_labels = source_dir / "labels" / seq_name
+    if not (src_images.is_dir() and src_labels.is_dir()):
+        return None
+
+    det_root = (Path(cfg.OUTPUT_ROOT) / "det_eval" / seq_name).resolve()
+    images_dir = det_root / "images" / seq_name
+    labels_dir = det_root / "labels" / seq_name
+    if images_dir.is_symlink():
+        images_dir.unlink()
+    images_dir.mkdir(parents=True, exist_ok=True)
+    for src_image in src_images.iterdir():
+        dst_image = images_dir / src_image.name
+        if dst_image.exists():
+            continue
+        try:
+            os.link(src_image, dst_image)
+        except OSError:
+            shutil.copy2(src_image, dst_image)
+    if labels_dir.exists():
+        shutil.rmtree(labels_dir)
+    shutil.copytree(src_labels, labels_dir)
+    cache = det_root / "labels" / f"{seq_name}.cache"
+    if cache.exists():
+        cache.unlink()
+
+    yaml_path = det_root / "data.yaml"
+    ensure_det_yaml_for_seq(det_root=det_root, seq_name=seq_name, names=names, yaml_path=yaml_path, overwrite=True)
+    return yaml_path
 
 
 # =========================================================
