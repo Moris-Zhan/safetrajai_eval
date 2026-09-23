@@ -51,6 +51,7 @@ import shutil
 import argparse
 from copy import deepcopy
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -76,6 +77,19 @@ from evaluation import dataset_layout
 # 第一階段：VideoSequenceTracker — 單一影片的 class-aware tracking
 # =============================================================================
 
+def make_min_size_quality_filter(min_width: int, min_height: int) -> Callable[[np.ndarray], bool]:
+    """Tier 1 品質過濾器範例：裁切寬或高小於門檻值就捨棄。
+
+    quality_filters 掛載點吃的是 Callable[[np.ndarray], bool]（True=保留），
+    用法：ReidCropCollector(crop_dir, det_corner, quality_filters=[make_min_size_quality_filter(20, 20)])
+    預設（不傳 quality_filters）行為與現行完全相同，見 openspec/changes/reid-training-data-pipeline/。
+    """
+    def _filter(crop: np.ndarray) -> bool:
+        h, w = crop.shape[:2]
+        return w >= min_width and h >= min_height
+    return _filter
+
+
 class ReidCropCollector:
     """蒐集 Re-ID 訓練用裁切圖（save_reid_crops=True 時啟用）。
 
@@ -84,9 +98,15 @@ class ReidCropCollector:
     （tracker 每支影片重建一次）互相撞名。
     """
 
-    def __init__(self, crop_dir: Path, det_corner: np.ndarray | None):
+    def __init__(
+        self,
+        crop_dir: Path,
+        det_corner: np.ndarray | None,
+        quality_filters: list[Callable[[np.ndarray], bool]] | None = None,
+    ):
         self.crop_dir = crop_dir
         self.det_corner = det_corner
+        self.quality_filters = quality_filters
 
     def collect(
         self,
@@ -97,7 +117,7 @@ class ReidCropCollector:
         width: int,
         height: int,
     ) -> None:
-        """對每個 track：多邊形過濾（與 draw/annotate 邏輯一致）→ 裁切 → 存檔。"""
+        """對每個 track：多邊形過濾（與 draw/annotate 邏輯一致）→ 裁切 → 品質過濾（可選）→ 存檔。"""
         for track in tracks:
             if len(track) >= 7:
                 x1, y1, x2, y2 = track[:4]
@@ -116,6 +136,10 @@ class ReidCropCollector:
                     continue
 
                 crop = clean_frame[yi1:yi2, xi1:xi2]
+
+                if self.quality_filters and not all(f(crop) for f in self.quality_filters):
+                    continue
+
                 cls_name = CLASS_NAMES.get(cls_id, f"cls_{cls_id}")
                 identity_dir = self.crop_dir / cls_name / f"{seq_stem}_track{track_id}"
                 identity_dir.mkdir(parents=True, exist_ok=True)
@@ -618,7 +642,7 @@ class TrackingEvalPipeline:
 
         讀取 stage1 產生的逐類別軌跡檔（annotation_<seq>/trackers/mot_challenge/
         <benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt，格式見
-        markdown/TRAJECTORY_FORMAT.md 第 1 節），對每支序列跑一次
+        .claude/rules/evaluation.md「軌跡格式契約」），對每支序列跑一次
         module.collision.run_collision_detection_for_sequence()，輸出寫到
         cfg.collision_output_dir/<seq_name>/ 底下。
 
