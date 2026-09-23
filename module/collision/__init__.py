@@ -40,9 +40,9 @@ def _reproject_box(box, H_inv):
 def _reproject_ttc_events(events: List[Dict[str, Any]], H_inv) -> List[Dict[str, Any]]:
     """把 TTC 事件裡所有座標欄位（collision_point/future_box*/arrow*）反投影回原始
     CCTV 像素座標。事件本身是用 compute_ttc_for_all_pairs() 算出來的，use_homography=True
-    時內部座標系是 Homo_*（衛星圖／地圖座標），若不轉回來，輸出檔案裡的座標會跟
-    TRAJECTORY_FORMAT.md 說的「CCTV 像素座標」慣例不一致，也跟熱區圖（疊在 CCTV 第一幀上）
-    對不起來。H_inv 為 None（沒用 homography）時原樣回傳。
+    時內部座標系是 Homo_*（衛星圖／地圖座標），若不轉回來，輸出檔案裡的座標會跟本專案
+    「CCTV 像素座標」慣例不一致，也跟熱區圖（疊在 CCTV 第一幀上）對不起來。
+    H_inv 為 None（沒用 homography）時原樣回傳。
     """
     if H_inv is None:
         return events
@@ -112,7 +112,7 @@ def run_collision_detection_for_sequence(
         {"seq_name": str, "num_tracks": int, "ttc_events": [...], "pet_events": [...]}
         兩個事件清單裡的座標欄位（collision_point/future_box*/arrow*/cross_point）一律是
         原始 CCTV 像素座標——即使運算是在 Homography 轉換後座標系下進行的，輸出前都會
-        反投影回來，跟 TRAJECTORY_FORMAT.md 的座標慣例一致，也跟熱區圖疊圖背景一致。
+        反投影回來，跟本專案的座標慣例一致，也跟熱區圖疊圖背景一致。
     """
     seq_name = seq_output_dir.stem
 

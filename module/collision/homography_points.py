@@ -12,7 +12,7 @@ module/collision/homography_validation.py）；其餘 20 個只有矩陣本身�
 可以選 check points，屬於「未驗證」狀態，套用時要留意。
 
 ## 2. 人工點選（fallback：路口不在既有 26 個之列時使用）
-原始 SafeTrajAI 的選點是 cv2 滑鼠互動視窗（見 markdown/HOMOGRAPHY.md），本專案
+原始 SafeTrajAI 的選點是 cv2 滑鼠互動視窗，本專案
 headless 環境（無 $DISPLAY）無法直接沿用，改成人工流程：
 
     1. 打開 stage1 已存的 <seq>/first_frame_with_box.jpg，自己在圖上
@@ -23,8 +23,7 @@ headless 環境（無 $DISPLAY）無法直接沿用，改成人工流程：
        有 → 算 Homography；沒有 → 回傳 None，該序列跳過 homography，只用原始像素座標。
 
 本專案目前沒有真實地圖底圖，map_points 是使用者自行在同一張 CCTV 畫面上定義的
-「校正後」座標（例如把透視變形的路口攤平成矩形），不是地理座標，詳見
-markdown/HOMOGRAPHY.md、markdown/TRAJECTORY_FORMAT.md 第 3 節。
+「校正後」座標（例如把透視變形的路口攤平成矩形），不是地理座標。
 
 yaml 格式（cctv_points / map_points 需一一對應、順序相同，至少 4 組）：
     cctv_points:

@@ -17,7 +17,7 @@ Homography 矩陣、該序列改用轉換後座標系跑 TTC/PET；找不到就�
    自己量測/估計 4 個以上對應點的像素座標（例如路口的四個角）。
 2. 決定這些點要對應到「校正後」座標系的哪 4 個點——本專案沒有真實地圖底圖，
    `map_points` 是自訂的目標座標（例如把透視變形的路口攤平成一個矩形），
-   不是地理座標，詳見 `markdown/HOMOGRAPHY.md`。
+   不是地理座標。
 3. 建立 `config/homography_points/<seq>.yaml`：
 
 ```yaml
@@ -44,5 +44,4 @@ map_points:
 只有 4 組點時 `cv2.findHomography()` 是「恰好可解」，沒有容錯機制，點位精準度會
 直接反映在轉換結果上；若提供 4 組以上的點，可以在
 `module/collision/homography.py::compute_homography()` 自行加上
-`method=cv2.RANSAC` 提升容錯度（目前保留原始行為，預設不啟用）。詳見
-`markdown/HOMOGRAPHY.md` 第 5 節。
+`method=cv2.RANSAC` 提升容錯度（目前保留原始行為，預設不啟用）。

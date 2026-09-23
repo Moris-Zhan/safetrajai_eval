@@ -20,19 +20,12 @@ dataset/reid/crop_dataset/
 ├── person/        ...
 ├── scooter/       ...
 ├── small_truck/   ...
-├── truck/         ...
-├── train/          舊的扁平身分資料集，跟上面 6 個類別資料夾無關（見下方說明）
-│   ├── train/{6碼數字id}/*.jpg
-│   ├── val/{6碼數字id}/*.jpg
-│   ├── train.cache
-│   └── val.cache
-├── numbers.txt      舊資料：train/ 子目錄的身分張數統計（見下方說明）
-└── res.txt          舊資料：train/ 子目錄的 tree -h 輸出（見下方說明）
+└── truck/         ...
 ```
 
 - 6 個類別資料夾（`bus`/`car`/`person`/`scooter`/`small_truck`/`truck`）底下每個子資料夾是一個身分，命名為 `{影片檔名}_track{track_id}`，由 `track_eval.py` 的 `save_reid_crops` 功能（`config/botsort_save_reid_crops.yaml`，`reid_crop_dir: ./dataset/reid/crop_dataset`）逐幀裁切寫入，詳見 `markdown/GUIDE.md` 第 6 節。**`track_id` 是 class-aware tracker 逐類別各自配號**——同一支影片同一個編號在不同類別代表不同物體，不能跨類別直接比對資料夾名稱。
-- `train/` 子目錄是另一批舊資料（身分資料夾直接命名為 6 碼數字如 `000100`），跟上面 6 個類別資料夾**不是同一套產生流程**，`build_reid_split.py` 不會讀取這個子目錄當來源。
-- 根目錄下既有的 `numbers.txt`／`res.txt` 描述的是這個 **`train/` 子目錄**（444 個身分，`tree -h -L 3` 輸出），**不是** 6 個類別資料夾的統計，不要跟下面兩個輸出目錄裡同名的新檔案搞混。
+
+> **2026-09-14 更新**：先前這裡記錄過一個 `train/` 子目錄（舊版扁平身分資料集，444 身分，資料夾直接命名為 6 碼數字如 `000100`，跟上面 6 個類別資料夾不是同一套產生流程）與對應的 `numbers.txt`／`res.txt`。確認**這個環境的 `dataset/reid/crop_dataset/` 底下本來就沒有同步這批資料**，只有上面 6 個類別資料夾——不是被移除，是這個工作目錄從未有過。因此 `markdown/ARCHITECTURE.md` 原本規劃的「搬到 `archive/reid_legacy_flat_dataset/`」這個批次操作在此環境無事可做，已從待辦清單移除；若其他環境/主機上確實還有這批舊資料，屬於該處另外處理的範圍，不在本文件描述內。
 
 ## 2. `dataset/reid/reid_category_dataset/` — `build_reid_split.py --mode category` 輸出
 
@@ -76,21 +69,21 @@ dataset/reid/reid_dataset/
 
 身分資料夾名稱前綴類別名（如 `car_C000025_..._track52`），避免不同類別的 `track_id` 撞名。
 
-## 目前資料量（`dataset/reid/crop_dataset/`，2026-07-24）
+## 目前資料量（`dataset/reid/crop_dataset/`，2026-09-21）
 
 不含舊的 `train/` 子目錄，只計 6 個類別資料夾：
 
 | 類別 | 身分數 | 總 crop 數 | 平均/身分 | 最少 | 最多 |
 |---|---:|---:|---:|---:|---:|
-| person | 35 | 1082 | 30.9 | 1 | 284 |
-| car | 531 | 14455 | 27.2 | 1 | 601 |
-| scooter | 336 | 14260 | 42.4 | 1 | 590 |
-| small_truck | 183 | 2230 | 12.2 | 1 | 448 |
-| bus | 5 | 51 | 10.2 | 1 | 24 |
-| truck | 95 | 1321 | 13.9 | 1 | 113 |
-| **總計** | **1185** | **33399** | | | |
+| person | 283 | 12742 | 45.0 | 1 | 2635 |
+| car | 7021 | 223322 | 31.8 | 1 | 1567 |
+| scooter | 5386 | 299852 | 55.7 | 1 | 1352 |
+| small_truck | 2091 | 11851 | 5.7 | 1 | 844 |
+| bus | 57 | 1256 | 22.0 | 1 | 340 |
+| truck | 1172 | 35091 | 29.9 | 1 | 1270 |
+| **總計** | **16010** | **584114** | | | |
 
-資料來源：`config/botsort_save_reid_crops.yaml`（中華三路_民生二路 6 支序列）+ `config/botsort_save_reid_crops_video.yaml`（`video/` 底下 5 支不同路口影片，各取前 60 秒，`det_corner` 關閉）。`bus` 身分數明顯偏少——這兩批來源影片路口車流裡幾乎沒拍到公車，需要額外找有公車出現的影片才能補足。
+資料來源：`config/botsort_save_reid_crops.yaml`（中華三路_民生二路 6 支序列）+ `config/botsort_save_reid_crops_video.yaml`（`video/` 底下 5 支不同路口影片 + `bus_video/` 補充的 4 支民族一路/天祥二路路口完整長度影片，`det_corner` 關閉）。`bus` 身分數已從 5 個提升到 57 個（`openspec/changes/reid-bus-video-crops/`，2026-09-21）：既有兩批來源影片路口車流裡幾乎沒拍到公車，`bus_video/` 完整長度影片驗證能實際補到公車身分，其餘類別身分數也因全長影片內容量大幅增加。
 
 ## `save_reid_crops` 蒐集目標（`reid_crop_dir`）
 

@@ -2,13 +2,12 @@
 Layer 1（本專案實際輸出）→ Layer 2（碰撞偵測核心運算要的格式）轉換層。
 
 Layer 1：evaluation/mot_format.py::save_mot_format() 產生的逐類別 MOT CSV
-（見 markdown/TRAJECTORY_FORMAT.md 第 1 節）：
+（格式見 .claude/rules/evaluation.md「軌跡格式契約」）：
     annotation_<seq>/trackers/mot_challenge/<benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt
     每行：frame,track_id,left,top,w,h,score（像素座標，無 header）
 
 Layer 2：module/collision/detection_core.py 的 compute_ttc_for_pair()/
-compute_pet_for_pair() 需要的單一物件軌跡 dict（定義與衍生規則見
-markdown/TRAJECTORY_FORMAT.md 第 3 節）：
+compute_pet_for_pair() 需要的單一物件軌跡 dict（定義與衍生規則如下）：
     {
         "Track ID": int,
         "class_id": int, "class_name": str,        # 本專案擴充欄位

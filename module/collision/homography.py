@@ -7,8 +7,7 @@ Homography（單應性變換）矩陣計算與座標轉換核心運算。
 見 module/collision/homography_points.py。
 
 本專案目前沒有真實地圖底圖，"map" 側點位是使用者自行在同一張 CCTV 第一幀畫面上
-定義的校正後座標（見 markdown/HOMOGRAPHY.md），因此這裡的轉換實質上是手動透視校正，
-不是地理座標轉換，詳見 markdown/TRAJECTORY_FORMAT.md 第 3 節。
+定義的校正後座標，因此這裡的轉換實質上是手動透視校正，不是地理座標轉換。
 
 原始程式位置：
 - utils/map_utils.py 的 class HomographyMapping
@@ -117,7 +116,7 @@ def transform_positions_and_bboxes(
     bboxes: Dict[int, Tuple[Point, Point]],
     H: np.ndarray,
 ) -> Tuple[Dict[int, Tuple[float, float, float]], Dict[int, Tuple[Point, Point]], Dict[int, list]]:
-    """批次轉換一條軌跡的 Positions / Bboxs（對應 TRAJECTORY_FORMAT.md 第 3 節格式）。
+    """批次轉換一條軌跡的 Positions / Bboxs。
 
     Args:
         positions: {frame: (x, y, z)}，z 不會被轉換，原值保留

@@ -14,7 +14,6 @@ CCTV 交通監控的物件偵測＋多物件追蹤（MOT）評估流程：YOLO11
 - `markdown/ARCHITECTURE.md`：專案總覽、範圍、核心流程圖、已知限制 + 已知待辦與落差清單。
 - `markdown/GUIDE.md`：四大模組（Detection/Tracker/Re-ID/Evaluation）+ `TrackingEvalPipeline`、grid search、`visualize_gt_on_*.py`、`yolo_reid_trainer` 的實際使用範例 + 手動驗證流程（無自動化測試，改動後照此手動驗證）。
 - `markdown/EXPERIMENTS.md`：已驗證過的實驗結論（ReID 開關、GMC 方法比較、FPS 比較等）與資料來源，避免重複測試。
-- `markdown/TRAJECTORY_FORMAT.md`：追蹤軌跡輸出格式規格（欄位、座標系統、frame/track_id 語意、已知限制），供跨專案介接（如碰撞偵測模組）參考。
 
 開始改動前先掃過 `markdown/EXPERIMENTS.md`，避免重工已驗證過的結論；改完後照 `markdown/GUIDE.md` 的流程驗證。
 
@@ -55,8 +54,7 @@ module/detection/ — YOLO 推論封裝（detector.py）。訓練腳本目前不
 module/tracker/   — class-aware BoTSORT / ByteTrack（原 trackers/ → tracker/ → module/tracker/）
 module/reid/      — Re-ID 特徵抽取（encoders.py：`ReID`、`Custom_ReID`）、YOLO-ReID 訓練工具（yolo_reid_trainer.py，
                      模型架構與訓練腳本說明見 module/reid/HANDOFF.md）
-module/collision/ — 軌跡碰撞偵測（TTC/PET）+ Homography 座標轉換/驗證，2026-08 新增，
-                     見 markdown/TRAJECTORY_FORMAT.md 第 3、4 節
+module/collision/ — 軌跡碰撞偵測（TTC/PET）+ Homography 座標轉換/驗證，2026-08 新增
 evaluation/       — DET/TrackEval 共用 pipeline（config_loader、dataset_layout、dataset_prep、mot_converter、
                      trackeval_runner、excel_export、mot_format、pipeline）
 utils/            — 通用小工具（visualization.py）+ model.py（見下方「⚠️ pickle 相容性」）
@@ -92,7 +90,7 @@ archive/          — 歸檔區：past_conf/、past_py_conf/、trackers_trackeva
 
 **第 7 個變體檔**：`config/botsort_save_reid_crops_video.yaml`（2026-07-24 新增）是情境 3 的變體——來源改成 `video/` 底下不同路口的原始影片（各取前 60 秒放進 `dataset/video_seqs/annotations_video/annotation_<seq>/<seq>.mp4`，符合 stage1 掃描結構），`det_corner` 關閉（不同路口鏡頭，原本的多邊形不適用）。用來補足既有 6 支序列裡 `bus`/`person`/`truck`/`small_truck` 身分數過少的問題。不計入固定的 6 個情境檔，因為只是資料來源不同、其餘設定完全比照情境 3。
 
-**第 8 個變體檔**：`config/collision_detect.yaml`（2026-08 新增）——追蹤參數沿用情境 2（`botsort_noreid.yaml`），`stage1=true / stage2=false / stage3=true`，多一段 `collision:` 區塊放 TTC/PET 固定參數與 Homography 相關路徑。用來跑第三階段軌跡碰撞偵測（`module/collision/`，見 `markdown/TRAJECTORY_FORMAT.md` 第 3、4 節），不需要 TrackEval 評估。不計入固定 6 個情境檔，因為目的（碰撞偵測 vs. 追蹤評估）跟其他 6 個不同。
+**第 8 個變體檔**：`config/collision_detect.yaml`（2026-08 新增）——追蹤參數沿用情境 2（`botsort_noreid.yaml`），`stage1=true / stage2=false / stage3=true`，多一段 `collision:` 區塊放 TTC/PET 固定參數與 Homography 相關路徑。用來跑第三階段軌跡碰撞偵測（`module/collision/`），不需要 TrackEval 評估。不計入固定 6 個情境檔，因為目的（碰撞偵測 vs. 追蹤評估）跟其他 6 個不同。
 
 **由 `evaluation/config_loader.py::load_config()` 讀取一般設定**（路徑、TrackEval 資料集參數、要評估的類別、偵測區域多邊形 `det_corner`、log 開關、`stages.run_stage1`/`run_stage2`/`run_stage3` 三階段開關、`save params.save_reid_crops`/`reid_crop_dir`、`collision:` 區塊的 TTC/PET 參數與 Homography 路徑）。**由 `module/tracker/config.py::load_track_config()` 讀取 `class_tracking:` 章節**（class-aware tracker 的逐類別參數表：`match_thresh`、`track_buffer`、`use_reid` 等），**必須在建立 tracker 之前呼叫**，否則 `CLASS_TRACKING_PARAMS` 是空的（`track_eval.py` 的 CLI 入口已處理好順序，寫新腳本時要照做）。
 

@@ -3,11 +3,10 @@ TTC/PET 碰撞事件輸出：乾淨 CSV/JSON、比照原始欄位風格的 log C
 
 三種輸出：
 1. 乾淨 CSV/JSON——欄位直接對應 detection_core.py::compute_ttc_for_pair() /
-   compute_pet_for_pair() 回傳的 dict key，跨專案交換建議優先用這份
-   （見 markdown/PET_TTC_OUTPUT_FORMAT.md 第 6 節建議）。
-2. log CSV——欄位風格比照原始 SafeTrajAI 的 collision_ttc_log.csv（中文表頭，
-   見 markdown/PET_TTC_OUTPUT_FORMAT.md 第 4 節），但修正了該文件第 5 節指出的
-   PET `colision_occur_sec` 未除以 fps、被誤當秒數使用的問題，這裡一律是正確的秒數；
+   compute_pet_for_pair() 回傳的 dict key，跨專案交換建議優先用這份。
+2. log CSV——欄位風格比照原始 SafeTrajAI 的 collision_ttc_log.csv（中文表頭），
+   但修正了原始格式裡 PET `colision_occur_sec` 未除以 fps、被誤當秒數使用的問題，
+   這裡一律是正確的秒數；
    另外本專案每次執行覆寫檔案（不用原始的 append 累加模式），避免跨執行結果混雜。
 3. 熱區圖 PNG——改寫自 markdown/reference_code/draw_utils.py::draw_collision_heatmap()，
    拿掉即時逐幀繪圖/影片疊圖的部分，只保留「一批碰撞點 + 一張背景圖 → 熱區圖」的核心邏輯，

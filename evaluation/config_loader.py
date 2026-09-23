@@ -76,7 +76,7 @@ _DEFAULTS: dict = {
     # Re-ID 訓練資料裁切
     "save_reid_crops": False,
     "reid_crop_dir":   "./dataset/reid/crop_dataset",
-    # 碰撞偵測（module/collision/，見 markdown/COLLISION_DETECTION.md）
+    # 碰撞偵測（module/collision/）
     "homography_points_dir":      "config/homography_points",
     # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/ARCHITECTURE.md「Homography 資料」），
     # resolve_homography() 優先用這份，找不到對應路口才退回 homography_points_dir 的人工點選
@@ -167,7 +167,7 @@ class AppConfig:
         d["run_stage2"] = bool(stages.get("run_stage2", d["run_stage2"]))
         d["run_stage3"] = bool(stages.get("run_stage3", d["run_stage3"]))
 
-        # collision 區塊（module/collision/ 的碰撞偵測參數，見 markdown/COLLISION_DETECTION.md）
+        # collision 區塊（module/collision/ 的碰撞偵測參數）
         collision = raw.get("collision", {}) or {}
         d["homography_points_dir"]       = collision.get("homography_points_dir", d["homography_points_dir"])
         d["homography_matrices_dir"]     = collision.get("homography_matrices_dir", d["homography_matrices_dir"])
