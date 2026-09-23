@@ -1,0 +1,57 @@
+# 定義版本變數
+CUDA="cu128"
+TORCH="2.7.1"
+TORCH_MINOR="2.7"
+OPENAI_VERSION="1.90.0"
+VLLM_VERSION="0.10.0"        
+TRANSFORMERS_VERSION="4.55.0"
+
+pip --timeout=300 --no-cache-dir install datasets \
+    Pillow openai==${OPENAI_VERSION} tqdm numpy pandas matplotlib ipykernel \
+    onnx onnxruntime onnxruntime-gpu onnxslim trl \
+    transformers==${TRANSFORMERS_VERSION} \
+    torch==${TORCH}
+
+# 安裝其他 pip 套件（補回原本沒裝到的 vllm，並移除重複/衝突的 openai 版號）
+pip install --no-cache-dir \
+    vllm==${VLLM_VERSION} \
+    ultralytics==8.3.141 \
+    opencv-contrib-python==4.11.0.86 \
+    opencv-python==4.11.0.86 \
+    opencv-python-headless==4.11.0.86 \
+    gradio==4.42.0 \
+    gradio_client==1.3.0 \
+    qwen-vl-utils==0.0.2 \
+    transformers-stream-generator==0.0.4 \
+    accelerate==1.7.0 \
+    av \
+    deepspeed==0.16.8 \
+    lmdeploy \
+    pillow_heif \
+    shapely \
+    lap \
+    deep_sort_realtime \
+    cython_bbox \
+    timm==1.0.15 \
+    albumentations==2.0.4 \
+    pycocotools \
+    PyYAML \
+    supervision \
+    googletrans \
+    pypinyin \
+    numba \
+    torch==${TORCH}
+
+# 安裝PyTorch（需要先安裝，因為vllm依賴它）
+pip install torch==${TORCH}+${CUDA} \
+            torchvision \
+            torchaudio \
+            --index-url https://download.pytorch.org/whl/${CUDA}
+
+# 先確認實際 ABI，再挑對應的 flash_attn wheel（避免 undefined symbol 錯誤）
+ABI=$(python -c "import torch; print('TRUE' if torch._C._GLIBCXX_USE_CXX11_ABI else 'FALSE')")
+echo "偵測到目前 torch 的 CXX11 ABI = ${ABI}"
+
+FLASH_ATTN_WHL="flash_attn-2.8.2+cu12torch${TORCH_MINOR}cxx11abi${ABI}-cp310-cp310-linux_x86_64.whl"
+wget https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.2/${FLASH_ATTN_WHL}
+pip install ./${FLASH_ATTN_WHL}
