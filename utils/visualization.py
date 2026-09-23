@@ -1,19 +1,6 @@
-import re
 import cv2
 import numpy as np
 from pathlib import Path
-from argostranslate import translate
-
-
-def normalize_string(s: str) -> str:
-    s2 = re.sub(r'[^A-Za-z0-9/]', '_', s)
-    s2 = re.sub(r'_+', '_', s2)
-    print(s)
-    return s2
-
-
-def translate_path(video_path: str, from_code: str = "zh", to_code: str = "en") -> str:
-    return normalize_string(translate.translate(video_path, from_code, to_code))
 
 
 def draw_polygon_and_save(frame, output_path: Path, pts=None, show_coord: bool = True, save_img: bool = True):

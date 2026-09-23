@@ -13,9 +13,9 @@
 
 ## 2. Phase 1：清理（仍在舊結構上）
 
-- [ ] 2.1 刪除 `utils/visualization.py` 的 `translate_path`、`normalize_string` 與 `argostranslate` import；以 `grep -rn argostranslate` 無結果（排除 vendored／ignored 目錄）驗證
-- [ ] 2.2 `git mv` 兩支 `.sh` 到 `tools/`，並確認 `skills-lock.json` 由哪個工具讀取、保持原位；驗證根目錄已無 `.sh` 檔
-- [ ] 2.3 跑 smoke 測試與 `run_all.sh after_p1`＋`compare.py before1 after_p1`，驗證差異在容忍度內；commit Phase 1
+- [x] 2.1 刪除 `utils/visualization.py` 的 `translate_path`、`normalize_string` 與 `argostranslate` import；以 `grep -rn argostranslate` 無結果（排除 vendored／ignored 目錄）驗證
+- [x] 2.2 `git mv` 兩支 `.sh` 到 `tools/`，並確認 `skills-lock.json` 由哪個工具讀取、保持原位；驗證根目錄已無 `.sh` 檔
+- [x] 2.3 跑 smoke 測試與 `run_all.sh after_p1`＋`compare.py before1 after_p1`，驗證差異在容忍度內；commit Phase 1
 
 ## 3. Phase 2：套件化與搬移
 
