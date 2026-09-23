@@ -58,6 +58,13 @@
 `module/collision/homography.py` 的內容整檔搬為 `safetrajai/collision/homography/__init__.py`，其餘 5 支 `homography_*.py` 搬進同一子套件（`run_homography_validation.py` 則移到 `scripts/`）。如此 `from . import homography as homography_mod`、`homography_mod.compute_homography()` 等既有呼叫不必改寫，子套件內原本的 `from .homography import ...` 改為 `from . import ...`。
 - 替代方案：改名為 `homography/core.py`，呼叫端全部要跟著改，import 改動較多，不採用。
 
+### D5c：搬移時的命名細節（實作時決定）
+- `collision/homography/` 內的 5 支 `homography_*.py` 拿掉前綴（例如 `homography_points.py` → `points.py`），模組路徑變成 `safetrajai.collision.homography.points`，避免 `homography.homography_points` 重複；`collision/__init__.py` 以 `from .homography import points as homography_points` 保留原本的名稱。
+- `utils/visualization.py` 搬為 `safetrajai/visualization/drawing.py`，`visualization/__init__.py` 保持空白。
+- 其餘檔名一律保留，只依 tasks 明確列出的改名（`tracker→tracking`、`run_homography_validation→validate_homography`、`train→train_reid`）。
+- `scripts/validate_homography.py` 沒有 argparse，執行 `--help` 會直接跑完整驗證並寫入 `models/homography/validation_output/`，所以 smoke 測試對它只做 import（不以 `__main__` 執行），其餘 `scripts/**/*.py` 皆驗證 `--help` 以 0 結束。
+- tracker override 的不變性由 smoke 以 AST 比對（依 D5），另以 `git diff BASE_COMMIT` 人工確認文字層級也只有 import 行變動。
+
 ### D8：Phase 3 拆分 `track_eval.py`
 | 新位置 | 內容 |
 |---|---|

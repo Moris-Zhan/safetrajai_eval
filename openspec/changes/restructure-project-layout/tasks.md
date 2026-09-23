@@ -21,16 +21,16 @@
 
 - [x] 3.1 建立 `pyproject.toml`（setuptools、`package-dir` 對應 `src/` 與 `third_party/`、額外頂層 package `utils`、依賴宣告、dev 依賴 pytest）與空的 `src/safetrajai/__init__.py`；以最小原型驗證 setuptools 83 editable 模式可同時 import `safetrajai`、`trackeval.metrics`、`trackeval.datasets`，失敗則改用 design D2 備案
 - [x] 3.2 `git mv trackeval third_party/trackeval`（內容不變），執行 `pip install -e . --no-deps`；在 `/tmp` 下啟動 Python 驗證 `trackeval.__file__` 指向 `third_party/trackeval/`，且 `git diff --stat -M` 顯示純 rename
-- [ ] 3.3 純搬移 commit：`git mv` `module/{detection,tracker→tracking,reid,grid_search/core.py,collision}`、`evaluation/`、`utils/visualization.py→visualization/` 到 `src/safetrajai/`，`homography_*` 收進 `collision/homography/`（`homography.py` 成為該子套件的 `__init__.py`，見 design D5b），`utils/model.py` 實作移到 `safetrajai/reid/model.py`；驗證 `git show --stat -M` 全部被辨識為 rename
-- [ ] 3.4 純搬移 commit：CLI 腳本 `git mv` 到 `scripts/`（grid_search_*、validate_homography、train_reid、`reid_data/*`＋README、`visualize_gt_*`），`evaluation/pipeline.py::main()` 抽到 `scripts/run_evaluation.py`；驗證 rename 偵測
-- [ ] 3.5 新增 `safetrajai/paths.py`（`PROJECT_ROOT`），取代全部 `parents[N]`、`DEFAULT_TRACK_CONFIG_PATH`、`_DATASETS_YAML_PATH`；以 `grep -rn "parents\[" src scripts` 只剩 `paths.py` 驗證
-- [ ] 3.6 改寫全部 import 為 `safetrajai.*`、刪除所有 `sys.path` 修改（含 `track_eval.py` 加入 repo 上一層的那行）；以 `grep -rn "sys.path" src scripts utils track_eval.py` 無結果驗證
-- [ ] 3.7 tracker 檔案只改檔案層級 import；以 AST 比對 `BASE_COMMIT` 版本與新版的 `__init__`／`update`／`remove_duplicate_stracks`／`init_track` 本體完全相同驗證
-- [ ] 3.8 `utils/model.py` 改為 re-export shim；在 `/tmp` 下實際 `torch.load` 一個 `best_full_model.pt`（`weights_only=False`）驗證可載入
-- [ ] 3.9 新增 `safetrajai/classes.py`（0-based `CLASS_NAMES`、`MOT_CLASS_ID = id + 1`），替換 `mot_format.NAMES`、`trackeval_runner.class_name_to_class_id`、`scripts/reid_data/` 三份 `CLASSES`（改 `sorted(CLASS_NAMES.values())`）；以 smoke 斷言新舊值完全相同驗證
-- [ ] 3.10 `.gitignore` 移除 `dataset/reid/` 例外規則；以 `git status` 確認 `dataset/reid/` 無新增追蹤或遺失追蹤的檔案
-- [ ] 3.11 更新 `tests/test_smoke.py` 為新結構版：walk import `safetrajai.*`＋`utils.model`、全 config 載入、類別一致性（含 YAML 載入的 `CLASS_NAMES`）、tracker AST 不變性、`sys.path` 掃描、`scripts/*.py --help` 皆 0 退出；`pytest` 全數通過
-- [ ] 3.12 跑 `run_all.sh after_p2`（以 `scripts/` 新路徑）＋`compare.py before1 after_p2`，驗證差異在容忍度內；commit Phase 2
+- [x] 3.3 純搬移 commit：`git mv` `module/{detection,tracker→tracking,reid,grid_search/core.py,collision}`、`evaluation/`、`utils/visualization.py→visualization/` 到 `src/safetrajai/`，`homography_*` 收進 `collision/homography/`（`homography.py` 成為該子套件的 `__init__.py`，見 design D5b），`utils/model.py` 實作移到 `safetrajai/reid/model.py`；驗證 `git show --stat -M` 全部被辨識為 rename
+- [x] 3.4 純搬移 commit：CLI 腳本 `git mv` 到 `scripts/`（grid_search_*、validate_homography、train_reid、`reid_data/*`＋README、`visualize_gt_*`），`evaluation/pipeline.py::main()` 抽到 `scripts/run_evaluation.py`；驗證 rename 偵測
+- [x] 3.5 新增 `safetrajai/paths.py`（`PROJECT_ROOT`），取代全部 `parents[N]`、`DEFAULT_TRACK_CONFIG_PATH`、`_DATASETS_YAML_PATH`；以 `grep -rn "parents\[" src scripts` 只剩 `paths.py` 驗證
+- [x] 3.6 改寫全部 import 為 `safetrajai.*`、刪除所有 `sys.path` 修改（含 `track_eval.py` 加入 repo 上一層的那行）；以 `grep -rn "sys.path" src scripts utils track_eval.py` 無結果驗證
+- [x] 3.7 tracker 檔案只改檔案層級 import；以 AST 比對 `BASE_COMMIT` 版本與新版的 `__init__`／`update`／`remove_duplicate_stracks`／`init_track` 本體完全相同驗證
+- [x] 3.8 `utils/model.py` 改為 re-export shim；在 `/tmp` 下實際 `torch.load` 一個 `best_full_model.pt`（`weights_only=False`）驗證可載入
+- [x] 3.9 新增 `safetrajai/classes.py`（0-based `CLASS_NAMES`、`MOT_CLASS_ID = id + 1`），替換 `mot_format.NAMES`、`trackeval_runner.class_name_to_class_id`、`scripts/reid_data/` 三份 `CLASSES`（改 `sorted(CLASS_NAMES.values())`）；以 smoke 斷言新舊值完全相同驗證
+- [x] 3.10 `.gitignore` 移除 `dataset/reid/` 例外規則；以 `git status` 確認 `dataset/reid/` 無新增追蹤或遺失追蹤的檔案
+- [x] 3.11 更新 `tests/test_smoke.py` 為新結構版：walk import `safetrajai.*`＋`utils.model`、全 config 載入、類別一致性（含 YAML 載入的 `CLASS_NAMES`）、tracker AST 不變性、`sys.path` 掃描、`scripts/*.py --help` 皆 0 退出；`pytest` 全數通過
+- [x] 3.12 跑 `run_all.sh after_p2`（以 `scripts/` 新路徑）＋`compare.py before1 after_p2`，驗證差異在容忍度內；commit Phase 2
 
 ## 4. Phase 3：拆分主入口
 
