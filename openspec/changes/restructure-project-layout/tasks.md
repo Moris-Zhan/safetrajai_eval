@@ -47,5 +47,5 @@
 
 ## 6. 收尾驗證
 
-- [ ] 6.1 在乾淨 shell（`conda activate track_eval`、repo 外 cwd）依 CLAUDE.md 的安裝步驟重做一次安裝並跑 `pytest`，驗證文件步驟可重現
-- [ ] 6.2 彙整各 Phase 的 compare 報告與 `git diff --stat master...HEAD` 摘要，確認 spec 全部 requirement 皆有對應驗證證據
+- [x] 6.1 在乾淨 shell（`conda activate track_eval`、repo 外 cwd）依 CLAUDE.md 的安裝步驟重做一次安裝並跑 `pytest`，驗證文件步驟可重現
+- [x] 6.2 彙整各 Phase 的 compare 報告與 `git diff --stat master...HEAD` 摘要，確認 spec 全部 requirement 皆有對應驗證證據（見 `verification.md`）
