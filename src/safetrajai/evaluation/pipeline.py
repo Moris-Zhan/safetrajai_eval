@@ -52,8 +52,6 @@ from evaluation.dataset_prep import (
     # run_ultralytics_track_to_labels,  # ← 若需自動生成追蹤標籤則啟用
 )
 
-from evaluation.config_loader import load_config
-
 def run_eval_pipeline(cfg):
     """
     執行 MOT/TrackEval pipeline，可被外部 main.py 調用。
@@ -257,19 +255,6 @@ def run_eval_pipeline(cfg):
             print("⏭️ TRACK skipped.")
 
     print("\n✅ ALL DONE (batch).")
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Run MOT/TrackEval pipeline with specified config.")
-    parser.add_argument("--config", type=str, default="config/bytetrack.yaml", help="Path to config yaml file")
-    args = parser.parse_args()
-    cfg = load_config(args.config)
-    run_eval_pipeline(cfg)
-
-
-if __name__ == "__main__":
-    main()
 
 
 # 關注Crop範圍前    
