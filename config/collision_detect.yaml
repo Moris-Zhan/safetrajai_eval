@@ -87,7 +87,7 @@ save params:
   show_unmatched: false
   show_removed: false
   save_reid_crops: false
-  reid_crop_dir: ./dataset/reid/crop_dataset
+  reid_crop_dir: ./dataset/reid/crops
 
 
 # -----------------------------------------------------------------------------

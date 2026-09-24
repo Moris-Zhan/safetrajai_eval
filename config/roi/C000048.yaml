@@ -1,0 +1,8 @@
+# config/roi/C000048.yaml — 鏡頭 C000048 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）
+camera: C000048
+image_size: [1280, 720]
+polygon:
+  - [503, 160]
+  - [1127, 199]
+  - [1024, 712]
+  - [9, 560]

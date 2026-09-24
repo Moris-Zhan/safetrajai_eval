@@ -4,10 +4,13 @@
 #                                              （只跑 stage1，蒐集 Re-ID 訓練用裁切影像，不跑 stage2 評估）
 # 用法：python track_eval.py --config config/botsort_save_reid_crops_video.yaml
 #
+# 注意：正式的 Re-ID 訓練資料請改用 config/reid_crops.yaml（frame_rate: auto，輸出到 dataset/reid/crops）。
+#       本檔保留作為 frame_rate: 30 的對照情境，裁切輸出放在 runs/，不寫進 dataset/reid/。
+#
 # 跟 config/botsort_save_reid_crops.yaml 的差異：
 #   - paths.dataset 使用 reid_sources（見 config/datasets.yaml）：來源資料集，影片依鏡頭放在
 #     dataset/raw/videos/<camera>/，只探索 datasets.yaml 列出的鏡頭；評估鏡頭 C000025 不在其中。
-#   - ROI 依序列所屬鏡頭讀取 config/roi/<camera>.yaml；鏡頭沒有 ROI 檔時以整張影像為 ROI。
+#   - ROI 依序列所屬鏡頭讀取 config/roi/<camera>.yaml；蒐集裁切時鏡頭缺 ROI 檔會在追蹤前報錯。
 #   - 其餘追蹤參數（class_tracking、tracker、conf/iou/imgsz 等）跟 config/botsort_save_reid_crops.yaml 一致，
 #     沿用 config/botsort_noreid.yaml 的 class_tracking（ReID 關閉，蒐集資料不需要追蹤本身啟用 ReID）。
 # =============================================================================
@@ -66,7 +69,7 @@ save params:
   show_unmatched: false
   show_removed: false
   save_reid_crops: true
-  reid_crop_dir: ./dataset/reid/crop_dataset
+  reid_crop_dir: ./runs/reid_crops_video/crops
 
 
 # -----------------------------------------------------------------------------

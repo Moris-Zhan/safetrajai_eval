@@ -34,7 +34,7 @@ pip install pytest          # dev 依賴
 python track_eval.py --config config/bytetrack.yaml               # 不帶 --config 時預設就是這個檔；等同 python scripts/run_pipeline.py
 python track_eval.py --config config/botsort_noreid.yaml
 python track_eval.py --config config/botsort_reid.yaml
-python track_eval.py --config config/botsort_save_reid_crops.yaml # 只跑 stage1，並蒐集 Re-ID 裁切
+python track_eval.py --config config/reid_crops.yaml              # 只跑 stage1，從 reid_sources 蒐集 Re-ID 裁切到 dataset/reid/crops/
 python track_eval.py --config config/collision_detect.yaml        # stage1 + stage3（TTC/PET）
 python scripts/run_evaluation.py --config <config>                # 只對既有 stage1 輸出跑 stage2
 
@@ -47,8 +47,11 @@ python scripts/grid_search_botsort_reid.py --target-class person
 # Homography 驗證（輸出到 models/homography/validation_output/）
 python scripts/validate_homography.py
 
-# Re-ID 資料工具（舊的 YOLO-as-encoder 訓練端已移除；新的 timm 訓練由後續 change 處理）
-python scripts/reid_data/build_reid_split.py --mode category|flat
+# Re-ID 資料工具：蒐集 → 標記 → 審查 → 排除 → manifest（新的 timm 訓練由後續 change 處理）
+python scripts/reid_data/detect_contamination.py                  # DINOv2 標記，輸出 dataset/reports/reid/
+python scripts/reid_data/generate_identity_review.py              # 依標記原因分頁的審查頁（勾選＝排除）
+python scripts/reid_data/apply_review_exclusions.py --confirm-csv <csv> [--apply]  # 合併進 dataset/reid/exclusions.csv
+python scripts/reid_data/build_reid_split.py --version <v>        # 產生 dataset/reid/splits/<v>/manifest.csv
 
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
@@ -57,7 +60,7 @@ python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <pa
 ### 測試與回歸驗證
 
 - `pytest`：smoke 測試（`tests/test_smoke.py`），涵蓋全部模組 import、全部 config 載入、類別 ID 契約、tracker override 方法的 AST 不變性、`sys.path` 掃描、`scripts/**/*.py --help`。幾秒內跑完，任何結構調整後都要跑。
-- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 11 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py after1 <run>` 與基準比對（基準於 2026-09-23 由 `before1` 改為 `after1`，原因見 `tests/golden/TOLERANCE.md`）。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
+- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 16 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py reid1 <run>` 與基準比對（基準於 2026-09-24 由 `after1` 改為 `reid1`：裁切情境改在來源鏡頭 C000043 上蒐集，原因見 `tests/golden/TOLERANCE.md`）。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
 - **禁止大量 I/O**：`dataset/`、`models/`、`runs/` 位於掛載磁碟，檔案數以百萬計（例如 Re-ID 裁切）。禁止對整個目錄樹逐檔讀取內容，例如全量 `sha256sum`／`md5sum`、全量 `du`、`find … -exec cat`、大範圍 `rsync --checksum`，這類操作容易造成磁碟損壞。需要核對搬移或複製結果時，只比對路徑清單與檔案數（`find -type f | wc -l`、只列路徑不讀內容），同一磁碟內的 `mv` 不需要核對內容；真的需要比對內容時，只針對少數指定檔案（例如單支影片或權重），並先向使用者確認範圍。長時間的背景讀寫任務要先告知使用者。
 - **隔離慣例**：有疑慮、不可使用的權重或資料一律用 `mv` 移到所在目錄下的 `temp/`（不刪除），並在 `temp/DO_NOT_USE.md` 逐項記錄原路徑、日期、原因與還原指令；config 不得引用 `temp/` 內的路徑（smoke 測試檢查）。評估資料集的人工 GT 內容不可修改。
 - 改動演算法時，驗證方式仍是實際跑受影響的 stage 再比對輸出。想縮小範圍時，直接在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列，或調整 `eval_flags.run_det_eval`／`run_track_eval`。全量序列、grid search 和重跑 stage1 都很耗時，也可能覆寫既有輸出，執行前要先確認範圍。
@@ -108,7 +111,6 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 - stage2 的 detection 評估以評估資料集的人工 GT 為基準（在 `OUTPUT_ROOT/det_eval/<seq>/` 組出資料集），不再使用 stage1 的追蹤標籤；目前不套用 ROI，報表會標示「ROI：未套用（全畫面）」。
 - `track_id` 只在單一序列、單一類別內唯一（每段序列都新建 tracker，而且是逐類別配號），跨序列要用「序列名＋track_id」當鍵。
 - GT 有 class 欄，但只給 TrackEval 比對用；stage3 和其他下游分析一律讀 tracker 輸出，不讀 GT。
-- 已知限制：`safetrajai/evaluation/mot_format.py::save_mot_format()` 用 `C000025_*` 做 glob，換成非預設資料集時可能靜默輸出全空的軌跡。修好之前，不要把空檔解讀成沒有偵測到東西。
 
 ### Tracker（改動前先讀 `src/safetrajai/tracking/HANDOFF.md` 與同目錄的 `class_aware_*_flow.md`）
 
@@ -122,8 +124,11 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 
 - **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：`models/class_reid_weights/*/best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。
-- 舊的 Re-ID 資料（`dataset/reid/` 全部內容）與權重（`models/yolo-reid/*`、`models/class_reid_weights/*`）已確認無效，隔離在各自的 `temp/`，將由後續 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建；不要引用或拿來訓練。
-- Crop 資料集結構是 `dataset/reid/crop_dataset/{class}/{seq}_track{id}/*.jpg`（由 `save_reid_crops` 產生），train／val 要依身分（identity）互斥切分；`--mode category` 和 `--mode flat` 是兩種不同的資料集，不能混用。資料切分與稽核腳本（`build_reid_split.py`、`check_class_consistency.py`、`generate_identity_review.py`、`quarantine_flagged.py`）在 `scripts/reid_data/`，用法見 `scripts/reid_data/README.md` 與各腳本開頭的 docstring；資料本身仍在 `dataset/reid/`。
+- 舊的 Re-ID 資料與權重（`dataset/reid/temp/`、`models/yolo-reid/temp/`、`models/class_reid_weights/temp/`）已確認無效並隔離；不要引用或拿來訓練。
+- Re-ID 資料已由 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建（流程、目錄與資料量見 `scripts/reid_data/README.md`）：
+  - 裁切在 `dataset/reid/crops/{class}/{seq}_track{id}/{frame:06d}.jpg`，每支序列一份 metadata 索引 `crops/_index/<seq>.csv`；只從 `role: source` 的鏡頭蒐集，評估鏡頭一律拒絕，每支鏡頭都必須有 ROI 檔。蒐集設定是 `config/reid_crops.yaml`。
+  - **訓練一律讀 `dataset/reid/splits/<version>/manifest.csv`**（`crop_path` 相對於 `crops/`），不要直接掃 `crops/`；排除清單、每身分 4～30 張、依鏡頭與日期切分（`config/reid_split.yaml`）只在 manifest 中套用。
+  - 標記、審查、排除都只寫紀錄，不移動裁切（排除與隔離的差異見 `docs/adr/0006`）。目前只有審查前的 `v1`；全量審查與 `v2` 由後續的自動排除 change 處理。
 
 ### Grid search
 

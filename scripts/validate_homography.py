@@ -11,7 +11,7 @@
     <tag>_heatmap_{idw,linear,rbf}.png       誤差空間內插熱力圖，plain 風格（check points >= 4 個才會產生）
     <tag>_pretty_heatmap_{idw,linear,rbf}.png  同上，pretty 風格（含色階圖例）
     <tag>_compare.mp4                     逐幀 warp 比對影片（只有本專案實際有來源影片的
-                                           6 個路口會產生，且預設開啟，see generate_videos 參數）
+                                           4 個路口會產生，且預設開啟，see generate_videos 參數）
     summary.csv                           26 個路口的驗證狀態彙總（validated 與否、reprojection 誤差統計）
 
 沒有 check points 的路口（見 config/homography_checkpoints/README.md）在 summary.csv
@@ -50,7 +50,7 @@ def run_all(generate_videos: bool = True) -> List[Dict[str, Any]]:
     """
     Args:
         generate_videos: 是否連帶產生逐幀 warp 比對影片（`<tag>_compare.mp4`，只有實際有
-            來源影片的 6 個路口會產生）。影片相對耗時，反覆測試 stats/heatmap 時可設 False
+            來源影片的 4 個路口會產生）。影片相對耗時，反覆測試 stats/heatmap 時可設 False
             跳過，只重算數值與圖片。
     """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

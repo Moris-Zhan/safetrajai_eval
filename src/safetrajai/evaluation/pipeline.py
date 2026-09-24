@@ -151,7 +151,7 @@ def run_eval_pipeline(cfg):
                     data=str(det_yaml_p),
                     split="val",
                     batch=8,
-                    imgsz=640,
+                    imgsz=getattr(cfg, "imgsz", 640),
                     cache=False,
                 )
                 export_det_metrics_to_excel_openpyxl(

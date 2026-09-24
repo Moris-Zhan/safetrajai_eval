@@ -1,97 +1,106 @@
 # scripts/reid_data/ — Re-ID 資料集工具（資料位於 dataset/reid/）
 
-本文件說明 `dataset/reid/crop_dataset/`、`dataset/reid/reid_category_dataset/`、`dataset/reid/reid_dataset/` 三個目錄的檔案／目錄架構與彼此關係。切分與稽核腳本放在 `scripts/reid_data/`（`build_reid_split.py`、`check_class_consistency.py`、`generate_identity_review.py`、`quarantine_flagged.py`），資料本身仍在 `dataset/reid/`（gitignore）。
+Re-ID 訓練資料由 change `rebuild-reid-dataset`（2026-09-24）從 `dataset/raw/videos/` 重建。流程是：
 
-> **2026-09-23 更新**：下面描述的 `crop_dataset/`、`reid_category_dataset/`、`reid_dataset/` 與稽核報表，都是舊追蹤器產生的無效資料，已整批隔離到 `dataset/reid/temp/`（見該目錄的 `DO_NOT_USE.md`），不可使用。Re-ID 資料會由後續 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建，屆時本文件與這些腳本的輸入會一併更新。
+**蒐集 → 標記 → 審查 → 排除 → manifest**
+
+裁切只寫一次，之後的標記、審查、排除、切分都只產生紀錄，不搬移、改名或刪除任何裁切。術語（裁切、身分、污染身分、資料集版本、排除、隔離）見 `CONTEXT.md`，排除與隔離的差異見 `docs/adr/0006`。
+
+> 舊的 `crop_dataset/`、`reid_category_dataset/`、`reid_dataset/` 是舊追蹤器產生的無效資料，已隔離到 `dataset/reid/temp/`（見該目錄的 `DO_NOT_USE.md`），不可引用或拿來訓練。
+
+## 目錄
 
 ```
 dataset/reid/
-├── crop_dataset/               原始裁切影像（來源，唯讀）
-├── reid_category_dataset/      --mode category 輸出
-└── reid_dataset/                --mode flat 輸出
+├── crops/                                   裁切（stage1 的 save_reid_crops 寫入）
+│   ├── <class>/<序列>_track<id>/<frame>.jpg
+│   └── _index/<序列>.csv                    每張裁切一列的 metadata 索引
+│       _index/<序列>.skipped.json           略過統計（ROI 外、最短邊 < 32px）
+├── exclusions.csv                           人工審查後的排除清單（apply_review_exclusions.py 寫入）
+├── splits/<version>/                        資料集版本
+│   ├── manifest.csv                         crop_path,identity,class,camera,date,split
+│   ├── summary.json                         各類別／split／鏡頭的身分數與張數
+│   └── split_rules.yaml                     本次使用的切分規則複本
+└── temp/                                    已隔離的舊資料，不可使用
+
+dataset/reports/reid/                        標記與審查頁（detect_contamination.py、generate_identity_review.py）
 ```
 
-## 1. `dataset/reid/crop_dataset/` — 原始裁切影像（來源，唯讀）
+**訓練時請讀 `splits/<version>/manifest.csv`**，再以 `crop_path`（相對於 `crops/`）讀取影像，不要直接掃描 `crops/`：排除清單、最少張數、每身分最多張數與 train／val 切分，都只在 manifest 中套用。
 
-```
-dataset/reid/crop_dataset/
-├── bus/           {影片檔名}_track{track_id}/*.jpg
-├── car/           {影片檔名}_track{track_id}/*.jpg
-├── person/        ...
-├── scooter/       ...
-├── small_truck/   ...
-└── truck/         ...
-```
-
-- 6 個類別資料夾（`bus`/`car`/`person`/`scooter`/`small_truck`/`truck`）底下每個子資料夾是一個身分，命名為 `{影片檔名}_track{track_id}`，由 `track_eval.py` 的 `save_reid_crops` 功能（`config/botsort_save_reid_crops.yaml`，`reid_crop_dir: ./dataset/reid/crop_dataset`）逐幀裁切寫入，詳見 `markdown/GUIDE.md` 第 6 節。**`track_id` 是 class-aware tracker 逐類別各自配號**——同一支影片同一個編號在不同類別代表不同物體，不能跨類別直接比對資料夾名稱。
-
-> **2026-09-14 更新**：先前這裡記錄過一個 `train/` 子目錄（舊版扁平身分資料集，444 身分，資料夾直接命名為 6 碼數字如 `000100`，跟上面 6 個類別資料夾不是同一套產生流程）與對應的 `numbers.txt`／`res.txt`。確認**這個環境的 `dataset/reid/crop_dataset/` 底下本來就沒有同步這批資料**，只有上面 6 個類別資料夾——不是被移除，是這個工作目錄從未有過。因此 `markdown/ARCHITECTURE.md` 原本規劃的「搬到 `archive/reid_legacy_flat_dataset/`」這個批次操作在此環境無事可做，已從待辦清單移除；若其他環境/主機上確實還有這批舊資料，屬於該處另外處理的範圍，不在本文件描述內。
-
-## 2. `dataset/reid/reid_category_dataset/` — `build_reid_split.py --mode category` 輸出
+## 1. 蒐集裁切
 
 ```bash
-python scripts/reid_data/build_reid_split.py --mode category
+python track_eval.py --config config/reid_crops.yaml
 ```
 
-6 個類別**各自獨立**依身分（資料夾）切一次 train/val（同一身分的照片只會出現在其中一邊），輸出：
+- 只從 `config/datasets.yaml` 中 `role: source` 的 `reid_sources` 蒐集；評估鏡頭（C000025）一律拒絕，每支鏡頭都必須有 `config/roi/<camera>.yaml`，否則在追蹤前就報錯，不會寫出任何東西。
+- 規則：框中心點在 ROI 內、最短邊 ≥ 32px、每條軌跡依影片時間每 0.5 秒最多 1 張。
+- 每支序列在結束時一次寫出索引；索引已存在時報錯，重跑前要先移走舊輸出。
+- 工具模型與追蹤參數（dennis@640、`frame_rate: auto`、`gmc_method: sparseOptFlow`、四輪車加重 `center_dist_weight`）的選定依據見 `openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md`。
+- 只跑部分鏡頭時，在另建的設定中加上 `paths.cameras: [<camera>, ...]`（只能取 `reid_sources` 登記鏡頭的子集）。
 
-```
-dataset/reid/reid_category_dataset/
-├── bus/
-│   ├── train/{identity}/*.jpg
-│   └── val/{identity}/*.jpg
-├── car/{train,val}/{identity}/*.jpg
-├── person/{train,val}/{identity}/*.jpg
-├── scooter/{train,val}/{identity}/*.jpg
-├── small_truck/{train,val}/{identity}/*.jpg
-├── truck/{train,val}/{identity}/*.jpg
-├── numbers.txt      每個身分一行 "{張數:>6d} {class}/{split}/{identity}"
-└── res.txt          tree -h -L 3 輸出（顯示到身分資料夾層級，不展開個別影像）
-```
-
-身分資料夾名稱維持原樣（`{影片檔名}_track{track_id}`），同一類別內不會撞名。
-
-## 3. `dataset/reid/reid_dataset/` — `build_reid_split.py --mode flat` 輸出
+## 2. 污染標記
 
 ```bash
-python scripts/reid_data/build_reid_split.py --mode flat
+python scripts/reid_data/detect_contamination.py
 ```
 
-6 個類別的身分**全部混在一起**依身分切一次 train/val（不分類別），輸出：
+- 每張裁切只讀一次，以 DINOv2（timm `vit_small_patch14_dinov2`，第一次使用時從 HF Hub 下載）抽特徵。
+- 只標記裁切數 ≥ `config/reid_split.yaml` 的 `min_crops_per_identity` 的身分（不足的身分不會進 manifest）。
+- 四種標記：
+  - **類別一致性**：只在人／二輪／四輪粗分組之間不一致時標記（`class_consistency.csv`）。
+  - **外觀離群**：裁切到身分平均特徵的 cosine 距離超過同類別第 99 百分位（`appearance_outliers.csv`）。
+  - **靜止身分**：首末兩張的中心點位移 < 0.5 倍框尺寸且持續 ≥ 5 秒，目標是號誌等誤判（`motion_flags.csv`）。
+  - **運動跳動**：相鄰取樣的速度突變，目標是 ID 閃跳（`motion_flags.csv`）。
+- 裁切層級的判定類別與離群結果在 `contamination_crops.csv`。
+- 全量約 29 萬張時曾發生一次 segmentation fault；若再發生，以 `python -X faulthandler -u ... --batch-size 256` 重跑並保留呼叫堆疊。
 
+## 3. 人工審查頁
+
+```bash
+python scripts/reid_data/generate_identity_review.py --audit-per-camera 20 --seed 0
 ```
-dataset/reid/reid_dataset/
-├── train/{class}_{identity}/*.jpg
-├── val/{class}_{identity}/*.jpg
-├── numbers.txt      每個身分一行 "{張數:>6d} {split}/{class}_{identity}"
-└── res.txt          tree -h -L 2 輸出
+
+- 只包含裁切數 ≥ `min_crops_per_identity` 的身分：任一標記的身分、bus 的全部身分，以及每支鏡頭以固定種子從未標記身分中抽出的隨機抽查身分。
+- 依原因分頁（靜止 → 運動跳動 → 外觀離群 → 類別不一致 → bus → 隨機抽查）；靜止分頁可整頁全選。
+- 頁面中的勾選代表**排除**：勾身分＝排除整個身分，勾縮圖＝只排除那一張。「產生確認清單」匯出 `class,identity,image,action` 的 CSV。
+- 伺服器沒有圖形介面時，在輸出目錄執行 `python -m http.server 8765 --bind 127.0.0.1`，再以 VS Code 或 `ssh -L` 轉發連接埠開啟；CCTV 畫面不要上傳到外部服務。
+
+## 4. 套用排除清單
+
+```bash
+python scripts/reid_data/apply_review_exclusions.py --confirm-csv review_exclusions.csv          # dry-run
+python scripts/reid_data/apply_review_exclusions.py --confirm-csv review_exclusions.csv --apply  # 寫入
 ```
 
-身分資料夾名稱前綴類別名（如 `car_C000025_..._track52`），避免不同類別的 `track_id` 撞名。
+- 合併進 `dataset/reid/exclusions.csv`（可用 `--exclusions` 指定），去除重複並依鍵排序；不動任何裁切。
 
-## 目前資料量（`dataset/reid/crop_dataset/`，2026-09-21）
+## 5. 產生資料集版本（manifest）
 
-不含舊的 `train/` 子目錄，只計 6 個類別資料夾：
+```bash
+python scripts/reid_data/build_reid_split.py --version v1
+python scripts/reid_data/build_reid_split.py --version v2 --exclusions dataset/reid/exclusions.csv
+```
 
-| 類別 | 身分數 | 總 crop 數 | 平均/身分 | 最少 | 最多 |
-|---|---:|---:|---:|---:|---:|
-| person | 283 | 12742 | 45.0 | 1 | 2635 |
-| car | 7021 | 223322 | 31.8 | 1 | 1567 |
-| scooter | 5386 | 299852 | 55.7 | 1 | 1352 |
-| small_truck | 2091 | 11851 | 5.7 | 1 | 844 |
-| bus | 57 | 1256 | 22.0 | 1 | 340 |
-| truck | 1172 | 35091 | 29.9 | 1 | 1270 |
-| **總計** | **16010** | **584114** | | | |
+- 依序套用：排除清單 → 捨棄少於 4 張的身分 → 每個身分依時間均勻抽樣到最多 30 張 → 依鏡頭與日期切分（`config/reid_split.yaml`：C000054 的 20250629 為 val，其他全部為 train）。
+- 同一個身分只會出現在一個 split；評估鏡頭永遠不會出現；相同輸入產生逐位元組相同的 manifest；不複製影像。
+- 版本目錄已存在時報錯，不覆寫。
 
-資料來源：`config/botsort_save_reid_crops.yaml`（中華三路_民生二路 6 支序列）+ `config/botsort_save_reid_crops_video.yaml`（`video/` 底下 5 支不同路口影片 + `bus_video/` 補充的 4 支民族一路/天祥二路路口完整長度影片，`det_corner` 關閉）。`bus` 身分數已從 5 個提升到 57 個（`openspec/changes/reid-bus-video-crops/`，2026-09-21）：既有兩批來源影片路口車流裡幾乎沒拍到公車，`bus_video/` 完整長度影片驗證能實際補到公車身分，其餘類別身分數也因全長影片內容量大幅增加。
+## 目前資料量（2026-09-24）
 
-## `save_reid_crops` 蒐集目標（`reid_crop_dir`）
+來源：9 支鏡頭、39 支影片（C000054 31 支，C000011／012／033／048／056／256 各 1 支約 10 分鐘，C000043／085 各 1 支 60 秒剪輯）。
 
-`config/*.yaml` 的 `save params.reid_crop_dir` 現在指向 `./dataset/reid/crop_dataset`——跟這裡的 `crop_dataset/` 是同一個目錄，`track_eval.py` 的 `save_reid_crops` 功能會直接把新蒐集的裁切寫進 `{class}/{影片}_track{id}/*.jpg`，與 `reid_category_dataset/`、`reid_dataset/` 這兩個切分輸出目錄不會互相覆蓋（各自獨立）。`scripts/train_reid.py` 的 `--data-root` 預設也指向這裡（訓練時直接讀 class-organized 的原始裁切，不經過切分輸出）。
+| 類別 | 裁切數 | 身分數 | `v1` 身分數（train／val） |
+|---|---:|---:|---|
+| car | 127,094 | 21,153 | 12,716（11,232／1,484） |
+| scooter | 138,228 | 31,257 | 9,820（8,300／1,520） |
+| truck | 11,642 | 3,339 | 859（720／139） |
+| small_truck | 9,290 | 4,874 | 443（377／66） |
+| bus | 1,921 | 409 | 189（143／46） |
+| person | 372 | 130 | 29（23／6） |
+| **合計** | **288,547** | **61,162** | **24,056（20,795／3,261）** |
 
-## 共用行為（`build_reid_split.py` 兩種模式都適用）
-
-- 切分單位是**身分**（整個資料夾），不是影像——避免同一身分的照片同時落在 train 和 val 造成資料外洩。
-- 預設 `--val-ratio 0.2 --seed 42`；身分數只有 1 個時整個身分會分進 train，val 為 0（見上方「目前資料量」，`bus` 目前 5 個身分已不會觸發這個邊界情況，但仍是身分數最少的類別）。
-- 用 `shutil.copy2` 實體複製影像，不會動到 `dataset/reid/crop_dataset/` 的原始資料。
-- 輸出目錄已存在且非空時預設報錯中止，需加 `--overwrite` 才會清空重建。
+- `v1` 是審查前的基準版本（174,344 張裁切），仍含號誌誤判、串錯與殘缺框。全量的審查、排除清單與 `v2` 由後續的自動排除 change 處理。
+- person 與 small_truck 的身分明顯不足，是來源影片本身的限制。
+- 遮擋造成的碎片（同一實體被切成多個身分）無法只靠追蹤參數接回，離線合併由後續 change 處理。

@@ -13,7 +13,7 @@ from safetrajai.detection.detector import Detector
 from safetrajai.tracking import create_tracker, CLASS_NAMES
 from safetrajai.visualization.drawing import draw_polygon_and_save, draw_track_box
 from safetrajai.evaluation import dataset_layout
-from safetrajai.pipeline.reid_crops import ReidCropCollector
+from safetrajai.pipeline.reid_crops import ReidCropCollector, frame_time_s
 from safetrajai.pipeline.video_io import VideoWriterWithFfmpeg
 from safetrajai.roi import resolve_roi
 
@@ -42,7 +42,7 @@ class VideoSequenceTracker:
         show_unmatched: bool = False,
         show_removed: bool = False,
         save_reid_crops: bool = False,
-        reid_crop_dir: str = "./dataset/reid/crop_dataset",
+        reid_crop_dir: str = "./dataset/reid/crops",
     ):
         self.detector = Detector(model_path)
         print(f"Loaded model : {model_path}")
@@ -182,6 +182,7 @@ class VideoSequenceTracker:
         labels_path: Path,
         width: int,
         height: int,
+        time_s: float,
     ) -> np.ndarray | None:
         """偵測 → 追蹤 → 存 label/image → reid 裁切蒐集 → 回傳（若需要）已標註的 frame。
 
@@ -222,7 +223,7 @@ class VideoSequenceTracker:
                         )
 
         if self._reid_collector is not None:
-            self._reid_collector.collect(tracks, clean_frame, self._stem_name, frame_id, width, height)
+            self._reid_collector.collect(tracks, clean_frame, frame_id, time_s, width, height)
 
         annotated_frame = None
         if self.save or self.show:
@@ -254,10 +255,12 @@ class VideoSequenceTracker:
         self._avg_track_time = []
 
         frame_id = 0
+        time_s = None
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            time_s = frame_time_s(cap.get(cv2.CAP_PROP_POS_MSEC), frame_id + 1, self._fps, time_s)
 
             clean_frame = deepcopy(frame)
 
@@ -267,7 +270,7 @@ class VideoSequenceTracker:
             frame_id += 1
 
             annotated_frame = self._process_frame(
-                frame, clean_frame, frame_id, images_path, labels_path, width, height,
+                frame, clean_frame, frame_id, images_path, labels_path, width, height, time_s,
             )
 
             if self.show and annotated_frame is not None:
@@ -306,11 +309,14 @@ class VideoSequenceTracker:
             output_path/labels/<seq>
         """
         cap, fps, width, height, total_frames = self._open_video(video_path)
+        self._fps = cap.get(cv2.CAP_PROP_FPS) or fps or 30
         output_path, images_path, labels_path = self._prepare_output_dirs(output_dir, video_path)
 
-        self.roi = resolve_roi(dataset_layout.seq_name_from_video_path(video_path), (width, height))
+        seq_name = dataset_layout.seq_name_from_video_path(video_path)
+        self.roi = resolve_roi(seq_name, (width, height))
+        self._reid_collector = None
         if self.save_reid_crops and self.reid_crop_dir is not None:
-            self._reid_collector = ReidCropCollector(self.reid_crop_dir, self.roi)
+            self._reid_collector = ReidCropCollector(self.reid_crop_dir, self.roi, seq_name)
 
         video_writer = None
         if self.save:
@@ -321,6 +327,8 @@ class VideoSequenceTracker:
         )
 
         cap.release()
+        if self._reid_collector is not None:
+            print(f"  reid crops: {self._reid_collector.finalize()}")
         if video_writer:
             video_writer.close()
         if self.show:

@@ -21,6 +21,8 @@ datasets:
     root: "./dataset/raw/videos/"
     role: source
     layout: raw
-    cameras: [C000043, C000054, C000085, C000294, C000297]
+    # C000026 與評估鏡頭 C000025 位於同一路口，影片歸位在 dataset/raw/videos/C000026/，
+    # 但不列入本資料集，避免 Re-ID 在 C000025 的驗收偏樂觀（2026-09-24 使用者決定）。
+    cameras: [C000011, C000012, C000033, C000043, C000048, C000054, C000056, C000085, C000256]
     run_det_eval_dir: annotations_video
     run_track_eval_dir: mot_annotations_video

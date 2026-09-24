@@ -7,7 +7,7 @@ NAMES = CLASS_NAMES
 
 def save_mot_format(imgs_path, labels_path, output_file, img_width: int, img_height: int):
     # stage1 軌跡保留全部追蹤結果，不依 ROI 過濾；ROI 由下游套用（docs/adr/0005）
-    img_files = sorted(Path(imgs_path).glob("C000025_*.jpg"))
+    img_files = sorted(Path(imgs_path).glob("*.jpg"))
 
     img_paths_txt = Path(output_file).parent / Path(output_file).name.replace("annotation_", "")
     with open(img_paths_txt, 'w') as out_f:
@@ -17,7 +17,7 @@ def save_mot_format(imgs_path, labels_path, output_file, img_width: int, img_hei
             out_f.write(f"{img_file}\n")
     print(f"img files list saved to: {img_paths_txt}")
 
-    label_files = sorted(Path(labels_path).glob("C000025_*.txt"))
+    label_files = sorted(Path(labels_path).glob("*.txt"))
 
     # 建立一個多類別（multi-class）的 dict 以便依據 cls_id 累積 MOT 欄位資訊，例：
     mot_by_class = dict()

@@ -49,4 +49,20 @@
 - 與 `before1` 不同（預期）：`mot_tracks`（stage1 不再過濾）、`trackeval`（評估語意）、`grid_search`（分數；最佳參數不變）、`other`（移除 stage1 `data.yaml`、新增 `trackers_raw/`）。
 - 逐項說明與指標對照見 `openspec/changes/reorganize-dataset-and-eval-gt/verification.md`。`before1` 與 MOT17 式的 `after1_mot17`、`after2_mot17` 保留供對照。
 
-之後的比對一律使用 `python tests/golden/compare.py after1 <run>`。
+（已被下一節取代：基準改為 `reid1`。）
+
+## 基準切換：after1 → reid1（2026-09-24，change `rebuild-reid-dataset`）
+
+Re-ID 裁切蒐集改為拒絕評估鏡頭（C000025），golden 的 `botsort_save_reid_crops` 情境因此改在來源資料集 `reid_sources` 的 C000043 上蒐集（`paths.cameras: [C000043]`），這是刻意的變更，golden 基準改為 `reid1`。
+
+- 自比：以最終程式碼連跑 `reid1`、`reid2`，`compare.py reid1 reid2` 全部為 0 差異，容忍度仍為 0。
+- 與 `after1` 相同：`bytetrack`、`botsort_noreid`、`botsort_reid`、`collision_detect` 四個情境，以及 grid search、homography；兩邊共有的檔案沒有任何差異。
+- 與 `after1` 不同（預期，全部位於 `botsort_save_reid_crops/`）：
+  - `mot_tracks`：C000025 的 6 段序列換成 C000043 的 1 段序列。這個情境 `save_txt: false`，兩邊的軌跡檔都是 0-byte。
+  - `reid_crops`：3830 張 C000025 裁切換成 415 張 C000043 裁切（0.5 秒抽樣、最短邊 32px、ROI 過濾），另外新增 `_index/<seq>.csv`、`_index/<seq>.skipped.json`。
+  - `other`：序列影片與文字檔換成 C000043。
+- 耗時：`pipeline_botsort_save_reid_crops` 從約 410 秒增加到約 964 秒，整體約 16 分鐘。
+- 逐項說明見 `openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md`。
+- 2026-09-24 整理 `runs/` 時，`reid1` 以外的舊 run（`before1`、`after1`、`after2`、`after1_mot17`、`after2_mot17`、`reid2`）已移到 `runs/tmp/refactor_golden/`。`compare.py` 只讀 `runs/refactor_golden/`，需要與舊 run 比對時，先把它搬回該目錄。
+
+之後的比對一律使用 `python tests/golden/compare.py reid1 <run>`。

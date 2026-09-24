@@ -71,7 +71,7 @@ _DEFAULTS: dict = {
     "debug":   False,  # True  = 開啟 TrackEval tracker 檔案逐項檢查 log
     # Re-ID 訓練資料裁切
     "save_reid_crops": False,
-    "reid_crop_dir":   "./dataset/reid/crop_dataset",
+    "reid_crop_dir":   "./dataset/reid/crops",
     # 碰撞偵測（safetrajai/collision/）
     "homography_points_dir":      "config/homography_points",
     # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/ARCHITECTURE.md「Homography 資料」），
@@ -129,6 +129,15 @@ class AppConfig:
         d["run_track_eval_dir"]   = paths.get("run_track_eval_dir", registry_entry.get("run_track_eval_dir", d["run_track_eval_dir"]))
         d["dataset_layout"]       = registry_entry.get("layout", "annotated")
         d["dataset_cameras"]      = list(registry_entry.get("cameras", []) or [])
+        cameras_override = paths.get("cameras")
+        if cameras_override is not None:
+            unknown = [cam for cam in cameras_override if cam not in d["dataset_cameras"]]
+            if unknown:
+                raise ValueError(
+                    f"paths.cameras 只能是資料集 {dataset_id!r} 登記鏡頭的子集，"
+                    f"不在登記清單中：{unknown}（登記鏡頭：{d['dataset_cameras']}）"
+                )
+            d["dataset_cameras"] = list(cameras_override)
         d["TRACKEVAL_OUT_DIR"]    = paths.get("TRACKEVAL_OUT_DIR", d["TRACKEVAL_OUT_DIR"])
         
         d["OUTPUT_ROOT"]          = paths.get("OUTPUT_ROOT",    d["OUTPUT_ROOT"])

@@ -6,9 +6,9 @@ Homography 矩陣載入：優先用既有已算好的矩陣，沒有對應路口
 搬過來的既有成果，涵蓋 26 個路口（tag 命名規則、資料來源見 markdown/ARCHITECTURE.md
 「Homography 資料」章節）。`find_tag_for_sequence()` 依序列名比對路口名前綴找出對應 tag，
 `resolve_homography()` 會優先用這份；只有 26 個路口以外的新路口才需要走第 2 節的
-人工點選流程。⚠️ 這 26 個路口裡，只有本專案實際有 CCTV 影片的 6 個（C000025、
-C000043、C000054、C000085、C000294、C000297）才有辦法真的驗證矩陣準確度（見
-safetrajai/collision/homography/validation.py）；其餘 20 個只有矩陣本身，沒有 CCTV 影片
+人工點選流程。⚠️ 這 26 個路口裡，只有本專案實際有 CCTV 影片的 4 個（C000025、
+C000043、C000054、C000085）才有辦法真的驗證矩陣準確度（見
+safetrajai/collision/homography/validation.py）；其餘 22 個只有矩陣本身，沒有 CCTV 影片
 可以選 check points，屬於「未驗證」狀態，套用時要留意。
 
 ## 2. 人工點選（fallback：路口不在既有 26 個之列時使用）

@@ -15,8 +15,8 @@ check points 必須是「獨立於訓練點之外」的驗證用點位（不是�
 才是有意義的 out-of-sample 驗證；用訓練點驗證會循環論證（誤差趨近於 0，見
 markdown/ARCHITECTURE.md 相關章節的說明）。
 
-⚠️ 本專案能真的產生 check points 的路口只有 6 個（有 CCTV 來源影片可看：C000025、
-C000043、C000054、C000085、C000294、C000297），其餘 20 個既有矩陣路口沒有影片可點選，
+⚠️ 本專案能真的產生 check points 的路口只有 4 個（有 CCTV 來源影片可看：C000025、
+C000043、C000054、C000085），其餘 22 個既有矩陣路口沒有影片可點選，
 永遠是「未驗證」狀態，不代表矩陣有問題，只是缺乏驗證資料。
 
 yaml 格式（config/homography_checkpoints/<tag>.yaml，cctv_points / sat_points

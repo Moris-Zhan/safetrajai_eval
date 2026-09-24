@@ -4,11 +4,14 @@
 # 用法：python track_eval.py --config config/botsort_save_reid_crops.yaml
 # 追蹤參數沿用 config/botsort_noreid.yaml（ReID 關閉）——這裡的目的是蒐集資料，
 # 不需要追蹤本身就啟用 ReID；save/save_txt 關閉以減少蒐集資料時的不必要磁碟用量。
+# golden 版本：裁切蒐集拒絕評估鏡頭，因此改在來源資料集 reid_sources 的 C000043（60 秒、704×480）上蒐集
+# （change rebuild-reid-dataset，design D9）。
 # =============================================================================
 
 
 paths:
-  dataset: cctv_all8
+  dataset: reid_sources
+  cameras: [C000043]
   TRACKEVAL_OUT_DIR: trackeval_output
   OUTPUT_ROOT: ./runs/refactor_golden/__RUN__/botsort_save_reid_crops
 

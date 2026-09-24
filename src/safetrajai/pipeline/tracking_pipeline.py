@@ -54,11 +54,37 @@ from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.pipeline import run_eval_pipeline
 from safetrajai.evaluation import dataset_layout
 from safetrajai.pipeline.sequence_tracker import VideoSequenceTracker
+from safetrajai.roi import ROI_DIR
 
 
 # =============================================================================
 # TrackingEvalPipeline — 兩階段主流程
 # =============================================================================
+
+def check_crop_sources(video_paths: list[str], roi_dir: Path = ROI_DIR, registry: dict | None = None) -> None:
+    """裁切蒐集前的檢查：評估鏡頭一律拒絕，每支鏡頭都必須有 ROI 檔（spec: reid-dataset）。"""
+    registry = dataset_layout.load_dataset_registry() if registry is None else registry
+    eval_cameras = {cam for entry in registry.values() if entry.get("role") == "eval" for cam in entry.get("cameras", [])}
+    cameras = sorted({dataset_layout.camera_id_from_seq_name(Path(p).stem) for p in video_paths})
+    forbidden = [cam for cam in cameras if cam in eval_cameras]
+    missing_roi = [cam for cam in cameras if not (Path(roi_dir) / f"{cam}.yaml").exists()]
+    if forbidden:
+        raise ValueError(f"評估鏡頭不得用來蒐集 Re-ID 裁切：{forbidden}")
+    if missing_roi:
+        raise ValueError(f"蒐集 Re-ID 裁切前，以下鏡頭必須先有 config/roi/<camera>.yaml：{missing_roi}")
+
+
+def resolve_frame_rate(setting, video_path: str) -> int:
+    """情境設定的 frame_rate：數值照用；"auto" 讀影片實際幀率並四捨五入。"""
+    if isinstance(setting, str) and setting.strip().lower() == "auto":
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        if not fps or fps <= 0:
+            raise ValueError(f"frame_rate: auto 無法取得影片幀率：{video_path}")
+        return int(round(fps))
+    return int(setting)
+
 
 class TrackingEvalPipeline:
     """
@@ -88,7 +114,7 @@ class TrackingEvalPipeline:
             conf         = cfg.conf,
             iou          = cfg.iou,
             imgsz        = cfg.imgsz,
-            frame_rate   = cfg.frame_rate,
+            frame_rate   = resolve_frame_rate(cfg.frame_rate, video_path),
             gmc_method   = cfg.gmc_method,
             save         = cfg.save,
             save_txt     = cfg.save_txt,
@@ -155,6 +181,9 @@ class TrackingEvalPipeline:
             return det_output_dir
 
         print(f"\n✅ Found {len(mp4s)} source video(s)")
+
+        if cfg.save_reid_crops:
+            check_crop_sources(mp4s)
 
         # 取要處理的切片（測試時可調整）
         target_mp4s = mp4s[:]   # ← 改這裡控制要跑哪幾支

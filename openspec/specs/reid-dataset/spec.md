@@ -1,10 +1,10 @@
-# Spec Delta
+# reid-dataset Specification
 
 ## Purpose
 
 定義 Re-ID 訓練資料如何從來源資料集的影片產生、標記、審查與切分，讓訓練資料可重現、可追溯，並且永遠不包含評估鏡頭。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 裁切只來自來源資料集並套用鏡頭 ROI
 
@@ -48,7 +48,7 @@ Re-ID 裁切 SHALL 只從 `config/datasets.yaml` 中 `role: source` 的資料集
 
 ### Requirement: 污染標記與人工審查只產生紀錄
 
-類別一致性檢查與軌跡內外觀離群值偵測 SHALL 只輸出標記檔，MUST NOT 搬移、改名或刪除任何裁切。人工審查的結果 SHALL 寫成排除清單（欄位 `class, identity, image, action`，`image` 為空代表整個身分），同樣不改動裁切檔案。審查頁 SHALL 涵蓋所有被任一檢查標記的身分，以及 bus 類別的全部身分。
+類別一致性檢查、軌跡內外觀離群值偵測、靜止身分與運動跳動偵測 SHALL 只輸出標記檔，MUST NOT 搬移、改名或刪除任何裁切。類別一致性 SHALL 只在人、二輪、四輪三個粗分組之間不一致時標記。人工審查的結果 SHALL 寫成排除清單（欄位 `class, identity, image, action`，`image` 為空代表整個身分），同樣不改動裁切檔案。審查頁 SHALL 只包含裁切數達到 manifest 最少張數的身分，並涵蓋其中所有被任一檢查標記的身分、bus 類別的全部身分，以及每支鏡頭以固定種子從未標記身分中抽出的隨機抽查身分。
 
 #### Scenario: 標記不改動檔案
 - **WHEN** 執行類別一致性檢查與外觀離群值偵測
@@ -60,7 +60,23 @@ Re-ID 裁切 SHALL 只從 `config/datasets.yaml` 中 `role: source` 的資料集
 
 #### Scenario: bus 全數進入審查
 - **WHEN** 產生審查頁
-- **THEN** bus 類別的每個身分都出現在審查頁，無論是否被標記
+- **THEN** 裁切數達到最少張數的每個 bus 身分都出現在審查頁，無論是否被標記
+
+#### Scenario: 不足最少張數的身分不進審查
+- **WHEN** 某個被標記的身分只有 3 張裁切，而 manifest 最少張數為 4
+- **THEN** 該身分不出現在審查頁
+
+#### Scenario: 靜止身分被標記
+- **WHEN** 某身分持續 10 秒，首末兩張的框中心點位移小於框尺寸的 0.5 倍
+- **THEN** 該身分被標記為靜止身分
+
+#### Scenario: 四輪子類別誤判不標記
+- **WHEN** 某個 car 身分的裁切多數被判定為 small_truck
+- **THEN** 類別一致性檢查不標記該身分
+
+#### Scenario: 隨機抽查可重現
+- **WHEN** 以相同的索引與標記連續產生兩次審查頁
+- **THEN** 兩次的隨機抽查身分完全相同
 
 ### Requirement: 以版本化 manifest 定義訓練資料與切分
 

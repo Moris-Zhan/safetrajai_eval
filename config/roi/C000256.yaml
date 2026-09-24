@@ -1,0 +1,8 @@
+# config/roi/C000256.yaml — 鏡頭 C000256 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）
+camera: C000256
+image_size: [1280, 720]
+polygon:
+  - [429, 196]
+  - [1085, 278]
+  - [794, 716]
+  - [144, 573]

@@ -1,0 +1,8 @@
+# config/roi/C000011.yaml — 鏡頭 C000011 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）
+camera: C000011
+image_size: [704, 480]
+polygon:
+  - [313, 150]
+  - [630, 214]
+  - [420, 476]
+  - [43, 237]

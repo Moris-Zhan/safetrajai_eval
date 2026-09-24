@@ -1,0 +1,7 @@
+# config/reid_split.yaml — Re-ID 資料集版本的切分規則（spec: reid-dataset，見 CONTEXT.md「資料集版本」）
+# 列在 val 的「鏡頭＋日期」組合為 val，其餘來源鏡頭全部為 train；評估鏡頭永遠不會出現在任何版本。
+val:
+  - camera: C000054
+    dates: ["20250629"]
+min_crops_per_identity: 4
+max_crops_per_identity: 30
