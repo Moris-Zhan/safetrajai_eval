@@ -47,11 +47,13 @@ python scripts/grid_search_botsort_reid.py --target-class person
 # Homography 驗證（輸出到 models/homography/validation_output/）
 python scripts/validate_homography.py
 
-# Re-ID 資料工具：蒐集 → 標記 → 審查 → 排除 → manifest（新的 timm 訓練由後續 change 處理）
+# Re-ID 資料工具：蒐集 → 標記 → 自動排除 → 抽查 → 排除 → manifest（新的 timm 訓練由後續 change 處理）
 python scripts/reid_data/detect_contamination.py                  # DINOv2 標記，輸出 dataset/reports/reid/
-python scripts/reid_data/generate_identity_review.py              # 依標記原因分頁的審查頁（勾選＝排除）
+python scripts/reid_data/apply_auto_exclusions.py [--apply]       # 由標記整份重算 dataset/reid/auto_exclusions.csv
+python scripts/reid_data/generate_identity_review.py --audit-only # 自動排除後的抽查頁＋audit_sample.csv（勾選＝排除）
+python scripts/reid_data/summarize_audit.py --confirm-csv <csv...> # 每支鏡頭的不合格率（> 10% 要處理）
 python scripts/reid_data/apply_review_exclusions.py --confirm-csv <csv> [--apply]  # 合併進 dataset/reid/exclusions.csv
-python scripts/reid_data/build_reid_split.py --version <v>        # 產生 dataset/reid/splits/<v>/manifest.csv
+python scripts/reid_data/build_reid_split.py --version <v> [--exclude-cameras <cam...>]  # 兩份排除清單都套用
 
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
@@ -128,7 +130,8 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 - Re-ID 資料已由 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建（流程、目錄與資料量見 `scripts/reid_data/README.md`）：
   - 裁切在 `dataset/reid/crops/{class}/{seq}_track{id}/{frame:06d}.jpg`，每支序列一份 metadata 索引 `crops/_index/<seq>.csv`；只從 `role: source` 的鏡頭蒐集，評估鏡頭一律拒絕，每支鏡頭都必須有 ROI 檔。蒐集設定是 `config/reid_crops.yaml`。
   - **訓練一律讀 `dataset/reid/splits/<version>/manifest.csv`**（`crop_path` 相對於 `crops/`），不要直接掃 `crops/`；排除清單、每身分 4～30 張、依鏡頭與日期切分（`config/reid_split.yaml`）只在 manifest 中套用。
-  - 標記、審查、排除都只寫紀錄，不移動裁切（排除與隔離的差異見 `docs/adr/0006`）。目前只有審查前的 `v1`；全量審查與 `v2` 由後續的自動排除 change 處理。
+  - 標記、排除、抽查都只寫紀錄，不移動裁切（排除與隔離的差異見 `docs/adr/0006`）。品質把關以**自動排除為主、人工只抽查**（`docs/adr/0007`）：`auto_exclusions.csv` 由標記整份重算、`exclusions.csv` 只累加人工結果，manifest 兩份都套用；不要改回全量人工審查，而是加大抽查樣本或新增規則。
+  - **訓練用 `v2`**（22,164 個身分、156,141 張）；`v1` 是審查前的基準，只供比較。
 
 ### Grid search
 

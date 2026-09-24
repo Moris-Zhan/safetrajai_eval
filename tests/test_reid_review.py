@@ -138,3 +138,76 @@ def test_apply_review_exclusions_merges_without_moving_files(tmp_path: Path) -> 
     with exclusions.open(encoding="utf-8") as f:
         assert list(csv.DictReader(f)) == [{"class": "car", "identity": "a", "image": "", "action": "remove"}]
     assert sorted(p.as_posix() for p in crops.rglob("*")) == before
+
+
+def index(cls: str, identity: str, camera: str, n: int = 4) -> list[dict]:
+    return [{"class": cls, "identity": identity, "camera": camera, "time_s": str(k * 0.5),
+             "crop_path": f"{cls}/{identity}/{k:06d}.jpg"} for k in range(n)]
+
+
+def audit_population() -> list[dict]:
+    rows = []
+    rows += [r for i in range(200) for r in index("car", f"A_car{i}", "C000054")]
+    rows += [r for i in range(3) for r in index("truck", f"A_truck{i}", "C000054")]
+    rows += [r for i in range(25) for r in index("bus", f"A_bus{i}", "C000054")]
+    rows += [r for i in range(4) for r in index("person", f"A_person{i}", "C000054")]
+    rows += [r for i in range(9) for r in index("car", f"B_car{i}", "C000085")]
+    rows += index("car", "A_short", "C000054", n=3)
+    return rows
+
+
+def select(auto: list[dict] = (), seed: int = 0) -> list[dict]:
+    module = load("generate_identity_review")
+    return module.select_audit(audit_population(), list(auto), [], min_crops=4, seed=seed)
+
+
+def test_audit_skips_auto_excluded_and_short_identities() -> None:
+    picks = select(auto=[{"class": "car", "identity": f"A_car{i}", "image": "", "action": "remove"} for i in range(200)])
+
+    ids = {p["identity"] for p in picks}
+    assert not any(i.startswith("A_car") for i in ids)
+    assert "A_short" not in ids
+
+
+def test_major_camera_is_stratified_and_minor_camera_taken_whole() -> None:
+    picks = select()
+    camera_audit = [p for p in picks if p["purpose"] == "camera_audit"]
+    major = [p for p in camera_audit if p["camera"] == "C000054"]
+    minor = [p for p in camera_audit if p["camera"] == "C000085"]
+
+    assert len(major) == 60 and sum(p["class"] == "truck" for p in major) >= 2
+    assert sorted(p["identity"] for p in minor) == sorted(f"B_car{i}" for i in range(9))
+
+
+def test_bus_is_sampled_and_person_reviewed_in_full() -> None:
+    picks = select()
+
+    assert sum(p["purpose"] == "bus_audit" for p in picks) == 20
+    assert sorted(p["identity"] for p in picks if p["purpose"] == "person_review") == [f"A_person{i}" for i in range(4)]
+    assert len({(p["class"], p["identity"]) for p in picks}) == len(picks)
+
+
+def test_audit_selection_is_reproducible_and_seed_dependent() -> None:
+    assert select(seed=3) == select(seed=3)
+    assert select(seed=3) != select(seed=4)
+
+
+def test_audit_only_writes_pages_and_sample_without_excluded_crops(tmp_path: Path, monkeypatch) -> None:
+    crops = tmp_path / "crops"
+    build_crops(crops, [("car", "kept", 5), ("car", "gone", 5), ("person", "p1", 4)])
+    (tmp_path / "reports").mkdir()
+    auto = tmp_path / "auto.csv"
+    auto.write_text("class,identity,image,action,rule\ncar,gone,,remove,static\n"
+                    "car,kept,000002.jpg,remove,appearance_outlier\n", encoding="utf-8")
+    manual = tmp_path / "manual.csv"
+    manual.write_text("class,identity,image,action\nperson,p1,000000.jpg,remove\n", encoding="utf-8")
+
+    pages = run_review(tmp_path, monkeypatch, ["--audit-only", "--auto-exclusions", str(auto),
+                                               "--exclusions", str(manual)])
+
+    out = tmp_path / "review"
+    with (out / "audit_sample.csv").open(encoding="utf-8") as f:
+        sample = {(r["identity"], r["purpose"], r["reviewed"]) for r in csv.DictReader(f)}
+    assert sample == {("kept", "camera_audit", "False"), ("p1", "person_review", "True")}
+    assert 'data-identity="gone"' not in pages and "已人工審查" in pages
+    assert not list((out / "assets").glob("car__kept__000002.jpg"))

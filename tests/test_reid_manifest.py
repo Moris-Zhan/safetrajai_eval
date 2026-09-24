@@ -59,9 +59,46 @@ def test_build_reid_split_cli_writes_version(tmp_path) -> None:
     write_index(index_path(tmp_path / "crops", "s"), [{k: r[k] for k in INDEX_FIELDS} for r in rows])
     cmd = [sys.executable, str(PROJECT_ROOT / "scripts/reid_data/build_reid_split.py"), "--version", "t1",
            "--crop-root", str(tmp_path / "crops"), "--exclusions", str(tmp_path / "none.csv"),
-           "--splits-root", str(tmp_path / "splits")]
+           "--auto-exclusions", str(tmp_path / "none_auto.csv"), "--splits-root", str(tmp_path / "splits")]
     subprocess.run(cmd, check=True, capture_output=True)
     with (tmp_path / "splits" / "t1" / "manifest.csv").open(encoding="utf-8") as f:
         assert len(list(csv.DictReader(f))) == 6
     assert subprocess.run(cmd, capture_output=True).returncode != 0
     assert not list((tmp_path / "splits").rglob("*.jpg"))
+
+
+def test_build_reid_split_applies_both_lists_and_excluded_cameras(tmp_path) -> None:
+    import csv
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from safetrajai.paths import PROJECT_ROOT
+    from safetrajai.reid.dataset_index import INDEX_FIELDS, index_path, write_index
+
+    rows = crops("A", 6) + crops("B", 6) + crops("C", 6, camera="C000011", date="20250512")
+    rows = [dict(r, sequence="s", frame=i, x1=0, y1=0, x2=40, y2=40, score="0.9") for i, r in enumerate(rows)]
+    write_index(index_path(tmp_path / "crops", "s"), [{k: r[k] for k in INDEX_FIELDS} for r in rows])
+    (tmp_path / "auto.csv").write_text(
+        "class,identity,image,action,rule\ncar,A,,remove,static\n", encoding="utf-8")
+    (tmp_path / "manual.csv").write_text(
+        "class,identity,image,action\ncar,B,000001.jpg,remove\n", encoding="utf-8")
+
+    def build(version: str) -> Path:
+        cmd = [sys.executable, str(PROJECT_ROOT / "scripts/reid_data/build_reid_split.py"), "--version", version,
+               "--crop-root", str(tmp_path / "crops"), "--exclusions", str(tmp_path / "manual.csv"),
+               "--auto-exclusions", str(tmp_path / "auto.csv"), "--exclude-cameras", "C000011",
+               "--splits-root", str(tmp_path / "splits")]
+        subprocess.run(cmd, check=True, capture_output=True)
+        return tmp_path / "splits" / version
+
+    first, second = build("t1"), build("t2")
+    with (first / "manifest.csv").open(encoding="utf-8") as f:
+        manifest = list(csv.DictReader(f))
+    assert {r["identity"] for r in manifest} == {"B"}
+    assert "car/B/000001.jpg" not in {r["crop_path"] for r in manifest} and len(manifest) == 5
+    assert (first / "manifest.csv").read_bytes() == (second / "manifest.csv").read_bytes()
+    summary = json.loads((first / "summary.json").read_text(encoding="utf-8"))
+    assert summary["exclusions"] == {"auto": 1, "manual": 1}
+    assert summary["excluded_cameras"] == ["C000011"]
