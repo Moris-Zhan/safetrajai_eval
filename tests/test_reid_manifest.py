@@ -102,3 +102,57 @@ def test_build_reid_split_applies_both_lists_and_excluded_cameras(tmp_path) -> N
     summary = json.loads((first / "summary.json").read_text(encoding="utf-8"))
     assert summary["exclusions"] == {"auto": 1, "manual": 1}
     assert summary["excluded_cameras"] == ["C000011"]
+
+
+def test_merged_fragments_count_together() -> None:
+    rows = crops("A", 3) + [dict(r, time_s=f"{10 + float(r['time_s']):.3f}") for r in crops("B", 2)]
+    manifest = build_manifest(rows, [], RULES, {"C000025"}, {("car", "B"): "A"})
+    assert [r["identity"] for r in manifest] == ["A"] * 5
+    assert [r["crop_path"] for r in manifest][-2:] == ["car/B/000000.jpg", "car/B/000001.jpg"]
+
+
+def test_exclusions_apply_before_merges() -> None:
+    exclusions = [{"class": "car", "identity": "B", "image": "", "action": "remove"}]
+    manifest = build_manifest(crops("A", 4) + crops("B", 3), exclusions, RULES, {"C000025"}, {("car", "B"): "A"})
+    assert {r["crop_path"] for r in manifest} == {f"car/A/{i:06d}.jpg" for i in range(4)}
+
+
+def test_manifest_with_merges_is_reproducible() -> None:
+    rows = crops("A", 20) + crops("B", 20) + crops("C", 3, cls="bus")
+    merges = {("car", "B"): "A"}
+    first = build_manifest(rows, [], RULES, set(), merges)
+    assert first == build_manifest(list(reversed(rows)), [], RULES, set(), dict(merges))
+    assert len(first) == 30 and {r["identity"] for r in first} == {"A"}
+
+
+def test_build_reid_split_applies_merges_and_records_summary(tmp_path) -> None:
+    import csv
+    import json
+    import subprocess
+    import sys
+
+    from safetrajai.paths import PROJECT_ROOT
+    from safetrajai.reid.dataset_index import INDEX_FIELDS, index_path, write_index
+
+    rows = crops("A", 3) + crops("B", 2) + crops("C", 5)
+    rows = [dict(r, sequence="s", frame=i, x1=0, y1=0, x2=40, y2=40, score="0.9") for i, r in enumerate(rows)]
+    write_index(index_path(tmp_path / "crops", "s"), [{k: r[k] for k in INDEX_FIELDS} for r in rows])
+    (tmp_path / "merges.csv").write_text(
+        "class,identity,merged_identity,sequence,score\ncar,B,A,s,0.950000\n", encoding="utf-8")
+    base = [sys.executable, str(PROJECT_ROOT / "scripts/reid_data/build_reid_split.py"),
+            "--crop-root", str(tmp_path / "crops"), "--exclusions", str(tmp_path / "none.csv"),
+            "--auto-exclusions", str(tmp_path / "none_auto.csv"), "--splits-root", str(tmp_path / "splits")]
+    subprocess.run([*base, "--version", "plain"], check=True, capture_output=True)
+    subprocess.run([*base, "--version", "merged", "--merges", str(tmp_path / "merges.csv")],
+                   check=True, capture_output=True)
+
+    def identities(version: str) -> list[str]:
+        with (tmp_path / "splits" / version / "manifest.csv").open(encoding="utf-8") as f:
+            return sorted({r["identity"] for r in csv.DictReader(f)})
+
+    assert identities("plain") == ["C"]
+    assert identities("merged") == ["A", "C"]
+    summary = json.loads((tmp_path / "splits" / "merged" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["merges"]["merged_identities"] == 1 and summary["merges"]["merged_into"] == 1
+    plain = json.loads((tmp_path / "splits" / "plain" / "summary.json").read_text(encoding="utf-8"))
+    assert plain["merges"]["merged_identities"] == 0

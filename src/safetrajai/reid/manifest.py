@@ -1,6 +1,6 @@
 """資料集版本（manifest）的產生規則（見 CONTEXT.md「資料集版本」、「排除」，spec: reid-dataset）。
 
-依序：套用排除清單 → 捨棄張數不足的身分 → 每個身分依時間均勻抽樣到上限 → 依鏡頭與日期切分。
+依序：套用排除清單 → 套用碎片合併（選用）→ 捨棄張數不足的身分 → 每個身分依時間均勻抽樣到上限 → 依鏡頭與日期切分。
 """
 
 from __future__ import annotations
@@ -47,8 +47,13 @@ def build_manifest(
     exclusions: list[dict],
     rules: dict,
     eval_cameras: set[str],
+    merges: dict[tuple[str, str], str] | None = None,
 ) -> list[dict]:
-    """由裁切索引、排除清單與切分規則產生 manifest 列，依 class、identity、time_s 排序。"""
+    """由裁切索引、排除清單、碎片合併對照與切分規則產生 manifest 列，依 class、identity、time_s 排序。
+
+    merges：(class, 原始身分) → 合併後的身分；在排除之後、最少張數之前改名。
+    """
+    merges = merges or {}
     leaked = sorted({r["camera"] for r in index_rows if r["camera"] in eval_cameras})
     if leaked:
         raise ValueError(f"裁切索引含有評估鏡頭，不得產生資料集版本：{leaked}")
@@ -60,7 +65,8 @@ def build_manifest(
     by_identity: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for row in index_rows:
         if not _is_excluded(row, removed_identities, removed_images):
-            by_identity[(row["class"], row["identity"])].append(row)
+            key = (row["class"], row["identity"])
+            by_identity[(row["class"], merges.get(key, row["identity"]))].append(row)
 
     manifest = []
     for key in sorted(by_identity):
@@ -73,7 +79,7 @@ def build_manifest(
         camera, date = dates.pop()
         split = _split_for(camera, date, rules)
         manifest.extend(
-            {"crop_path": r["crop_path"], "identity": r["identity"], "class": r["class"],
+            {"crop_path": r["crop_path"], "identity": key[1], "class": r["class"],
              "camera": camera, "date": date, "split": split}
             for r in _uniform_sample(rows, rules["max_crops_per_identity"])
         )

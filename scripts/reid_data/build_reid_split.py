@@ -7,15 +7,19 @@
   - <exclusions>                   人工排除清單（class,identity,image,action），可不存在
   - <auto-exclusions>              自動排除清單（class,identity,image,action,rule），可不存在；兩份清單都套用
   - --exclude-cameras              抽查不合格而整支排除的鏡頭（見 docs/adr/0007），其所有裁切不進入版本
+  - --merges                       碎片合併清單（class,identity,merged_identity,...，build_fragment_merges.py 產生）；
+                                   預設不套用。套用時在排除之後、最少張數之前把原始身分改名為合併後的身分
   - config/reid_split.yaml         切分規則（val 的鏡頭與日期、每身分張數上下限）
 輸出（dataset/reid/splits/<version>/，版本已存在時報錯）：
   - manifest.csv                   crop_path,identity,class,camera,date,split
-  - summary.json                   各類別／split／鏡頭的身分數與張數、兩份排除清單的筆數、被排除的鏡頭
+  - summary.json                   各類別／split／鏡頭的身分數與張數、兩份排除清單的筆數、被排除的鏡頭、
+                                   合併清單（路徑、被合併的原始身分數、合併後的身分數）
   - split_rules.yaml               本次使用的規則複本
 
 用法：
     python scripts/reid_data/build_reid_split.py --version v1
     python scripts/reid_data/build_reid_split.py --version v2 --exclude-cameras C000056
+    python scripts/reid_data/build_reid_split.py --version v3 --merges dataset/reid/fragment_merges.csv
 """
 from __future__ import annotations
 
@@ -49,6 +53,7 @@ def main() -> None:
     parser.add_argument("--exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "exclusions.csv"))
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--exclude-cameras", nargs="*", default=[], help="整支排除的鏡頭，例如 C000056")
+    parser.add_argument("--merges", default=None, help="碎片合併清單，例如 dataset/reid/fragment_merges.csv")
     parser.add_argument("--rules", default=str(CONFIG_DIR / "reid_split.yaml"))
     parser.add_argument("--splits-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "splits"))
     args = parser.parse_args()
@@ -61,7 +66,13 @@ def main() -> None:
     excluded_cameras = sorted(set(args.exclude_cameras))
     index_rows = [r for r in read_all_indexes(Path(args.crop_root)) if r["camera"] not in excluded_cameras]
     manual, auto = read_exclusions(Path(args.exclusions)), read_exclusions(Path(args.auto_exclusions))
-    manifest = build_manifest(index_rows, manual + auto, rules, eval_cameras())
+    merge_rows = []
+    if args.merges:
+        if not Path(args.merges).exists():
+            raise SystemExit(f"找不到合併清單：{args.merges}")
+        merge_rows = read_exclusions(Path(args.merges))
+    merges = {(r["class"], r["identity"]): r["merged_identity"] for r in merge_rows}
+    manifest = build_manifest(index_rows, manual + auto, rules, eval_cameras(), merges)
 
     out_dir.mkdir(parents=True)
     with (out_dir / "manifest.csv").open("w", newline="", encoding="utf-8") as f:
@@ -69,7 +80,9 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(manifest)
     summary = {**summarize(manifest), "exclusions": {"auto": len(auto), "manual": len(manual)},
-               "excluded_cameras": excluded_cameras}
+               "excluded_cameras": excluded_cameras,
+               "merges": {"path": args.merges, "merged_identities": len(merges),
+                          "merged_into": len({(c, m) for (c, _), m in merges.items()})}}
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.copyfile(args.rules, out_dir / "split_rules.yaml")
     print(f"{args.version}: {summary['identities']} identities, {summary['crops']} crops -> {out_dir}")
