@@ -251,6 +251,8 @@ def get_dists_class_aware(self, tracks, detections, cls_id):
 
 對比原版 `BOTSORT.get_dists()` 只有全域的 `self.appearance_thresh`，不接受 `cls_id` 參數。
 
+change `reid-center-gate-fusion` 在這裡加了兩個選用的逐類別參數：`reid_center_gate_px`（只對遺失中的軌跡，以中心距離閘門擴大外觀的作用範圍）與 `appearance_veto_sim`（外觀否決）。設定任一個時改走 `_gated_appearance()` → `matching.fuse_appearance()`；都沒設定時上面的程式碼逐位元不變（`tests/test_reid_fusion.py` 以修改前演算法的複製比對）。流程細節見 `class_aware_botsort_flow.md` 第四節。
+
 ByteTrack 版本不需要這個方法（ByteTrack 本身就不用 ReID），所以直接呼叫繼承的 `self.get_dists()`。
 
 #### 修改 3：類別級 track buffer（解決需求 3）

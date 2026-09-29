@@ -469,6 +469,9 @@ class ClassAwareBOTSORT(BOTSORT):
                 # 該距離矩陣是 shape=(N_tracks, N_detections)，每一項表示一個 track 和一個 detection 的 embedding 特徵距離（通常為 cosine 或 euclidean）。
                 # 用於判斷追蹤框和偵測框的外觀相似度
                 emb_dists = matching.embedding_distance(tracks, detections) / 2.0
+                # 設定了中心距離閘門或外觀否決時改走新的融合（spec: reid-fusion）；都沒設定時維持原本的計算
+                if params.get('reid_center_gate_px') is not None or params.get('appearance_veto_sim') is not None:
+                    return self._gated_appearance(tracks, detections, dists, emb_dists, dists_mask, params, appearance_thresh)
                 emb_dists[emb_dists > (1 - appearance_thresh)] = 1.0  # 超過 appearance 門檻視為無法匹配
                 emb_dists[dists_mask] = 1.0  # 若已超過 proximity 門檻，也視為無法匹配
                 # 距離取IoU/center和ReID/appearance最小值（只要有一方無法匹配即不配對）
@@ -476,6 +479,31 @@ class ClassAwareBOTSORT(BOTSORT):
 
         # 回傳融合後的距離矩陣
         return dists
+
+    def _gated_appearance(self, tracks, detections, dists, emb_dists, dists_mask, params, appearance_thresh):
+        gate_px = params.get('reid_center_gate_px')
+        veto_sim = params.get('appearance_veto_sim')
+        if gate_px is None:
+            return matching.fuse_appearance(dists, emb_dists, dists_mask, appearance_thresh, veto_sim=veto_sim)
+
+        # STrack 不保存觀測框：Tracked 時記下當下中心，遺失後作為「最後位置」
+        for track in tracks:
+            if track.state == TrackState.Tracked:
+                track._reid_last_center = track.xywh[:2].copy()
+
+        det_centers = np.array([d.xywh[:2] for d in detections])
+        predicted = np.array([t.xywh[:2] for t in tracks])
+        last = np.array([getattr(t, '_reid_last_center', t.xywh[:2]) for t in tracks])
+        center_px = np.minimum(
+            np.linalg.norm(predicted[:, None, :] - det_centers[None, :, :], axis=-1),
+            np.linalg.norm(last[:, None, :] - det_centers[None, :, :], axis=-1),
+        )
+        is_lost = np.array([t.state == TrackState.Lost for t in tracks])
+        lost_s = np.array([(self.frame_id - t.frame_id) / self.frame_rate if lost else 0.0
+                           for t, lost in zip(tracks, is_lost)])
+        gate_radius = gate_px + params.get('reid_center_gate_px_per_s', 0.0) * lost_s
+        return matching.fuse_appearance(dists, emb_dists, dists_mask, appearance_thresh,
+                                        is_lost, center_px, gate_radius, veto_sim)
 
     def _center_distance(self, tracks, detections, norm_factor=200.0):
         """

@@ -61,6 +61,7 @@ python scripts/reid_data/build_reid_split.py --version <v> [--exclude-cameras <c
 python scripts/reid_train/pack_manifest.py --version <v> [--reuse-version <v0>]   # ~/.cache/safetrajai/reid_packs/<v>/；--reuse-version 只補讀缺少的裁切
 python scripts/reid_train/train_reid.py --version <v> --output models/class_reid_weights/<run>  # 背景執行，30 epoch 約 25～45 分鐘
 python scripts/reid_train/eval_reid.py --weights models/class_reid_weights/<run>/model.pt --version <v>  # val mAP／Rank-1，只作參考
+python scripts/reid_train/fusion_distance_stats.py --out <json>   # 調參序列 GT 的外觀距離分布與融合門檻候選（拒絕保留序列）
 
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
@@ -128,8 +129,10 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 - **不可更動（使用者明確指示，見 `docs/adr/0004`）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
 - 已知但不會修正的落差：`track_buffer` 在 BoTSORT 版被當成「秒」（會乘上 frame rate），在 ByteTrack 版被當成 30fps 基準的幀數，同一個數值換算成實際存活時間，兩者差 30 倍。
 - GMC 只在 BoTSORT 有作用；ReID 只透過 BoTSORT 的逐類別 `use_reid` 啟用，預設關閉。
-  - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在 C000025 上逐類別驗收：各類別都不變差，但只有 car 有可量測的改善（AssA +0.006），所以 `botsort_reid_timm.yaml` 只開 car。
-  - 效果有限的原因在 `get_dists_class_aware()` 的融合：外觀距離只作用在 IoU 距離 ≤ `1 − proximity_thresh` 的配對上，並取 `min(運動, 外觀)`，無法接回遮擋後位置已偏移的軌跡。要改善 ReID 的效果，應修改這個融合（不受凍結限制），而不是再換模型。
+  - 啟用條件（spec `reid-model`）：在調參序列上與驗收基準比較，不變差，而且 IDSW 減少或 IDP 上升；只有 AssA／TP 上升、沒有 GT 的類別不啟用；沒有類別符合時全部關閉。目前 `botsort_reid_timm.yaml` 的 6 類都關閉。
+  - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在原本的融合下幾乎沒有作用：外觀距離只作用在 IoU 已重疊的配對上。
+  - change `reid-center-gate-fusion` 新增選用的逐類別參數（未設定時距離矩陣逐位元不變）：`reid_center_gate_px`／`reid_center_gate_px_per_s`（只對遺失中的軌跡，以中心距離閘門擴大外觀的作用範圍）與 `appearance_veto_sim`（外觀否決）。在 C000025 上閘門讓 car、scooter 的 IDSW 明顯增加，否決沒有效果。瓶頸在模型：C000025 上同一條 GT 軌跡相隔 ≥ 1 秒的外觀距離，和鄰近的不同物體高度重疊（`fusion_distance_stats.py` 可量測）；下一步應改善模型或資料，而不是再調融合。
+  - 外觀門檻的方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向（容許的外觀距離上限為 1 − 值，值越大越嚴）；新增外觀門檻時沿用這個方向。
   - 啟用 ReID 會讓每幀追蹤時間增加數倍（凍結的 `init_track` 對每個框各呼叫一次 encoder）。
 - 驗證方式：先跑單一序列或目標類別，比較同一基準下的 HOTA、AssA、IDSW，再用疊圖影片檢查 ID switch 和跨類別誤配。
 
@@ -137,7 +140,7 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 
 - **`Custom_ReID` 支援兩種權重格式**（`models/class_reid_weights/` 之下的路徑才會走 `Custom_ReID`）：
   - 新格式 `safetrajai-reid-v1`（`scripts/reid_train/train_reid.py` 產生的 `model.pt`）：state_dict＋設定（`arch`、`embed_dim`、`input_size`、`mean`、`std`、`manifest_version`），以 `weights_only=True` 讀取、不依賴 pickle 類別路徑；每個框以與 `ReID` 相同的 `xywh2xyxy`＋`save_one_box` 裁切，letterbox 到 `input_size`、正規化、批次推論，回傳每個框一個 L2 正規化特徵。同目錄的 `train_record.json` 記錄資料集版本、超參數與種子。
-  - 目前的模型：`models/class_reid_weights/dinov2s_v3/model.pt`（DINOv2 ViT-S/14，`v3`，val mAP 0.783）；`dinov2s_v2` 是 `v2` 的對照組。情境設定 `config/botsort_reid_timm.yaml`（R1 追蹤參數＋只有 car 開 ReID）。
+  - 目前的模型：`models/class_reid_weights/dinov2s_v3/model.pt`（DINOv2 ViT-S/14，`v3`，val mAP 0.783）；`dinov2s_v2` 是 `v2` 的對照組。情境設定 `config/botsort_reid_timm.yaml`（R1 追蹤參數；目前 6 類 ReID 都關閉，等同驗收基準，檔頭記錄重新驗收的方式）。
   - 舊格式：完整模型 pickle，行為不變（只處理第一個框）。
 - **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：舊格式的 `best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。

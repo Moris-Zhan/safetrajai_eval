@@ -77,6 +77,23 @@ def _coerce_class_names(raw: dict[Any, Any]) -> dict[int, str]:
     return out
 
 
+# Re-ID fusion parameters (spec: reid-fusion): name -> predicate on the numeric value, rule text
+_FUSION_PARAM_RULES = {
+    "reid_center_gate_px": (lambda v: v > 0, "> 0"),
+    "reid_center_gate_px_per_s": (lambda v: v >= 0, ">= 0"),
+    "appearance_veto_sim": (lambda v: 0 <= v <= 1, "介於 0 與 1 之間"),
+}
+
+
+def _validate_fusion_params(class_name: str, params: dict[str, Any]) -> None:
+    for key, (is_valid, rule) in _FUSION_PARAM_RULES.items():
+        if key not in params:
+            continue
+        value = params[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not is_valid(value):
+            raise ValueError(f"class_tracking_params['{class_name}'].{key} 必須是數字且 {rule}，目前為 {value!r}")
+
+
 def load_track_config(path: str | Path | None = None) -> Path:
     """
     從 YAML 載入 tracking 設定，並寫入全域參數（class-aware tracking 用）。
@@ -137,6 +154,11 @@ def load_track_config(path: str | Path | None = None) -> Path:
     # 驗證 class_conf_thresh
     if not isinstance(cct, dict) or not cct:
         raise ValueError(f"YAML 缺少非空 class_conf_thresh: {resolved}")
+
+    # 驗證 Re-ID 融合參數（在更新任何全域參數之前）
+    for name, params in ctp.items():
+        if isinstance(params, dict):
+            _validate_fusion_params(str(name), params)
 
     # 預設 conf threshold（若沒寫就用 0.15）
     dct = float(data.get("default_conf_thresh", 0.15))

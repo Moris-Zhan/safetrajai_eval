@@ -115,6 +115,11 @@ flowchart TD
    - 超過 `appearance_thresh` 的 pair 設為 1.0（無法匹配）
    - 步驟 2 記下「距離太遠」的 pair 也強制設為 1.0
    - `dists = np.minimum(dists, emb_dists)`：兩個距離取更小值（IoU 夠近 **或** 外觀夠像，其一即可配對）
+6. **選用的閘門與否決**（change `reid-center-gate-fusion`，類別設定了新參數且 `use_reid=True` 才啟用；都沒設定時完全走步驟 5）：改由 `_gated_appearance()` 呼叫 `matching.fuse_appearance()`。
+   - `reid_center_gate_px`（＋`reid_center_gate_px_per_s` × 遺失秒數）：**只對遺失中的軌跡（Lost）**，中心距離在閘門內的 pair 也可取得外觀成本（與 IoU proximity 取聯集）。中心距離取「預測中心」與「最後一次 Tracked 時的中心」（記在 `track._reid_last_center`，因為 `STrack` 不保存觀測框）的較近者。Tracked 與未確認的 track 仍只看 IoU proximity。
+   - `appearance_veto_sim`：外觀距離 > `1 − appearance_veto_sim` 的 pair 成本設為 1（所有 track）。
+   - 門檻方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向，值越大越嚴。
+   - 在 C000025 上驗收的結果：閘門讓 car、scooter 串錯明顯增加，否決沒有效果，所以目前沒有任何情境啟用（見 `openspec/changes/archive/*-reid-center-gate-fusion/verification.md`）。
 
 ## 五、與 `class_aware_bytetrack.py` 的差異
 

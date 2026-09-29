@@ -216,3 +216,32 @@ def fuse_score(cost_matrix: np.ndarray, detections: list) -> np.ndarray:
 
     # 6. 輸出最終的融合後成本矩陣（值越小越容易分配給 track）
     return 1 - fuse_sim  # 輸出 fused cost 矩陣
+
+
+def fuse_appearance(
+    motion: np.ndarray,
+    appearance: np.ndarray,
+    proximity_mask: np.ndarray,
+    appearance_thresh: float,
+    is_lost: np.ndarray | None = None,
+    center_px: np.ndarray | None = None,
+    gate_radius: np.ndarray | None = None,
+    veto_sim: float | None = None,
+) -> np.ndarray:
+    """Fuse motion and appearance cost with an optional center gate for lost tracks and an appearance veto.
+
+    appearance is the embedding distance / 2 in [0, 1]. A pair may use its appearance cost when it is inside
+    the IoU proximity (proximity_mask False) or, for lost tracks, when center_px <= gate_radius of that track.
+    Appearance costs above 1 - appearance_thresh are ignored; the result is min(motion, appearance). With
+    veto_sim set, pairs whose appearance distance exceeds 1 - veto_sim cost 1 (spec: reid-fusion).
+    """
+    allowed = ~proximity_mask
+    if center_px is not None:
+        allowed = allowed | (is_lost[:, None] & (center_px <= gate_radius[:, None]))
+    gated = appearance.copy()
+    gated[gated > (1 - appearance_thresh)] = 1.0
+    gated[~allowed] = 1.0
+    fused = np.minimum(motion, gated)
+    if veto_sim is not None:
+        fused[appearance > (1 - veto_sim)] = 1.0
+    return fused
