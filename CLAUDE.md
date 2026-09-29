@@ -47,7 +47,7 @@ python scripts/grid_search_botsort_reid.py --target-class person
 # Homography 驗證（輸出到 models/homography/validation_output/）
 python scripts/validate_homography.py
 
-# Re-ID 資料工具：蒐集 → 標記 → 自動排除 → 抽查 → 排除 → 碎片合併 → manifest（新的 timm 訓練由後續 change 處理）
+# Re-ID 資料工具：蒐集 → 標記 → 自動排除 → 抽查 → 排除 → 碎片合併 → manifest
 python scripts/reid_data/detect_contamination.py                  # DINOv2 標記，輸出 dataset/reports/reid/
 python scripts/reid_data/apply_auto_exclusions.py [--apply]       # 由標記整份重算 dataset/reid/auto_exclusions.csv
 python scripts/reid_data/generate_identity_review.py --audit-only # 自動排除後的抽查頁＋audit_sample.csv（勾選＝排除）
@@ -56,6 +56,11 @@ python scripts/reid_data/apply_review_exclusions.py --confirm-csv <csv> [--apply
 python scripts/reid_data/extract_fragment_features.py            # 只讀碎片候選端點裁切的 DINOv2 特徵
 python scripts/reid_data/build_fragment_merges.py [--sample 80 --seed 0 | --calibrate <csv> | --apply]  # 碎片合併清單
 python scripts/reid_data/build_reid_split.py --version <v> [--exclude-cameras <cam...>] [--merges dataset/reid/fragment_merges.csv]  # 兩份排除清單都套用
+
+# Re-ID 模型訓練：manifest → 本機快取（只讀一次掛載磁碟）→ 訓練 → val 評估
+python scripts/reid_train/pack_manifest.py --version <v> [--reuse-version <v0>]   # ~/.cache/safetrajai/reid_packs/<v>/；--reuse-version 只補讀缺少的裁切
+python scripts/reid_train/train_reid.py --version <v> --output models/class_reid_weights/<run>  # 背景執行，30 epoch 約 25～45 分鐘
+python scripts/reid_train/eval_reid.py --weights models/class_reid_weights/<run>/model.pt --version <v>  # val mAP／Rank-1，只作參考
 
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
@@ -83,7 +88,8 @@ src/safetrajai/
                              reid_crops、video_io
   detection/                 Detector：單幀 YOLO 推論 + 逐類別信心門檻（class_conf_thresh）過濾
   tracking/                  class-aware ByteTrack / BoTSORT（繼承 ultralytics trackers），唯一入口 create_tracker()
-  reid/                      推論端：ReID（YOLO 當 encoder）與 Custom_ReID（models/class_reid_weights/）兩條路徑
+  reid/                      推論端：ReID（YOLO 當 encoder）與 Custom_ReID（models/class_reid_weights/）兩條路徑；
+                             training/（manifest 資料集與本機快取、PK 取樣、骨幹＋BNNeck、CE＋三元組、val 評估）
   roi.py                     以鏡頭為鍵的 ROI 解析（config/roi/<camera>.yaml），stage1 繪製／裁切、stage2、stage3 共用
   grid_search/core.py        grid search 共用邏輯，scripts/grid_search_*.py 只保留 PARAM_GRIDS + argparse
   collision/                 stage3：MOT 軌跡 → TTC/PET 衝突事件、熱區圖；homography/ 子套件負責轉換／點選／驗證
@@ -121,19 +127,26 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 - 核心設計：偵測結果**依類別分組後才做三階段匈牙利匹配**，每個類別有自己的 `match_thresh`／`second_match_thresh`／`unconfirmed_match_thresh`／`new_track_thresh`／`track_buffer`／`use_reid`，由 `get_params_for_class()` 查表取得。不能讓不同類別共用同一個 matching matrix。
 - **不可更動（使用者明確指示，見 `docs/adr/0004`）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
 - 已知但不會修正的落差：`track_buffer` 在 BoTSORT 版被當成「秒」（會乘上 frame rate），在 ByteTrack 版被當成 30fps 基準的幀數，同一個數值換算成實際存活時間，兩者差 30 倍。
-- GMC 只在 BoTSORT 有作用；ReID 只透過 BoTSORT 的逐類別 `use_reid` 啟用。實驗結論是 ReID 對 person 有幫助，但會讓 scooter 變差、IDSW 增加，所以預設關閉。
+- GMC 只在 BoTSORT 有作用；ReID 只透過 BoTSORT 的逐類別 `use_reid` 啟用，預設關閉。
+  - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在 C000025 上逐類別驗收：各類別都不變差，但只有 car 有可量測的改善（AssA +0.006），所以 `botsort_reid_timm.yaml` 只開 car。
+  - 效果有限的原因在 `get_dists_class_aware()` 的融合：外觀距離只作用在 IoU 距離 ≤ `1 − proximity_thresh` 的配對上，並取 `min(運動, 外觀)`，無法接回遮擋後位置已偏移的軌跡。要改善 ReID 的效果，應修改這個融合（不受凍結限制），而不是再換模型。
+  - 啟用 ReID 會讓每幀追蹤時間增加數倍（凍結的 `init_track` 對每個框各呼叫一次 encoder）。
 - 驗證方式：先跑單一序列或目標類別，比較同一基準下的 HOTA、AssA、IDSW，再用疊圖影片檢查 ID switch 和跨類別誤配。
 
 ### Re-ID
 
-- **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：`models/class_reid_weights/*/best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
+- **`Custom_ReID` 支援兩種權重格式**（`models/class_reid_weights/` 之下的路徑才會走 `Custom_ReID`）：
+  - 新格式 `safetrajai-reid-v1`（`scripts/reid_train/train_reid.py` 產生的 `model.pt`）：state_dict＋設定（`arch`、`embed_dim`、`input_size`、`mean`、`std`、`manifest_version`），以 `weights_only=True` 讀取、不依賴 pickle 類別路徑；每個框以與 `ReID` 相同的 `xywh2xyxy`＋`save_one_box` 裁切，letterbox 到 `input_size`、正規化、批次推論，回傳每個框一個 L2 正規化特徵。同目錄的 `train_record.json` 記錄資料集版本、超參數與種子。
+  - 目前的模型：`models/class_reid_weights/dinov2s_v3/model.pt`（DINOv2 ViT-S/14，`v3`，val mAP 0.783）；`dinov2s_v2` 是 `v2` 的對照組。情境設定 `config/botsort_reid_timm.yaml`（R1 追蹤參數＋只有 car 開 ReID）。
+  - 舊格式：完整模型 pickle，行為不變（只處理第一個框）。
+- **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：舊格式的 `best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。
 - 舊的 Re-ID 資料與權重（`dataset/reid/temp/`、`models/yolo-reid/temp/`、`models/class_reid_weights/temp/`）已確認無效並隔離；不要引用或拿來訓練。
 - Re-ID 資料已由 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建（流程、目錄與資料量見 `scripts/reid_data/README.md`）：
   - 裁切在 `dataset/reid/crops/{class}/{seq}_track{id}/{frame:06d}.jpg`，每支序列一份 metadata 索引 `crops/_index/<seq>.csv`；只從 `role: source` 的鏡頭蒐集，評估鏡頭一律拒絕，每支鏡頭都必須有 ROI 檔。蒐集設定是 `config/reid_crops.yaml`。
-  - **訓練一律讀 `dataset/reid/splits/<version>/manifest.csv`**（`crop_path` 相對於 `crops/`），不要直接掃 `crops/`；排除清單、每身分 4～30 張、依鏡頭與日期切分（`config/reid_split.yaml`）只在 manifest 中套用。
+  - **訓練一律讀 `dataset/reid/splits/<version>/manifest.csv`**（`crop_path` 相對於 `crops/`），不要直接掃 `crops/`；排除清單、每身分 4～30 張、依鏡頭與日期切分（`config/reid_split.yaml`）只在 manifest 中套用。訓練與 val 評估只從本機快取 `~/.cache/safetrajai/reid_packs/<version>/` 讀取影像（`pack_manifest.py` 依 manifest 從掛載磁碟各讀一次），不要讓每個 epoch 直接讀 `crops/`。
   - 標記、排除、抽查都只寫紀錄，不移動裁切（排除與隔離的差異見 `docs/adr/0006`）。品質把關以**自動排除為主、人工只抽查**（`docs/adr/0007`）：`auto_exclusions.csv` 由標記整份重算、`exclusions.csv` 只累加人工結果，manifest 兩份都套用；不要改回全量人工審查，而是加大抽查樣本或新增規則。
-  - **訓練用 `v2`**（22,164 個身分、156,141 張）；`v1` 是審查前的基準，只供比較。
+  - `v2`（22,164 個身分、156,141 張）與 `v3` 都可訓練；兩者訓練出的模型在追蹤上表現相同，平手依規則採用 `v3`。`v1` 是審查前的基準，只供比較。
   - 遮擋碎片由 change `merge-occlusion-fragments` 離線合併：只寫 `dataset/reid/fragment_merges.csv`（不動裁切），manifest 以 `--merges` 在排除之後套用。
     - 同一序列、同一類別內，以時間、外插位置加上 DINOv2 外觀門檻（`config/fragment_merge.yaml`，以人工確認校準到 ≥ 95%）一對一配對。
     - 只靠時間與位置不可靠（C000054 車流密集）。

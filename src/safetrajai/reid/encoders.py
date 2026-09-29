@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import torch
 from ultralytics.utils.plotting import save_one_box
@@ -5,6 +7,9 @@ from ultralytics.utils.ops import xywh2xyxy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from safetrajai.reid.dinov2_features import letterbox
+from safetrajai.reid.training.model import build_from_checkpoint, embed_batch, is_weight_checkpoint
 
 class ReID:
     """YOLO model as encoder for re-identification."""
@@ -31,18 +36,49 @@ class ReID:
 
 
 class Custom_ReID:
-    """SOTA model as encoder for re-identification."""
+    """Re-ID encoder for weights under models/class_reid_weights/.
+
+    Two weight formats (spec: reid-model):
+      - safetrajai-reid-v1 dict (state_dict + config, loadable with weights_only=True): every box is cropped
+        like ReID, letterboxed, normalized and embedded in one batch; returns one L2-normalized feature per box.
+      - legacy full-model pickle (ADR 0001): unchanged behavior, only the first box is embedded.
+    """
 
     def __init__(self, model_path):
         """Initialize encoder for re-identification."""
-   
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
+        except pickle.UnpicklingError:
+            checkpoint = None
+
+        if is_weight_checkpoint(checkpoint):
+            self.config = {k: v for k, v in checkpoint.items() if k != "state_dict"}
+            self.model = build_from_checkpoint(checkpoint, self.device)
+            self.mean = torch.tensor(checkpoint["mean"], device=self.device).view(1, 3, 1, 1)
+            self.std = torch.tensor(checkpoint["std"], device=self.device).view(1, 3, 1, 1)
+            return
+
+        self.config = None
         self.model = torch.load(model_path,
-                             map_location="cuda" if torch.cuda.is_available() else "cpu", 
+                             map_location="cuda" if torch.cuda.is_available() else "cpu",
                              weights_only=False)
         self.model.eval()
 
     def __call__(self, img, dets):
         """Extract embeddings for detected objects."""
+        if self.config is None:
+            return self._legacy_call(img, dets)
+        size = self.config["input_size"]
+        crops = [
+            letterbox(save_one_box(det, img, save=False, BGR=True), size)
+            for det in xywh2xyxy(torch.from_numpy(dets[:, :4]))
+        ]
+        batch = torch.from_numpy(np.stack(crops)).to(self.device).permute(0, 3, 1, 2).float().div(255.0)
+        feats = embed_batch(self.model, (batch - self.mean) / self.std)
+        return [f.cpu().numpy() for f in feats]
+
+    def _legacy_call(self, img, dets):
         # crop_imgs - [ ... ][0] 其實只裁出第一個 bbox；此時 crop_imgs shape 為 (H, W, 3)
         # crop_imgs = [save_one_box(det, img, save=False) for det in xywh2xyxy(torch.from_numpy(dets[:, :4]))][0]
         # # 將 crop_imgs 處理成符合模型輸入要求的 torch.Tensor: [N, 3, 256, 128]

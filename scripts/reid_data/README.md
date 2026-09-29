@@ -32,6 +32,8 @@ dataset/reports/reid/                        標記（detect_contamination.py）
 
 **訓練時請讀 `splits/<version>/manifest.csv`**，再以 `crop_path`（相對於 `crops/`）讀取影像，不要直接掃描 `crops/`：排除清單、碎片合併、最少張數、每身分最多張數與 train／val 切分，都只在 manifest 中套用。
 
+`scripts/reid_train/` 的訓練流程不直接讀 `crops/`：先以 `pack_manifest.py --version <v>` 依 manifest 從掛載磁碟**各讀一次**裁切，打包成本機快取 `~/.cache/safetrajai/reid_packs/<v>/`（`crops.bin`＋`index.csv`＋`pack.json`，張數必須與 manifest 列數一致），之後每個 epoch 只讀快取。另一個版本的 crop_path 大多相同時，以 `--reuse-version <v0>` 沿用既有快取，只補讀缺少的裁切（`v3` 沿用 `v2` 時只讀 1,243 張）。訓練與評估見 `train_reid.py`、`eval_reid.py` 的 `--help`。
+
 ## 1. 蒐集裁切
 
 ```bash
@@ -144,10 +146,11 @@ python scripts/reid_data/build_reid_split.py --version <v> --exclude-cameras C00
 | person | 372 | 130 | 29（23／6） | 28（23／5） | 28（23／5） |
 | **合計** | **288,547** | **61,162** | **24,056（20,795／3,261）** | **22,164（19,043／3,121）** | **22,223（19,101／3,122）** |
 
-- **訓練請用 `v2`**（156,141 張裁切）：套用自動排除 4,374 列（整段 1,847 個身分、單張 2,527 張）與人工排除 80 列；抽查 223 個身分，各鏡頭的不合格率都不超過 10%（C000054 為 1.7%），沒有鏡頭被排除。細節見 `openspec/changes/archive/*-auto-reid-exclusions/verification.md`。
+- `v2`（156,141 張裁切）：套用自動排除 4,374 列（整段 1,847 個身分、單張 2,527 張）與人工排除 80 列；抽查 223 個身分，各鏡頭的不合格率都不超過 10%（C000054 為 1.7%），沒有鏡頭被排除。細節見 `openspec/changes/archive/*-auto-reid-exclusions/verification.md`。
 - `v3`（156,186 張）＝ `v2` 的規則＋碎片合併（`fragment_merges.csv`：734 個原始身分併成 560 條鏈，門檻 0.911305）。有 282 個身分由合併而來，其中 187 個是 `v2` 沒有的。
   - 門檻以上的人工確認為 31/32 正確，錯誤合併率的 95% 上限約 16%；錯誤都是 car，集中在 C000033。
   - 細節見 `openspec/changes/archive/*-merge-occlusion-fragments/verification.md`。
+- change `train-reid-timm` 以 `v2`、`v3` 各訓練一個 DINOv2 ViT-S/14 模型（val mAP 0.785／0.783），兩者在 C000025 的追蹤結果相同，依平手規則採用 `v3`（`models/class_reid_weights/dinov2s_v3/`）。
 - `v1` 是審查前的基準版本（174,344 張裁切），仍含號誌誤判、串錯與殘缺框，只供比較。
 - person 與 small_truck 的身分明顯不足，是來源影片本身的限制。
 - 遮擋造成的碎片（同一實體被切成多個身分）無法只靠追蹤參數接回，改以離線碎片合併處理（見第 6 節）。

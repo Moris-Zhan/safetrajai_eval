@@ -1,0 +1,180 @@
+# =============================================================================
+# config/botsort_reid_timm.yaml — BoTSORT + 本地訓練的 Re-ID 模型（change train-reid-timm）
+#                                  stage1 tracking + stage2 TrackEval 評估
+# 用法：python track_eval.py --config config/botsort_reid_timm.yaml
+#
+# - 以驗收基準為底：config/reid_crops.yaml 的追蹤參數（R1：四輪車 center_dist_weight 加重、
+#   gmc_method: sparseOptFlow、frame_rate: auto），dataset 改為 cctv_all8、開啟 stage2。
+# - Re-ID 模型：models/class_reid_weights/dinov2s_v3/model.pt（DINOv2 ViT-S/14，資料集版本 v3，
+#   state_dict＋設定格式，由 Custom_ReID 載入）。
+# - 只有 car 啟用 Re-ID：逐類別驗收中各類別都「不變差」，但只有 car 有可量測的改善
+#   （調參序列 AssA 92.187 → 92.193）；其他類別指標完全不變、bus 在調參序列上沒有 GT，維持關閉。
+#   Re-ID 效果有限的原因是融合方式只讓外觀距離作用在 IoU 已重疊的配對上，改進由後續 change 處理。
+#   驗收過程見 openspec/changes/train-reid-timm/verification.md。
+# =============================================================================
+
+paths:
+  dataset: cctv_all8
+  TRACKEVAL_OUT_DIR: trackeval_output
+  OUTPUT_ROOT: ./runs/track_eval
+
+
+models:
+  det_model_path: ./models/yolo/yolo11x_dennis.pt
+
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+stages:
+  run_stage1: true
+  run_stage2: true
+
+eval_flags:
+  run_det_eval:   false
+  run_track_eval: true
+
+
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+logging:
+  verbose: false
+  debug:   false
+
+tracking_params:
+  tracker: botsort
+  conf:        0.15
+  iou:         0.50
+  imgsz:       640
+  frame_rate:  auto
+  gmc_method:  sparseOptFlow
+
+save params:
+  show: false
+  save: false
+  save_txt: true      # MOT 軌跡由 YOLO label txt 轉出，必須開啟
+  show_unmatched: false
+  show_removed: false
+  save_reid_crops: false
+  reid_crop_dir: ./dataset/reid/crops
+
+
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（BoTSORT；只有 car 使用本地訓練的 Re-ID 模型）
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.6
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+      use_reid: true
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/class_reid_weights/dinov2s_v3/model.pt
+      track_buffer: 3.0
+    bus:
+      center_dist_weight: 0.4
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+      use_reid: false
+      proximity_thresh: 0.1
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 3.0
+    small_truck:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 3.0
+    truck:
+      center_dist_weight: 0.4
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.6
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 3.0
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.3
+      model: models/yolo/yolo11x.pt
+      track_buffer: 2.0
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 2.0
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+    model: ./yolo11x-cls-reid.pt
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15
