@@ -51,7 +51,7 @@ from safetrajai.reid.fragment_merge import (
     find_candidates,
     head_paths,
     load_merge_config,
-    load_track_buffers,
+    load_retention,
     merge_records,
     score_candidates,
     select_pairs,
@@ -236,8 +236,8 @@ def main() -> None:
     crop_root = Path(args.crop_root)
     tracks = collect_tracks(read_all_indexes(crop_root),
                             read_rows(Path(args.exclusions)) + read_rows(Path(args.auto_exclusions)))
-    candidates = find_candidates(tracks, load_track_buffers(cfg["track_config"]),
-                                 cfg["time_margin_s"], cfg["position_factor"])
+    track_buffers = load_retention(cfg["track_config"])
+    candidates = find_candidates(tracks, track_buffers, cfg["margin_frames"], cfg["position_factor"])
     features = load_features(Path(args.features))
     missing = {p for c in candidates for p in tail_paths(tracks[(c.cls, c.identity_a)], cfg["endpoint_crops"])
                + head_paths(tracks[(c.cls, c.identity_b)], cfg["endpoint_crops"]) if p not in features}

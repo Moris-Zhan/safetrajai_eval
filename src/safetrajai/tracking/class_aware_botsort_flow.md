@@ -83,7 +83,7 @@ flowchart TD
 
     subgraph LostBuffer["⑦ Lost track 存活判斷"]
         E1["cls_buffer_sec = track_buffer（該類別）"]
-        E2["max_time_lost = cls_buffer_sec × frame_rate<br/>（單位：秒）"]
+        E2["max_time_lost = int(cls_buffer_sec)<br/>（單位：幀；變數為歷史名稱）"]
         E3["超過時限 → mark_removed()"]
         E1 --> E2 --> E3
     end
@@ -116,7 +116,7 @@ flowchart TD
    - 步驟 2 記下「距離太遠」的 pair 也強制設為 1.0
    - `dists = np.minimum(dists, emb_dists)`：兩個距離取更小值（IoU 夠近 **或** 外觀夠像，其一即可配對）
 6. **選用的閘門與否決**（change `reid-center-gate-fusion`，類別設定了新參數且 `use_reid=True` 才啟用；都沒設定時完全走步驟 5）：改由 `_gated_appearance()` 呼叫 `matching.fuse_appearance()`。
-   - `reid_center_gate_px`（＋`reid_center_gate_px_per_s` × 遺失秒數）：**只對遺失中的軌跡（Lost）**，中心距離在閘門內的 pair 也可取得外觀成本（與 IoU proximity 取聯集）。中心距離取「預測中心」與「最後一次 Tracked 時的中心」（記在 `track._reid_last_center`，因為 `STrack` 不保存觀測框）的較近者。Tracked 與未確認的 track 仍只看 IoU proximity。
+   - `reid_center_gate_px`（＋`reid_center_gate_px_per_frame` × 遺失幀數；遺失幀數＝`self.frame_id − track.frame_id`，見 ADR 0009）：**只對遺失中的軌跡（Lost）**，中心距離在閘門內的 pair 也可取得外觀成本（與 IoU proximity 取聯集）。中心距離取「預測中心」與「最後一次 Tracked 時的中心」（記在 `track._reid_last_center`，因為 `STrack` 不保存觀測框）的較近者。Tracked 與未確認的 track 仍只看 IoU proximity。
    - `appearance_veto_sim`：外觀距離 > `1 − appearance_veto_sim` 的 pair 成本設為 1（所有 track）。
    - 門檻方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向，值越大越嚴。
    - 在 C000025 上驗收的結果：閘門讓 car、scooter 串錯明顯增加，否決沒有效果，所以目前沒有任何情境啟用（見 `openspec/changes/archive/*-reid-center-gate-fusion/verification.md`）。
@@ -129,15 +129,10 @@ flowchart TD
 | ReID 外觀比對 | 有（`init_track` 依類別建特徵、`get_dists_class_aware` 依類別融合 embedding） | 無，`get_dists_class_aware` 只有 IoU + 中心距離 + fuse_score |
 | Kalman dt_scale 重新校正 | 有（`__init__` 手動改 `kf._motion_mat`） | 無 |
 | `init_track` 簽章 | `init_track(dets, scores, cls, img=None)`，需要 `img` 來裁切算 ReID 特徵 | 沿用 BYTETracker 原生 `init_track`，不需要 `img` |
-| **`track_buffer` 的單位換算**（見下方「注意事項」） | `cls_max_time_lost = cls_buffer_sec * frame_rate`（視為**秒**） | `cls_max_time_lost = (frame_rate/30.0) * cls_buffer`（視為**30fps 基準下的幀數**） |
+| **`track_buffer` 的單位** | `cls_max_time_lost = int(cls_buffer_sec)`（幀） | `cls_max_time_lost = int(cls_buffer)`（幀） |
 
-## 六、⚠️ 注意事項：`track_buffer` 兩個 tracker 的單位不一致
+## 六、保留期限統一為幀數（ADR 0009）
 
-`class_aware_botsort.py` 的程式碼註解明確寫「新版：cls_buffer 單位是秒，直接乘以 frame_rate 換算成幀數」，但 `class_aware_bytetrack.py` 仍是**沿用 HANDOFF.md 描述的舊公式**（`frame_rate/30 × track_buffer`，把 `track_buffer` 當作「30fps 下的幀數基準」再依實際 fps 等比例縮放）。
+兩個追蹤器的逐類別 `track_buffer` 都是正整數幀數；例如 15 在 5fps 與 10fps 下都於遺失第 16 幀移除，第 15 幀仍可重新關聯。載入時檢查每個類別的有效值，使全域 fallback 不會被已宣告的類別用到。
 
-這代表**同一個 `track_buffer` 設定值，在兩個 tracker 下的實際存活時間差非常多**。以 `frame_rate=30` 為例：
-
-- `track_buffer: 2.0` 在 BoTSORT → `2.0 × 30 = 60` 幀（2 秒）
-- `track_buffer: 2.0` 在 ByteTrack → `(30/30) × 2.0 = 2` 幀（約 0.07 秒）
-
-`safetrajai/tracking/track_config.yaml`（base 版）裡每個類別都設了 `track_buffer: 2.0`～`3.0`（原本是給 BoTSORT 用的設計值），如果直接拿去跑 ByteTrack，lost track 幾乎立即被清除，等同完全沒有 buffer——**這不是本次重組造成的問題，是既有程式碼的既有落差**，切換 tracker 類型或共用 track_config 檔案時要特別注意，換算前務必先確認是哪個 tracker 在讀這個值。已記錄進 `NEED.md`。
+BoTSORT 的 `cls_buffer_sec` 是歷史名稱，現在代表幀數。`update()` 中仍提到秒與乘上幀率的註解已過時，但依使用者授權範圍只修改算式那一行，註解原文保留。`__init__` 與 Kalman 的 `dt_scale` 不變。詳見 [ADR 0009](../../../docs/adr/0009-track-buffer-in-frames.md)。

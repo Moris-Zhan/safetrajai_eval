@@ -3,32 +3,41 @@
 import re
 
 import numpy as np
+import pytest
 
 from safetrajai.reid.fragment_merge import (
     calibrate_threshold,
     collect_tracks,
     endpoint_crop_paths,
     find_candidates,
+    load_merge_config,
+    load_retention,
     merge_records,
     score_candidates,
     select_pairs,
     stratified_sample,
 )
 
-BUFFERS = {"car": 3.0, "small_truck": 3.0}
+BUFFERS = {"car": 30, "small_truck": 30}  # retention in frames for both trackers
+MARGIN_FRAMES = 10
 THRESHOLD = 0.8
 
 
-def track(identity: str, t0: float, n: int, x0: float, vx: float = 20.0,
+def track(identity: str, f0: int, n: int, x0: float, vx: float = 2.0, step: int = 5, fps: float = 10.0,
           cls: str = "car", seq: str = "s", camera: str = "C000012") -> list[dict]:
+    """n crops every `step` frames from frame f0, moving vx px/frame."""
     rows = []
     for k in range(n):
-        t = t0 + k * 0.5
-        x = x0 + vx * (t - t0)
+        frame = f0 + k * step
+        x = x0 + vx * (frame - f0)
         rows.append({"crop_path": f"{cls}/{identity}/{k:06d}.jpg", "identity": identity, "class": cls,
-                     "camera": camera, "sequence": seq, "time_s": f"{t:.3f}",
+                     "camera": camera, "sequence": seq, "frame": str(frame), "time_s": f"{frame / fps:.3f}",
                      "x1": x - 20, "y1": 100, "x2": x + 20, "y2": 140})
     return rows
+
+
+def candidates(rows: list[dict], buffers: dict = BUFFERS) -> list:
+    return find_candidates(collect_tracks(rows, []), buffers, MARGIN_FRAMES, 2.0)
 
 
 def features_for(rows: list[dict], vectors: dict[str, list[float]]) -> dict[str, np.ndarray]:
@@ -37,69 +46,117 @@ def features_for(rows: list[dict], vectors: dict[str, list[float]]) -> dict[str,
 
 def run(rows: list[dict], vectors: dict[str, list[float]], exclusions: list[dict] = ()) -> list[dict]:
     tracks = collect_tracks(rows, list(exclusions))
-    candidates = find_candidates(tracks, BUFFERS, 1.0, 2.0)
-    scored = score_candidates(candidates, tracks, features_for(rows, vectors), 3)
+    found = find_candidates(tracks, BUFFERS, MARGIN_FRAMES, 2.0)
+    scored = score_candidates(found, tracks, features_for(rows, vectors), 3)
     return merge_records(select_pairs(scored, THRESHOLD), tracks)
 
 
 def test_occluded_fragment_is_merged() -> None:
-    # A ends at t=10.0, x=200; extrapolated to t=11.0 -> x=220; B starts at x=260 (1 box away).
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0)
+    # A: frames 80..100 ending at x=160; extrapolated 10 frames -> x=180; B starts at frame 110, x=220 (1 box away).
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0)
     records = run(rows, {"A": [1, 0], "B": [0.95, 0.05]})
     assert [(r["identity"], r["merged_identity"]) for r in records] == [("B", "A")]
 
 
+@pytest.mark.parametrize("tracker", ["botsort", "bytetrack"])
+@pytest.mark.parametrize("fps", [10, 14])
+def test_candidate_window_is_retention_plus_margin_frames(tmp_path, tracker, fps) -> None:
+    import yaml
+
+    cfg = tmp_path / "track.yaml"
+    cfg.write_text(yaml.safe_dump({"tracking_params": {"tracker": tracker},
+                                   "class_tracking": {"class_tracking_params": {"car": {"track_buffer": 30}}}}))
+    buffers = load_retention(cfg)
+    assert buffers == {"car": 30} and type(buffers["car"]) is int
+    a = track("A", 80, 5, 120.0, fps=fps)  # ends at frame 100, x=160
+    inside = a + track("B", 140, 4, 240.0, fps=fps)
+    outside = a + track("B", 141, 4, 242.0, fps=fps)
+    assert [(c.identity_b, c.gap_frames) for c in candidates(inside, buffers)] == [("B", 40)]
+    assert candidates(outside, buffers) == []
+
+
+def test_candidate_window_does_not_require_inferable_fps() -> None:
+    rows = track("A", 100, 1, 160.0) + track("B", 140, 1, 160.0)
+    for row in rows:
+        row["time_s"] = "0"
+    assert [c.gap_frames for c in candidates(rows)] == [40]
+
+
+def test_extrapolation_uses_per_frame_velocity() -> None:
+    # A's last two crops are 10 frames and 20 px apart -> 2 px/frame; 30 frames later -> +60 px.
+    a = track("A", 80, 3, 100.0, step=10)  # frames 80, 90, 100 ending at x=140
+    [found] = candidates(a + track("B", 130, 3, 200.0))
+    assert found.gap_frames == 30 and found.distance_ratio == pytest.approx(0.0)
+
+
 def test_dissimilar_neighbour_is_not_merged() -> None:
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0)
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0)
     assert run(rows, {"A": [1, 0], "B": [0, 1]}) == []
 
 
 def test_no_merge_across_class_or_sequence() -> None:
-    rows = (track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0, cls="small_truck")
-            + track("C", 11.0, 4, 260.0, seq="other"))
-    tracks = collect_tracks(rows, [])
-    assert find_candidates(tracks, BUFFERS, 1.0, 2.0) == []
+    rows = (track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0, cls="small_truck")
+            + track("C", 110, 4, 220.0, seq="other"))
+    assert candidates(rows) == []
     assert run(rows, {"A": [1, 0], "B": [1, 0], "C": [1, 0]}) == []
 
 
 def test_one_to_one_keeps_most_similar() -> None:
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 250.0) + track("C", 11.5, 4, 240.0)
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 210.0) + track("C", 115, 4, 200.0)
     records = run(rows, {"A": [1, 0], "B": [0.99, 0.01], "C": [0.9, 0.1]})
     assert [(r["identity"], r["merged_identity"]) for r in records] == [("B", "A")]
 
 
 def test_chain_of_fragments_maps_to_earliest() -> None:
-    # B: t=11.0..12.5 ending at x=290; C starts at t=14.0 near the extrapolation (x=320).
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0) + track("C", 14.0, 4, 330.0)
+    # B: frames 110..125 ending at x=250; C starts at frame 140 near the extrapolation (x=280), too far from A's.
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0) + track("C", 140, 4, 330.0)
     records = run(rows, {"A": [1, 0], "B": [1, 0], "C": [1, 0]})
     assert [(r["identity"], r["merged_identity"]) for r in records] == [("B", "A"), ("C", "A")]
 
 
 def test_candidate_time_and_position_limits() -> None:
-    late = track("A", 8.0, 5, 120.0) + track("B", 14.5, 4, 330.0)  # gap 4.5 s > 3 + 1
-    far = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 360.0)  # 140 px > 2 x 40 px
+    late = track("A", 80, 5, 120.0) + track("B", 145, 4, 250.0)  # gap 45 frames > 30 + 10
+    far = track("A", 80, 5, 120.0) + track("B", 110, 4, 320.0)  # 140 px > 2 x 40 px
     for rows in (late, far):
-        assert find_candidates(collect_tracks(rows, []), BUFFERS, 1.0, 2.0) == []
+        assert candidates(rows) == []
 
 
 def test_excluded_identity_does_not_participate() -> None:
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0)
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0)
     exclusions = [{"class": "car", "identity": "B", "image": "", "action": "remove"}]
     assert run(rows, {"A": [1, 0], "B": [1, 0]}, exclusions) == []
 
 
 def test_endpoint_paths_are_only_fragment_ends() -> None:
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0)
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0)
     tracks = collect_tracks(rows, [])
-    paths = endpoint_crop_paths(find_candidates(tracks, BUFFERS, 1.0, 2.0), tracks, 3)
+    paths = endpoint_crop_paths(find_candidates(tracks, BUFFERS, MARGIN_FRAMES, 2.0), tracks, 3)
     assert paths == ["car/A/000002.jpg", "car/A/000003.jpg", "car/A/000004.jpg",
                      "car/B/000000.jpg", "car/B/000001.jpg", "car/B/000002.jpg"]
 
 
 def test_merge_records_are_order_independent() -> None:
-    rows = track("A", 8.0, 5, 120.0) + track("B", 11.0, 4, 260.0) + track("C", 14.0, 4, 330.0)
+    rows = track("A", 80, 5, 120.0) + track("B", 110, 4, 220.0) + track("C", 140, 4, 330.0)
     vectors = {"A": [1, 0], "B": [1, 0], "C": [1, 0]}
     assert run(rows, vectors) == run(list(reversed(rows)), vectors)
+
+
+def test_load_retention_reads_integer_buffers() -> None:
+    from safetrajai.paths import CONFIG_DIR
+
+    buffers = load_retention(CONFIG_DIR / "reid_crops.yaml")
+    assert buffers["car"] == 30 and {"person", "scooter", "truck"} <= set(buffers)
+
+
+def test_merge_config_uses_margin_frames_and_rejects_seconds(tmp_path) -> None:
+    from safetrajai.paths import CONFIG_DIR
+
+    text = (CONFIG_DIR / "fragment_merge.yaml").read_text(encoding="utf-8")
+    assert load_merge_config(CONFIG_DIR / "fragment_merge.yaml")["margin_frames"] == 10
+    legacy = tmp_path / "legacy.yaml"
+    legacy.write_text(text + "time_margin_s: 1.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="time_margin_s.*margin_frames"):
+        load_merge_config(legacy)
 
 
 def test_calibrate_threshold_picks_lowest_accurate_value() -> None:
@@ -126,18 +183,17 @@ def test_stratified_sample_is_reproducible_and_keeps_other_cameras() -> None:
 
 
 def _write_fragment_crops(root, tracks_spec):
-    """tracks_spec: list of (identity, t0, n, x0, seq, gray)."""
+    """tracks_spec: list of (identity, f0, n, x0, seq, gray)."""
     import cv2
 
     from safetrajai.reid.dataset_index import INDEX_FIELDS, index_path, write_index
 
     by_seq = {}
-    for identity, t0, n, x0, seq, gray in tracks_spec:
-        for r in track(identity, t0, n, x0, seq=seq):
+    for identity, f0, n, x0, seq, gray in tracks_spec:
+        for r in track(identity, f0, n, x0, seq=seq):
             (root / r["crop_path"]).parent.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(str(root / r["crop_path"]), np.full((40, 40, 3), gray, np.uint8))
-            by_seq.setdefault(seq, []).append(
-                {**r, "date": "20250512", "frame": int(float(r["time_s"]) * 10), "score": "0.9"})
+            by_seq.setdefault(seq, []).append({**r, "date": "20250512", "score": "0.9"})
     for seq, rows in by_seq.items():
         write_index(index_path(root, seq), [{k: r[k] for k in INDEX_FIELDS} for r in rows])
 
@@ -173,8 +229,8 @@ def _fixture(tmp_path, monkeypatch):
 
     crops = tmp_path / "crops"
     # A -> B is an occlusion fragment (same appearance); X is a lone track; C is in another sequence.
-    _write_fragment_crops(crops, [("A", 8.0, 6, 120.0, "s", 200), ("B", 11.0, 5, 260.0, "s", 200),
-                                  ("X", 30.0, 6, 500.0, "s", 50), ("C", 11.0, 5, 260.0, "t", 200)])
+    _write_fragment_crops(crops, [("A", 80, 6, 120.0, "s", 200), ("B", 110, 5, 220.0, "s", 200),
+                                  ("X", 300, 6, 500.0, "s", 50), ("C", 110, 5, 220.0, "t", 200)])
     (tmp_path / "auto.csv").write_text("class,identity,image,action,rule\n", encoding="utf-8")
     (tmp_path / "manual.csv").write_text("class,identity,image,action\n", encoding="utf-8")
 

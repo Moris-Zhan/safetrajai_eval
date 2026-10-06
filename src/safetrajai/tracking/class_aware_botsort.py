@@ -379,7 +379,7 @@ class ClassAwareBOTSORT(BOTSORT):
             
             if cls_buffer_sec is not None:
                 # 秒數 × fps = 該 fps 下應等待的幀數
-                cls_max_time_lost = int(cls_buffer_sec * self.frame_rate)
+                cls_max_time_lost = int(cls_buffer_sec)
             else:
                 cls_max_time_lost = self.max_time_lost  # fallback 用全域預設值
 

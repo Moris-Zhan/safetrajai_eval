@@ -135,9 +135,9 @@ src/safetrajai/tracking/              # 現況路徑（本文件寫成時仍叫 
 
 ```python
 CLASS_TRACKING_PARAMS = {
-    'person':      { 'match_thresh': 0.85, 'second_match_thresh': 0.5,  'track_buffer': None, ... },  # None = 用全域 120
+    'person':      { 'match_thresh': 0.85, 'second_match_thresh': 0.5,  'track_buffer': 120, ... },  # 保留期限 120 幀
     'scooter':     { 'match_thresh': 0.90, 'second_match_thresh': 0.75, 'track_buffer': 90,   ... },  # 90 < 全域 120，適度縮短
-    'car':         { 'match_thresh': 0.85, 'second_match_thresh': 0.5,  'track_buffer': None, ... },  # None = 用全域 120
+    'car':         { 'match_thresh': 0.85, 'second_match_thresh': 0.5,  'track_buffer': 120, ... },  # 保留期限 120 幀
     ...
 }
 ```
@@ -275,12 +275,12 @@ for track in self.lost_stracks:
     cls_buffer = params.get('track_buffer', None)
     cls_max_time_lost = self.max_time_lost                         # 全域預設 120
     if cls_buffer is not None:
-        cls_max_time_lost = int(self.frame_rate / 30.0 * cls_buffer)  # 類別覆蓋（如 scooter=90，比全域 120 更短）
+        cls_max_time_lost = int(cls_buffer)  # 類別保留期限幀數（ByteTrack；BoTSORT 變數為 cls_buffer_sec）
     if self.frame_id - track.end_frame > cls_max_time_lost:
         track.mark_removed()
 ```
 
-注意：`self.frame_rate` 在 `__init__` 中儲存，確保非 30fps 影片的 buffer 計算正確。
+注意：以上原版 Ultralytics 段落保留 upstream 行為說明。本專案逐類別 `track_buffer` 已統一為正整數幀數（ADR 0009），不依 `self.frame_rate` 換算。載入設定時每個類別必須有有效值，使全域 fallback 不可達；BoTSORT 的 `cls_buffer_sec` 為歷史名稱，方法內舊註解維持原文。
 
 #### 修改 4：類別級新 track 閾值（解決需求 5）
 

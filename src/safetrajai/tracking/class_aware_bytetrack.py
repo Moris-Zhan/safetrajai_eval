@@ -258,7 +258,7 @@ class ClassAwareBYTETracker(BYTETracker):
             cls_buffer = params.get('track_buffer', None)
             cls_max_time_lost = self.max_time_lost
             if cls_buffer is not None:
-                cls_max_time_lost = int(self.frame_rate / 30.0 * cls_buffer)
+                cls_max_time_lost = int(cls_buffer)
             if self.frame_id - track.end_frame > cls_max_time_lost:
                 track.mark_removed()
                 removed_stracks.append(track)

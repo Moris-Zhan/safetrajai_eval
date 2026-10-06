@@ -115,7 +115,7 @@ class_tracking:
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 3.0
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     bus:
       center_dist_weight: 0.25
       fuse_score: false
@@ -128,7 +128,7 @@ class_tracking:
       proximity_thresh: 0.1
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 3.0
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     small_truck:
       center_dist_weight: 0.2
       fuse_score: true
@@ -141,7 +141,7 @@ class_tracking:
       proximity_thresh: 0.3
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 3.0
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     truck:
       center_dist_weight: 0.2
       fuse_score: false
@@ -154,7 +154,7 @@ class_tracking:
       proximity_thresh: 0.6
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 3.0
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     person:
       center_dist_weight: 0.25
       fuse_score: false
@@ -167,7 +167,7 @@ class_tracking:
       proximity_thresh: 0.3
       appearance_thresh: 0.3
       model: models/yolo/yolo11x.pt
-      track_buffer: 2.0
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
     scooter:
       center_dist_weight: 0.25
       fuse_score: true
@@ -180,7 +180,7 @@ class_tracking:
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 2.0
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
 
   default_tracking_params:
     match_thresh: 0.80

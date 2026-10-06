@@ -167,6 +167,13 @@ def load_track_config(path: str | Path | None = None) -> Path:
         if isinstance(params, dict):
             _validate_fusion_params(str(name), params)
 
+    # Validate effective per-class retention before changing any loaded globals.
+    for class_name in _coerce_class_names(cn).values():
+        params = ctp.get(class_name, dtp)
+        value = params.get("track_buffer") if isinstance(params, dict) else None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"類別 {class_name!r} 的 track_buffer 必須是正整數幀數，目前為 {value!r}")
+
     # 預設 conf threshold（若沒寫就用 0.15）
     dct = float(data.get("default_conf_thresh", 0.15))
 

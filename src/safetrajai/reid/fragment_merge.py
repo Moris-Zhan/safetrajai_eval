@@ -1,8 +1,8 @@
 """遮擋碎片合併（見 CONTEXT.md「碎片」「碎片合併」、spec: reid-dataset）。
 
 同一序列、同一類別內：
-1. 候選：A 結束後 track_buffer＋餘裕秒內 B 出現，且 B 起點在 A 末段速度外插位置的
-   position_factor 倍框尺寸（面積平方根）以內。
+1. 候選：A 結束後「保留期限幀數＋margin_frames」幀內 B 出現（保留期限依追蹤器與序列幀率換算，
+   見 ADR 0008），且 B 起點在 A 末段每幀速度外插位置的 position_factor 倍框尺寸（面積平方根）以內。
 2. 外觀：A 最後 n 張與 B 最前 n 張的特徵平均取 cosine。
 3. 一對一：相似度 ≥ 門檻者由高到低貪婪接受，每段最多一個前段、一個後段；以 union-find 串成鏈，
    合併後的身分沿用鏈中首張時間最早的軌跡。
@@ -31,6 +31,7 @@ STRATA = ("low", "mid", "high")
 
 class CropSample(NamedTuple):
     crop_path: str
+    frame: int
     time_s: float
     cx: float
     cy: float
@@ -51,7 +52,7 @@ class Candidate(NamedTuple):
     camera: str
     identity_a: str
     identity_b: str
-    gap_s: float
+    gap_frames: int
     distance_ratio: float
 
 
@@ -63,11 +64,13 @@ class ScoredCandidate(NamedTuple):
 def load_merge_config(path: Path) -> dict:
     with Path(path).open(encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
+    if "time_margin_s" in raw:
+        raise ValueError(f"{path}: time_margin_s 已不再支援，請改用 margin_frames（以保留期限幀數計算，見 ADR 0008）")
     threshold = raw.get("threshold")
     sample = raw["sample"]
     return {
         "track_config": PROJECT_ROOT / raw["track_config"],
-        "time_margin_s": float(raw["time_margin_s"]),
+        "margin_frames": int(raw["margin_frames"]),
         "position_factor": float(raw["position_factor"]),
         "endpoint_crops": int(raw["endpoint_crops"]),
         "threshold": None if threshold is None else float(threshold),
@@ -82,10 +85,12 @@ def load_merge_config(path: Path) -> dict:
     }
 
 
-def load_track_buffers(track_config: Path) -> dict[str, float]:
+def load_retention(track_config: Path) -> dict[str, int]:
+    """回傳逐類別的保留期限幀數，不依追蹤器或序列幀率換算。"""
     with Path(track_config).open(encoding="utf-8") as f:
-        params = yaml.safe_load(f)["class_tracking"]["class_tracking_params"]
-    return {cls: float(p["track_buffer"]) for cls, p in params.items()}
+        raw = yaml.safe_load(f)
+    params = raw["class_tracking"]["class_tracking_params"]
+    return {cls: int(p["track_buffer"]) for cls, p in params.items()}
 
 
 def collect_tracks(index_rows: list[dict], exclusions: list[dict]) -> dict[tuple[str, str], Track]:
@@ -107,25 +112,28 @@ def collect_tracks(index_rows: list[dict], exclusions: list[dict]) -> dict[tuple
         for r in rows:
             x1, y1, x2, y2 = (float(r[k]) for k in ("x1", "y1", "x2", "y2"))
             size = max(math.sqrt(max(x2 - x1, 0.0) * max(y2 - y1, 0.0)), 1.0)
-            samples.append(CropSample(r["crop_path"], float(r["time_s"]), (x1 + x2) / 2, (y1 + y2) / 2, size))
-        samples.sort(key=lambda s: (s.time_s, s.crop_path))
-        tracks[key] = Track(key[0], key[1], rows[0]["sequence"], rows[0]["camera"], tuple(samples))
+            samples.append(CropSample(r["crop_path"], int(r["frame"]), float(r["time_s"]),
+                                      (x1 + x2) / 2, (y1 + y2) / 2, size))
+        samples.sort(key=lambda s: (s.frame, s.crop_path))
+        sequence = rows[0]["sequence"]
+        tracks[key] = Track(key[0], key[1], sequence, rows[0]["camera"],
+                            tuple(samples))
     return tracks
 
 
-def _extrapolate(track: Track, gap_s: float) -> tuple[float, float]:
+def _extrapolate(track: Track, gap_frames: int) -> tuple[float, float]:
     last = track.crops[-1]
     if len(track.crops) < 2:
         return last.cx, last.cy
     prev = track.crops[-2]
-    dt = max(last.time_s - prev.time_s, 1e-6)
-    return last.cx + (last.cx - prev.cx) / dt * gap_s, last.cy + (last.cy - prev.cy) / dt * gap_s
+    df = max(last.frame - prev.frame, 1)
+    return last.cx + (last.cx - prev.cx) / df * gap_frames, last.cy + (last.cy - prev.cy) / df * gap_frames
 
 
 def find_candidates(
     tracks: Mapping[tuple[str, str], Track],
-    track_buffers: Mapping[str, float],
-    time_margin_s: float,
+    track_buffers: Mapping[str, int],
+    margin_frames: int,
     position_factor: float,
 ) -> list[Candidate]:
     groups: dict[tuple[str, str], list[Track]] = defaultdict(list)
@@ -136,16 +144,18 @@ def find_candidates(
     for (sequence, cls), members in sorted(groups.items()):
         if cls not in track_buffers:
             raise KeyError(f"track config 缺少類別 {cls!r} 的 track_buffer")
-        max_gap = track_buffers[cls] + time_margin_s
-        members.sort(key=lambda t: (t.crops[0].time_s, t.identity))
-        starts = [t.crops[0].time_s for t in members]
+        if len(members) < 2:
+            continue
+        max_gap = track_buffers[cls] + margin_frames
+        members.sort(key=lambda t: (t.crops[0].frame, t.identity))
+        starts = [t.crops[0].frame for t in members]
         for a in members:
             end = a.crops[-1]
-            lo = bisect.bisect_right(starts, end.time_s)
-            hi = bisect.bisect_right(starts, end.time_s + max_gap)
+            lo = bisect.bisect_right(starts, end.frame)
+            hi = bisect.bisect_right(starts, end.frame + max_gap)
             for b in members[lo:hi]:
                 first = b.crops[0]
-                gap = first.time_s - end.time_s
+                gap = first.frame - end.frame
                 px, py = _extrapolate(a, gap)
                 ratio = math.hypot(first.cx - px, first.cy - py) / max(end.size, first.size)
                 if gap > 0 and ratio <= position_factor:
@@ -219,8 +229,8 @@ def merge_records(accepted: list[ScoredCandidate], tracks: Mapping[tuple[str, st
             key = parent[key]
         return key
 
-    def order(key: tuple[str, str]) -> tuple[float, str]:
-        return tracks[key].crops[0].time_s, key[1]
+    def order(key: tuple[str, str]) -> tuple[int, str]:
+        return tracks[key].crops[0].frame, key[1]
 
     link_score = {}
     for s in accepted:

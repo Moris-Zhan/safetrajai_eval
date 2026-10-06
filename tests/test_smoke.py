@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import importlib
 import importlib.util
 import pkgutil
@@ -37,6 +38,32 @@ FROZEN_TRACKER_METHODS = {
 }
 
 
+# ADR 0009: only these Assign statements may differ from BASE_COMMIT.
+RETENTION_EXCEPTIONS = {
+    ("ClassAwareBOTSORT", "update"): (
+        "cls_max_time_lost = int(cls_buffer_sec * self.frame_rate)",
+        "cls_max_time_lost = int(cls_buffer_sec)",
+    ),
+    ("ClassAwareBYTETracker", "update"): (
+        "cls_max_time_lost = int(self.frame_rate / 30.0 * cls_buffer)",
+        "cls_max_time_lost = int(cls_buffer)",
+    ),
+}
+
+
+class RetentionAssignmentReplacement(ast.NodeTransformer):
+    def __init__(self, old: str, new: str):
+        self.old = old
+        self.new = ast.parse(new).body[0]
+        self.count = 0
+
+    def visit_Assign(self, node):
+        if ast.unparse(node) == self.old:
+            self.count += 1
+            return ast.copy_location(copy.deepcopy(self.new), node)
+        return self.generic_visit(node)
+
+
 def package_modules() -> list[str]:
     return sorted(
         info.name for info in pkgutil.walk_packages(safetrajai.__path__, prefix="safetrajai.")
@@ -47,11 +74,19 @@ def scripts_with_cli() -> list[Path]:
     return [path for path in SCRIPTS if "argparse" in path.read_text(encoding="utf-8")]
 
 
-def method_bodies(source: str, class_name: str) -> dict[str, str]:
+def method_bodies(source: str, class_name: str, *, replace_retention: bool = False) -> dict[str, str]:
     tree = ast.parse(source)
     class_node = next(
         node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name
     )
+    if replace_retention:
+        for (exception_class, method), (old, new) in RETENTION_EXCEPTIONS.items():
+            if exception_class != class_name:
+                continue
+            method_node = next(node for node in class_node.body if isinstance(node, ast.FunctionDef) and node.name == method)
+            replacement = RetentionAssignmentReplacement(old, new)
+            replacement.visit(method_node)
+            assert replacement.count == 1, f"{class_name}.{method}: expected 1 replacement, got {replacement.count}"
     return {
         node.name: ast.dump(ast.Module(body=node.body, type_ignores=[]))
         for node in class_node.body
@@ -130,7 +165,7 @@ def test_tracker_override_bodies_unchanged(old_path: str, new_path: str, class_n
     old_source = subprocess.run(
         ["git", "show", f"{BASE_COMMIT}:{old_path}"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
     ).stdout
-    old_bodies = method_bodies(old_source, class_name)
+    old_bodies = method_bodies(old_source, class_name, replace_retention=True)
     new_bodies = method_bodies((REPO_ROOT / new_path).read_text(encoding="utf-8"), class_name)
     for method in FROZEN_TRACKER_METHODS[(old_path, new_path, class_name)]:
         assert method in old_bodies, f"{class_name}.{method} missing at BASE_COMMIT"
@@ -205,3 +240,39 @@ def yaml_string_values(node) -> list[str]:
 def test_config_does_not_reference_quarantined_assets(config_path: Path) -> None:
     values = yaml_string_values(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {})
     assert [v for v in values if "/temp/" in v or v.startswith("temp/")] == []
+
+
+@pytest.mark.parametrize(("class_name", "method"), RETENTION_EXCEPTIONS)
+@pytest.mark.parametrize("count", [0, 1, 2])
+def test_retention_exception_matches_exactly_once(class_name, method, count):
+    old, new = RETENTION_EXCEPTIONS[class_name, method]
+    body = "\n".join("        " + old for _ in range(count)) or "        pass"
+    source = f"class {class_name}:\n    def {method}(self):\n{body}\n"
+    if count == 1:
+        expected = source.replace(old, new)
+        assert method_bodies(source, class_name, replace_retention=True) == method_bodies(expected, class_name)
+    else:
+        with pytest.raises(AssertionError, match="expected 1 replacement"):
+            method_bodies(source, class_name, replace_retention=True)
+
+
+@pytest.mark.parametrize(("old_path", "new_path", "class_name"), FROZEN_TRACKER_METHODS)
+def test_frozen_methods_reject_unlisted_changes(tmp_path, old_path, new_path, class_name):
+    source = subprocess.run(
+        ["git", "show", f"{BASE_COMMIT}:{old_path}"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    ).stdout
+    expected = method_bodies(source, class_name, replace_retention=True)
+    # Use a temporary copy: exercise every frozen method, without changing repository sources.
+    old, new = RETENTION_EXCEPTIONS[class_name, "update"]
+    tree = ast.parse(source)
+    replacement = RetentionAssignmentReplacement(old, new)
+    replacement.visit(tree)
+    assert replacement.count == 1
+    for method in FROZEN_TRACKER_METHODS[old_path, new_path, class_name]:
+        changed = copy.deepcopy(tree)
+        changed_cls = next(n for n in changed.body if isinstance(n, ast.ClassDef) and n.name == class_name)
+        node = next(n for n in changed_cls.body if isinstance(n, ast.FunctionDef) and n.name == method)
+        node.body.append(ast.parse("unexpected_change = True").body[0])
+        path = tmp_path / "tampered.py"
+        path.write_text(ast.unparse(ast.fix_missing_locations(changed)), encoding="utf-8")
+        assert method_bodies(path.read_text(), class_name)[method] != expected[method]

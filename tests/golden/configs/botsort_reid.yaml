@@ -65,8 +65,7 @@ save params:
 
 # -----------------------------------------------------------------------------
 # Class-aware tracker 逐類別參數表（BoTSORT，ReID 全部開啟）
-# 這裡沒有 track_buffer 欄位（跟原始 track_config_BotSort_0413.yaml 一致），
-# 各類別 lost track 存活時間會回落全域預設 self.max_time_lost。
+# track_buffer 已明列為幀數，等價於原本在 30fps 的 fallback 120。
 # -----------------------------------------------------------------------------
 class_tracking:
   class_names:
@@ -79,6 +78,7 @@ class_tracking:
 
   class_tracking_params:
     car:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.4
       fuse_score: true
       match_thresh: 0.7
@@ -91,6 +91,7 @@ class_tracking:
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
     bus:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: false
       match_thresh: 0.7
@@ -103,6 +104,7 @@ class_tracking:
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
     small_truck:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2
       fuse_score: true
       match_thresh: 0.6
@@ -115,6 +117,7 @@ class_tracking:
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
     truck:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2
       fuse_score: false
       match_thresh: 0.6
@@ -127,6 +130,7 @@ class_tracking:
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
     person:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: false
       match_thresh: 0.9
@@ -139,6 +143,7 @@ class_tracking:
       appearance_thresh: 0.3
       model: models/yolo/yolo11x.pt
     scooter:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: true
       match_thresh: 0.9

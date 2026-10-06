@@ -7,7 +7,7 @@
 輸入：
   - <crop-root>/_index/*.csv           裁切索引
   - <auto-exclusions>、<exclusions>    兩份排除清單都套用：整段排除的身分不參與、單張排除的裁切不當端點
-  - config/fragment_merge.yaml         候選條件（時間餘裕、位置倍數、端點張數；track_buffer 取自 track_config）
+  - config/fragment_merge.yaml         候選條件（餘裕幀數、位置倍數、端點張數；track_buffer 幀數取自 track_config）
 輸出：
   - <out>（預設 dataset/reports/reid/fragment_features.npz）：crop_path（依字典序）、features（float32）
 
@@ -32,7 +32,7 @@ from safetrajai.reid.fragment_merge import (
     endpoint_crop_paths,
     find_candidates,
     load_merge_config,
-    load_track_buffers,
+    load_retention,
 )
 
 
@@ -59,8 +59,8 @@ def main() -> None:
     if not rows:
         raise SystemExit(f"找不到任何裁切索引：{crop_root / '_index'}")
     tracks = collect_tracks(rows, read_rows(Path(args.exclusions)) + read_rows(Path(args.auto_exclusions)))
-    candidates = find_candidates(tracks, load_track_buffers(cfg["track_config"]),
-                                 cfg["time_margin_s"], cfg["position_factor"])
+    track_buffers = load_retention(cfg["track_config"])
+    candidates = find_candidates(tracks, track_buffers, cfg["margin_frames"], cfg["position_factor"])
     paths = endpoint_crop_paths(candidates, tracks, cfg["endpoint_crops"])
     print(f"tracks={len(tracks)} candidates={len(candidates)} endpoint_crops={len(paths)} "
           f"(of {len(rows)} indexed crops)")

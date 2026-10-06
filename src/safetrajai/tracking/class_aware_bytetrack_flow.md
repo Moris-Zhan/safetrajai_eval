@@ -4,7 +4,7 @@
 
 ## 一、`__init__(args, frame_rate=30)`
 
-只做一件事：呼叫 `super().__init__()` 後多存一個 `self.frame_rate = frame_rate`，供 `update()` 裡逐 track 換算 lost track 存活時間用。**沒有** BoTSORT 版的 Kalman dt_scale 重新校正、沒有 GMC、沒有逐類別 ReID encoder 建立。
+只做一件事：呼叫 `super().__init__()` 後多存一個 `self.frame_rate = frame_rate`，保留原初始化行為；`update()` 的保留期限已直接使用幀數，不再使用此值換算。**沒有** BoTSORT 版的 Kalman dt_scale 重新校正、沒有 GMC、沒有逐類別 ReID encoder 建立。
 
 ## 二、`update(results, img=None, feats=None)` 逐幀主流程
 
@@ -70,7 +70,7 @@ flowchart TD
 
     subgraph LostBuffer["⑦ Lost track 存活判斷"]
         E1["cls_buffer = track_buffer（該類別）"]
-        E2["max_time_lost = (frame_rate/30.0) × cls_buffer<br/>（單位：30fps 基準幀數）"]
+        E2["max_time_lost = int(cls_buffer)<br/>（單位：幀）"]
         E3["超過時限 → mark_removed()"]
         E1 --> E2 --> E3
     end
@@ -104,4 +104,4 @@ flowchart TD
 ## 四、⚠️ 注意事項
 
 1. **與 BoTSORT 共用同一份 `track_config*.yaml` 時，`use_reid`/`model`/`appearance_thresh`/`proximity_thresh` 這幾個欄位對 ByteTrack 完全是死欄位**（讀不到，也不會報錯，靜默忽略）。這是 ByteTrack 本身設計上不支援 ReID 的必然結果，不是 bug，但容易誤以為調整這些參數對 ByteTrack 有效。
-2. **`track_buffer` 單位與 BoTSORT 版不同**：本檔案用 `(frame_rate/30.0) × track_buffer`（視為「30fps 基準幀數」），BoTSORT 版用 `track_buffer × frame_rate`（視為「秒」）。同一個設定值在兩個 tracker 下換算出的實際存活幀數差很多，詳細數字對照見 `class_aware_botsort_flow.md` 第六節。若要切換 tracker 類型並沿用同一份 track_config，記得重新確認 `track_buffer` 的實際效果，不要假設兩者等價。
+2. **`track_buffer` 與 BoTSORT 統一為正整數幀數**（ADR 0009）：保留期限直接為 `int(cls_buffer)`，不依影片幀率換算。設定載入時檢查每個已宣告類別，沒有類別設定才使用預設參數；缺少或不是正整數時報錯。凍結方法只有這個敘述與 BoTSORT 對應敘述開放修改，其餘包含 `__init__` 與舊註解都維持原文。

@@ -126,12 +126,12 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 ### Tracker（改動前先讀 `src/safetrajai/tracking/HANDOFF.md` 與同目錄的 `class_aware_*_flow.md`）
 
 - 核心設計：偵測結果**依類別分組後才做三階段匈牙利匹配**，每個類別有自己的 `match_thresh`／`second_match_thresh`／`unconfirmed_match_thresh`／`new_track_thresh`／`track_buffer`／`use_reid`，由 `get_params_for_class()` 查表取得。不能讓不同類別共用同一個 matching matrix。
-- **不可更動（使用者明確指示，見 `docs/adr/0004`）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
-- 已知但不會修正的落差：`track_buffer` 在 BoTSORT 版被當成「秒」（會乘上 frame rate），在 ByteTrack 版被當成 30fps 基準的幀數，同一個數值換算成實際存活時間，兩者差 30 倍。
+- **不可更動（使用者明確指示，見 `docs/adr/0004`）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），除 ADR 0009 明列的兩個 `update()` 保留期限敘述外，方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
+- `track_buffer` 在 BoTSORT 與 ByteTrack 都是正整數保留期限幀數，不依幀率換算（ADR 0009，取代 ADR 0008）。載入設定時每個類別都必須有有效值（沒有該類別設定時取預設參數），浮點值與布林值會報錯。碎片候選窗直接用 `track_buffer + margin_frames`；Re-ID 閘門維持每幀計算。BoTSORT 的 `cls_buffer_sec` 是歷史名稱，方法內舊註解仍依凍結規則保留。
 - GMC 只在 BoTSORT 有作用；ReID 只透過 BoTSORT 的逐類別 `use_reid` 啟用，預設關閉。
   - 啟用條件（spec `reid-model`）：在調參序列上與驗收基準比較，不變差，而且 IDSW 減少或 IDP 上升；只有 AssA／TP 上升、沒有 GT 的類別不啟用；沒有類別符合時全部關閉。目前 `botsort_reid_timm.yaml` 的 6 類都關閉。
   - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在原本的融合下幾乎沒有作用：外觀距離只作用在 IoU 已重疊的配對上。
-  - change `reid-center-gate-fusion` 新增選用的逐類別參數（未設定時距離矩陣逐位元不變）：`reid_center_gate_px`／`reid_center_gate_px_per_s`（只對遺失中的軌跡，以中心距離閘門擴大外觀的作用範圍）與 `appearance_veto_sim`（外觀否決）。在 C000025 上閘門讓 car、scooter 的 IDSW 明顯增加，否決沒有效果。瓶頸在模型：C000025 上同一條 GT 軌跡相隔 ≥ 1 秒的外觀距離，和鄰近的不同物體高度重疊（`fusion_distance_stats.py` 可量測）；下一步應改善模型或資料，而不是再調融合。
+  - change `reid-center-gate-fusion` 新增選用的逐類別參數（未設定時距離矩陣逐位元不變）：`reid_center_gate_px`／`reid_center_gate_px_per_frame`（只對遺失中的軌跡，以中心距離閘門擴大外觀的作用範圍；放寬量是每幀像素 × 遺失幀數，舊名稱 `reid_center_gate_px_per_s` 會報錯）與 `appearance_veto_sim`（外觀否決）。在 C000025 上閘門讓 car、scooter 的 IDSW 明顯增加，否決沒有效果。瓶頸在模型：C000025 上同一條 GT 軌跡相隔 ≥ 1 秒的外觀距離，和鄰近的不同物體高度重疊（`fusion_distance_stats.py` 可量測）；下一步應改善模型或資料，而不是再調融合。
   - 外觀門檻的方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向（容許的外觀距離上限為 1 − 值，值越大越嚴）；新增外觀門檻時沿用這個方向。
   - 啟用 ReID 會讓每幀追蹤時間增加數倍（凍結的 `init_track` 對每個框各呼叫一次 encoder）。
 - 驗證方式：先跑單一序列或目標類別，比較同一基準下的 HOTA、AssA、IDSW，再用疊圖影片檢查 ID switch 和跨類別誤配。
@@ -152,8 +152,10 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
   - `v2`（22,164 個身分、156,141 張）與 `v3` 都可訓練；兩者訓練出的模型在追蹤上表現相同，平手依規則採用 `v3`。`v1` 是審查前的基準，只供比較。
   - 遮擋碎片由 change `merge-occlusion-fragments` 離線合併：只寫 `dataset/reid/fragment_merges.csv`（不動裁切），manifest 以 `--merges` 在排除之後套用。
     - 同一序列、同一類別內，以時間、外插位置加上 DINOv2 外觀門檻（`config/fragment_merge.yaml`，以人工確認校準到 ≥ 95%）一對一配對。
+    - 時間條件以幀數計算（ADR 0009）：幀差 ≤ `track_config` 的逐類別 `track_buffer` ＋ `margin_frames`，不依追蹤器或序列幀率換算，外插用每幀速度。
     - 只靠時間與位置不可靠（C000054 車流密集）。
     - `v3`＝`v2`＋合併（22,223 個身分、156,186 張）。
+    - `v3` 的 `fragment_merges.csv` 是用舊的秒數規則產生的，決定不重建。改用幀數規則後少 2 筆，都在非 10fps 序列，見該 change 的 `verification.md`；下次重建時才套用新規則。
 
 ### Grid search
 

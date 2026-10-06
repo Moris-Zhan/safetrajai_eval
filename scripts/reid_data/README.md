@@ -111,8 +111,10 @@ python scripts/reid_data/build_fragment_merges.py --apply              # 寫 dat
 ```
 
 - 參數在 `config/fragment_merge.yaml`。同一序列、同一類別內，兩段軌跡 A、B 同時符合下列條件才合併：
-  - A 結束後 `track_buffer`（取自 `config/reid_crops.yaml`）＋1 秒內 B 出現。
-  - B 的起點在 A 末段速度外插位置的 2 倍框尺寸以內。
+  - B 的第一張與 A 的最後一張的幀差 > 0，且 ≤ 保留期限幀數＋`margin_frames`（10）。
+    - 保留期限幀數直接取 `config/reid_crops.yaml` 的逐類別 `track_buffer`（ADR 0009），不依追蹤器或序列幀率換算。car 為 30，加上餘裕 10，候選窗為 40 幀。
+    - 設定以多數來源 10fps 換算成 30／20 幀。C000011、C000056（14fps）、C000012（15fps）、C000043（9fps）與原規則有差異，只在之後重新蒐集裁切或重建候選時套用；既有裁切、合併清單與 v3 不重建。
+  - B 的起點在 A 末段每幀速度（最後兩張的幀差）外插位置的 2 倍框尺寸以內。
   - A 最後 3 張與 B 最前 3 張的 DINOv2 特徵平均 cosine ≥ `threshold`。
 - 只靠時間與位置不可靠（C000054 車流密集，同車道下一台車也會落在外插位置附近），是否合併由外觀門檻決定。
 - 一對一配對：相似度由高到低貪婪接受，每段最多一個前段、一個後段；串起來的軌跡沿用首張時間最早那段的身分。
@@ -148,6 +150,7 @@ python scripts/reid_data/build_reid_split.py --version <v> --exclude-cameras C00
 
 - `v2`（156,141 張裁切）：套用自動排除 4,374 列（整段 1,847 個身分、單張 2,527 張）與人工排除 80 列；抽查 223 個身分，各鏡頭的不合格率都不超過 10%（C000054 為 1.7%），沒有鏡頭被排除。細節見 `openspec/changes/archive/*-auto-reid-exclusions/verification.md`。
 - `v3`（156,186 張）＝ `v2` 的規則＋碎片合併（`fragment_merges.csv`：734 個原始身分併成 560 條鏈，門檻 0.911305）。有 282 個身分由合併而來，其中 187 個是 `v2` 沒有的。
+  - 這份合併清單是用修改前的秒數時間條件產生的。改成幀數規則（change `retention-window-frames`）後會少 2 筆，都在非 10fps 序列；決定不重建，下次重建時才套用新規則。
   - 門檻以上的人工確認為 31/32 正確，錯誤合併率的 95% 上限約 16%；錯誤都是 car，集中在 C000033。
   - 細節見 `openspec/changes/archive/*-merge-occlusion-fragments/verification.md`。
 - change `train-reid-timm` 以 `v2`、`v3` 各訓練一個 DINOv2 ViT-S/14 模型（val mAP 0.785／0.783），兩者在 C000025 的追蹤結果相同，依平手規則採用 `v3`（`models/class_reid_weights/dinov2s_v3/`）。
