@@ -151,20 +151,21 @@ def test_veto_only_without_gate_matches_legacy_fusion() -> None:
     assert np.array_equal(matching.fuse_appearance(motion, appearance, mask, 0.8, veto_sim=0.7), expected)
 
 
-def stopped_then_lost_scene(params: dict, record_last: bool = True):
-    """A car tracked at (100,100), lost, then extrapolated to ~(250,100); a same-looking detection at (145,100)."""
+def stopped_then_lost_scene(params: dict, record_last: bool = True, det_x: float = 145.0, vx: float = 30.0,
+                            lost_frames: int = 5, frame_rate: int = 5):
+    """A car tracked at (100,100), lost, then extrapolated by vx px/frame; a same-looking detection at (det_x,100)."""
     feat = unit(np.random.default_rng(1))
-    tracker = make_tracker(frame_id=10, frame_rate=5)
+    tracker = make_tracker(frame_id=10, frame_rate=frame_rate)
     track = make_track(100, 100, 40, 40, feat, frame_id=10)
-    det = make_box(145, 100, 40, 40, feat)
+    det = make_box(det_x, 100, 40, 40, feat)
     if record_last:
         tracker.get_dists_class_aware([track], [det], CAR)
         assert np.allclose(track._reid_last_center, track.xywh[:2])
     track.mark_lost()
-    track.mean[4] = 30.0
-    for _ in range(5):
+    track.mean[4] = vx
+    for _ in range(lost_frames):
         BOTrack.multi_predict([track])
-    tracker.frame_id = 15
+    tracker.frame_id = 10 + lost_frames
     return tracker, track, det
 
 
@@ -186,12 +187,14 @@ def test_lost_track_without_record_uses_predicted_center_only(params) -> None:
     assert tracker.get_dists_class_aware([track], [det], CAR)[0, 0] == pytest.approx(1.0)
 
 
-def test_gate_widens_with_lost_seconds(params) -> None:
-    params.update(reid_center_gate_px=10.0, reid_center_gate_px_per_s=40.0, appearance_thresh=0.8)
-    tracker, track, det = stopped_then_lost_scene(params)
-    # lost 5 frames at 5 fps = 1 s -> radius 50 px >= 45 px to the last center
+@pytest.mark.parametrize("frame_rate", [5, 10])
+def test_gate_widens_with_lost_frames(params, frame_rate) -> None:
+    params.update(reid_center_gate_px=80.0, reid_center_gate_px_per_frame=8.0, appearance_thresh=0.8)
+    # prediction drifts away (vx < 0); the last center is 120 px from the detection
+    tracker, track, det = stopped_then_lost_scene(params, det_x=220.0, vx=-30.0, lost_frames=7, frame_rate=frame_rate)
+    # lost 7 frames -> radius 80 + 8 * 7 = 136 px >= 120 px, regardless of frame rate
     assert tracker.get_dists_class_aware([track], [det], CAR)[0, 0] == pytest.approx(0.0, abs=1e-6)
-    params.update(reid_center_gate_px_per_s=0.0)
+    params.update(reid_center_gate_px_per_frame=5.0)  # 80 + 5 * 7 = 115 px < 120 px
     assert tracker.get_dists_class_aware([track], [det], CAR)[0, 0] == pytest.approx(1.0)
 
 
@@ -204,7 +207,7 @@ def test_use_reid_false_ignores_new_params(params) -> None:
 
 
 @pytest.mark.parametrize(("key", "value"), [
-    ("appearance_veto_sim", 1.5), ("appearance_veto_sim", -0.1), ("reid_center_gate_px_per_s", -1.0),
+    ("appearance_veto_sim", 1.5), ("appearance_veto_sim", -0.1), ("reid_center_gate_px_per_frame", -1.0),
     ("reid_center_gate_px", 0), ("reid_center_gate_px", "80"),
 ])
 def test_invalid_fusion_params_rejected_before_tracking(tmp_path, key, value) -> None:
@@ -231,8 +234,24 @@ def test_valid_fusion_params_load(tmp_path) -> None:
 
     cfg = yaml.safe_load((CONFIG_DIR / "reid_crops.yaml").read_text(encoding="utf-8"))
     cfg["class_tracking"]["class_tracking_params"]["car"].update(
-        reid_center_gate_px=80, reid_center_gate_px_per_s=0, appearance_veto_sim=0.6)
+        reid_center_gate_px=80, reid_center_gate_px_per_frame=0, appearance_veto_sim=0.6)
     path = tmp_path / "ok.yaml"
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
     tracking_config.load_track_config(path)
     assert tracking_config.get_params_for_class(CAR)["reid_center_gate_px"] == 80
+
+
+def test_legacy_per_second_gate_param_rejected(tmp_path) -> None:
+    import yaml
+
+    from safetrajai.paths import CONFIG_DIR
+    from safetrajai.tracking import config as tracking_config
+
+    cfg = yaml.safe_load((CONFIG_DIR / "reid_crops.yaml").read_text(encoding="utf-8"))
+    cfg["class_tracking"]["class_tracking_params"]["car"]["reid_center_gate_px_per_s"] = 40
+    path = tmp_path / "legacy.yaml"
+    path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    before = dict(tracking_config.CLASS_TRACKING_PARAMS)
+    with pytest.raises(ValueError, match=r"car.*reid_center_gate_px_per_s.*reid_center_gate_px_per_frame"):
+        tracking_config.load_track_config(path)
+    assert tracking_config.CLASS_TRACKING_PARAMS == before

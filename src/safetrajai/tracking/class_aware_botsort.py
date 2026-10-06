@@ -499,9 +499,9 @@ class ClassAwareBOTSORT(BOTSORT):
             np.linalg.norm(last[:, None, :] - det_centers[None, :, :], axis=-1),
         )
         is_lost = np.array([t.state == TrackState.Lost for t in tracks])
-        lost_s = np.array([(self.frame_id - t.frame_id) / self.frame_rate if lost else 0.0
-                           for t, lost in zip(tracks, is_lost)])
-        gate_radius = gate_px + params.get('reid_center_gate_px_per_s', 0.0) * lost_s
+        lost_frames = np.array([self.frame_id - t.frame_id if lost else 0
+                                for t, lost in zip(tracks, is_lost)])
+        gate_radius = gate_px + params.get('reid_center_gate_px_per_frame', 0.0) * lost_frames
         return matching.fuse_appearance(dists, emb_dists, dists_mask, appearance_thresh,
                                         is_lost, center_px, gate_radius, veto_sim)
 
