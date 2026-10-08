@@ -154,8 +154,7 @@ def size_bin(boxes: list[dict], pair: tuple[int, int]) -> str:
     return next(name for upper, name in SIZE_BINS if shortest < upper)
 
 
-def _separability(features: np.ndarray, boxes: list[dict], pos: list[tuple[int, int]],
-                  neg: list[tuple[int, int]]) -> dict:
+def _separability(features: np.ndarray, pos: list[tuple[int, int]], neg: list[tuple[int, int]]) -> dict:
     pos_d, neg_d = distances(features, pos), distances(features, neg)
     return {"auc": auc(pos_d, neg_d), "tpr_at_fpr5": tpr_at_fpr5(pos_d, neg_d),
             "positive_pairs": len(pos), "negative_pairs": len(neg)}
@@ -182,7 +181,7 @@ def class_stats(features: np.ndarray, boxes: list[dict], fps_by_seq: dict[str, f
             bin_pos = [p for p in pos if size_bin(boxes, p) == name]
             bin_neg = [p for p in neg if size_bin(boxes, p) == name]
             if bin_pos or bin_neg:
-                by_size[name] = _separability(features, boxes, bin_pos, bin_neg)
+                by_size[name] = _separability(features, bin_pos, bin_neg)
         out[cls] = {
             "positive": summarize(pos_d), "positive_1s": summarize(pos_1s_d), "negative": summarize(neg_d),
             "negative_kind": kind, "retention_frames": retention_by_class[cls], "min_gap_frames": MIN_GAP_FRAMES,

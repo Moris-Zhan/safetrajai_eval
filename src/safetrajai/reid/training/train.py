@@ -20,9 +20,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-
 import yaml
+from torch.utils.data import DataLoader
 
 from safetrajai.paths import CONFIG_DIR, PROJECT_ROOT
 from safetrajai.reid.training.data import (
@@ -164,9 +163,10 @@ def train(cfg: TrainConfig) -> dict:
     loader_kwargs = {"num_workers": cfg.num_workers, "pin_memory": device == "cuda",
                      "persistent_workers": cfg.num_workers > 0}
     train_loader = DataLoader(train_set, batch_sampler=sampler, **loader_kwargs)
-    val_set = ManifestDataset(val_rows, pack, val_labels, cfg.input_size, build_transform(mean, std, train=False))
+    val_transform = build_transform(mean, std, train=False)
+    val_set = ManifestDataset(val_rows, pack, val_labels, cfg.input_size, val_transform)
     val_loader = DataLoader(val_set, batch_size=cfg.eval_batch_size, shuffle=False, **loader_kwargs)
-    reduced_set = ManifestDataset(val_rows, pack, val_labels, cfg.input_size, build_transform(mean, std, train=False),
+    reduced_set = ManifestDataset(val_rows, pack, val_labels, cfg.input_size, val_transform,
                                   downscale=reduced, fixed=True)
     reduced_loader = DataLoader(reduced_set, batch_size=cfg.eval_batch_size, shuffle=False, **loader_kwargs)
 
