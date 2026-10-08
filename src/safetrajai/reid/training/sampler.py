@@ -1,7 +1,8 @@
 """每批 P 個身分 × K 張的取樣（design D1）；身分張數不足 K 時重複取樣。
 
-DistractorPKBatchSampler（change align-reid-training-domain D3）：每批以一個身分為種子，最多
-round(P × fraction) − 1 個名額從種子的干擾物中選，其餘從尚未用過的身分補滿。干擾物＝同序列、同類別，
+DistractorPKBatchSampler（change align-reid-training-domain D3）：每批以本 epoch 未用過的一個身分為種子，最多
+round(P × fraction) − 1 個名額從種子的干擾物中選（先選未用過的，不足再重複選入已用過的；同一批不重複），
+其餘從尚未用過的身分補滿；每個 epoch 的批數不變。干擾物＝同序列、同類別，
 裁切幀範圍（不擴張）至少重疊 cooccur_min_frames 幀，且有一對幀差 ≤ pair_max_frame_gap 的裁切中心距離
 ≤ 半徑；幀範圍不重疊的碎片因此不會被當成負樣本推開。
 """
@@ -144,7 +145,8 @@ class DistractorPKBatchSampler(PKBatchSampler):
         super().__init__(labels, p, k, seed)
         self.distractors = distractors
         self.slots = max(0, round(p * fraction) - 1)
-        self.epoch_stats = {"distractor_identities": 0, "distractor_share": 0.0}
+        self.epoch_stats = {"distractor_identities": 0, "distractor_share": 0.0, "reused_distractors": 0,
+                            "seen_identity_share": 0.0}
 
     def __iter__(self) -> Iterator[list[int]]:
         rng = np.random.default_rng(self.seed + self.epoch)
@@ -152,6 +154,7 @@ class DistractorPKBatchSampler(PKBatchSampler):
         used: set[int] = set()
         cursor = 0
         picked_total = 0
+        reused_total = 0
 
         def next_unused() -> int:
             nonlocal cursor
@@ -164,12 +167,20 @@ class DistractorPKBatchSampler(PKBatchSampler):
             used.add(seed_label)
             chosen = [seed_label]
             if self.slots:
-                candidates = sorted(self.distractors.get(seed_label, frozenset()) - used)
-                if candidates:
-                    picks = rng.permutation(candidates)[:self.slots]
-                    chosen.extend(int(c) for c in picks)
-                    used.update(int(c) for c in picks)
+                others = self.distractors.get(seed_label, frozenset())
+                fresh = sorted(others - used)
+                if fresh:
+                    picks = [int(c) for c in rng.permutation(fresh)[:self.slots]]
+                    chosen.extend(picks)
+                    used.update(picks)
                     picked_total += len(picks)
+                missing = self.slots - (len(chosen) - 1)
+                repeat = sorted(others - set(chosen)) if missing > 0 else []
+                if repeat:
+                    picks = [int(c) for c in rng.permutation(repeat)[:missing]]
+                    chosen.extend(picks)
+                    picked_total += len(picks)
+                    reused_total += len(picks)
             while len(chosen) < self.p:
                 label = next_unused()
                 used.add(label)
@@ -183,4 +194,6 @@ class DistractorPKBatchSampler(PKBatchSampler):
         self.epoch_stats = {
             "distractor_identities": picked_total,
             "distractor_share": round(picked_total / max(1, len(self) * self.p), 4),
+            "reused_distractors": reused_total,
+            "seen_identity_share": round(len(used) / max(1, len(self.by_label)), 4),
         }

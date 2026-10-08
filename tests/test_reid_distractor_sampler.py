@@ -68,7 +68,29 @@ def test_distractor_sampler_batches_are_p_by_k_with_unique_identities() -> None:
         counts = Counter(labels[i] for i in batch)
         assert len(counts) == 8 and set(counts.values()) == {4}
         seen.extend(counts)
-    assert len(seen) == len(set(seen))
+    stats = sampler.epoch_stats
+    assert len(seen) - stats["reused_distractors"] == len(set(seen))
+    assert stats["seen_identity_share"] == round(len(set(seen)) / 80, 4)
+
+
+def test_seeds_are_unique_and_distractors_are_reused() -> None:
+    cluster = frozenset(range(5))
+    labels = [label for label in range(35) for _ in range(2)]
+    distractors = {label: (cluster - {label} if label in cluster else frozenset()) for label in range(35)}
+    sampler = DistractorPKBatchSampler(labels, p=4, k=2, seed=0, distractors=distractors, fraction=1.0)
+    reused_any = False
+    for epoch in range(20):
+        sampler.set_epoch(epoch)
+        seeds = []
+        for batch in sampler:
+            batch_labels = [labels[i] for i in batch[::2]]
+            assert len(set(batch_labels)) == 4
+            seeds.append(batch_labels[0])
+            if batch_labels[0] in cluster:
+                assert set(batch_labels) <= cluster
+        assert len(seeds) == len(set(seeds))
+        reused_any |= sampler.epoch_stats["reused_distractors"] > 0
+    assert reused_any
 
 
 def test_distractor_sampler_fills_half_with_seed_distractors() -> None:
@@ -90,7 +112,7 @@ def test_distractor_sampler_never_falls_back_to_non_distractors() -> None:
     sampler = DistractorPKBatchSampler(labels, p=10, k=2, seed=1, distractors=distractors, fraction=0.5)
     for batch in sampler:
         assert len({labels[i] for i in batch}) == 10
-    assert sampler.epoch_stats["distractor_identities"] <= 2
+    assert sampler.epoch_stats["distractor_identities"] <= 2 * len(sampler)
 
 
 def test_fraction_zero_matches_pk_sampler() -> None:
