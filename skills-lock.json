@@ -152,6 +152,12 @@
       "skillPath": "skills/nature-paper2ppt/SKILL.md",
       "computedHash": "bcaadeb4c3bd7de40065a76241d9ac00c1c5cca2e78be3242d03d72fab19adf6"
     },
+    "nature-shared": {
+      "source": "yuan1z0825/nature-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nature-shared/SKILL.md",
+      "computedHash": "ef1a3a153a628d1690806741f5e9e99a58df1c46b0c52a7c85fd58c482dcb49c"
+    },
     "open-code-review": {
       "source": "alibaba/open-code-review",
       "sourceType": "github",
