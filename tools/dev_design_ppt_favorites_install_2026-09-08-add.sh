@@ -68,3 +68,20 @@ openspec init
 # open-slide - Agent 原生簡報製作框架，以 /create-slide、/slide-authoring、/apply-comments
 # 驅動「產出→點選留言→套用修改」的簡報製作循環工作流程 (ppt簡報製作)
 npx @open-slide/cli init my-slide
+
+# rtk
+# 減少 90% 的 bash 輸出量，藉此降低進入 LLM context 的 token 數
+curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
+rtk --version
+rtk init -g
+
+npx skills add https://github.com/huggingface/skills --skill huggingface-vision-trainer --agent claude-code -y
+npx skills add https://github.com/huggingface/skills --skill huggingface-llm-trainer --agent claude-code -y
+npx skills add https://github.com/huggingface/skills --skill huggingface-papers --agent claude-code -y
+
+
+npx skills add https://github.com/anthropics/claude-plugins-official --skill claude-automation-recommender --agent claude-code -y
+npx skills add anthropics/skills@doc-coauthoring -y
+npx skills add wshobson/agents@architecture-patterns -y
+npx skills add https://github.com/OPPO-Mente-Lab/X-OmniClaw/tree/main/app/src/main/assets/skills/memory-evolution -y
