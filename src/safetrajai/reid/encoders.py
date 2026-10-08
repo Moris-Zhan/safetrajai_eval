@@ -40,13 +40,16 @@ class Custom_ReID:
 
     Two weight formats (spec: reid-model):
       - safetrajai-reid-v1 dict (state_dict + config, loadable with weights_only=True): every box is cropped
-        like ReID, letterboxed, normalized and embedded in one batch; returns one L2-normalized feature per box.
+        tight (no gain, no pad, same as training crops), letterboxed, normalized and embedded in one batch;
+        returns one L2-normalized feature per box. legacy_crop=True restores save_one_box's gain=1.02, pad=10
+        and is only meant for measuring the pre-change reference.
       - legacy full-model pickle (ADR 0001): unchanged behavior, only the first box is embedded.
     """
 
-    def __init__(self, model_path):
+    def __init__(self, model_path, legacy_crop=False):
         """Initialize encoder for re-identification."""
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.crop_kwargs = {"gain": 1.02, "pad": 10} if legacy_crop else {"gain": 1.0, "pad": 0}
         try:
             checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
         except pickle.UnpicklingError:
@@ -71,7 +74,7 @@ class Custom_ReID:
             return self._legacy_call(img, dets)
         size = self.config["input_size"]
         crops = [
-            letterbox(save_one_box(det, img, save=False, BGR=True), size)
+            letterbox(save_one_box(det, img, save=False, BGR=True, **self.crop_kwargs), size)
             for det in xywh2xyxy(torch.from_numpy(dets[:, :4]))
         ]
         batch = torch.from_numpy(np.stack(crops)).to(self.device).permute(0, 3, 1, 2).float().div(255.0)

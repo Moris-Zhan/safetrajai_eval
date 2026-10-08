@@ -1,9 +1,14 @@
-"""外觀距離分布與融合門檻候選（spec: reid-fusion「門檻校準只使用調參序列」，design D4）。
+"""外觀距離分布、外觀分離度與融合門檻候選（spec: reid-fusion「門檻校準只使用調參序列」、
+reid-model「候選模型先通過外觀分離度關卡」；change align-reid-training-domain D4）。
 
-外觀距離＝兩個 L2 正規化特徵的 cosine 距離 / 2（0～1，越小越像），與追蹤器相同。
-- 正樣本：同一條 GT 軌跡、時間間隔 ≥ 1 秒的兩個框。
-- 硬負樣本：同一幀、同類別、中心距離 ≤ 2×該類別 norm_factor 的不同 GT 軌跡；少於 30 對時改用同類別任意
-  不同 GT 軌跡的配對（隨機抽樣），並標示 negative_kind = "any_fallback"。
+外觀距離＝兩個 L2 正規化特徵的 cosine 距離 / 2（0～1，越小越像），與追蹤器相同。所有間隔以幀數表示。
+- 正樣本（positive）：同一條 GT 軌跡、間隔在 MIN_GAP_FRAMES ～ 該類別保留期限幀數（設定檔的 track_buffer，
+  ADR 0009，不換算）之間的兩個框；候選門檻與關卡用這組。positive_1s：間隔 ≥ 1 秒（依幀率換算成幀數），
+  只供與先前的量測比較。
+- 干擾物（negative）：同一幀、同類別、中心距離 ≤ 2×該類別 norm_factor 的不同 GT 軌跡；少於 30 對時改用
+  同類別任意不同 GT 軌跡的配對（隨機抽樣），並標示 negative_kind = "any_fallback"。
+- 外觀分離度：AUC（正樣本距離小於干擾物距離的機率，相同算一半）與 TPR@FPR5%（正樣本距離小於干擾物 P5 的
+  比例）；另依配對中較小的框的最短邊分 <16、16-32、>=32 回報，只供參考。
 只接受調參序列（C000025 的 145630、150634 時段）；保留序列或其他序列一律拒絕。
 """
 
@@ -15,6 +20,7 @@ from itertools import combinations
 from pathlib import Path
 
 import numpy as np
+from scipy.stats import rankdata
 
 from safetrajai.classes import CLASS_NAMES
 
@@ -22,6 +28,12 @@ TUNING_STAMPS = ("20251209145630", "20251209150634")
 MIN_HARD_NEGATIVES = 30
 MAX_SAMPLED_PAIRS = 20000
 PERCENTILES = (1, 5, 50, 95, 99, 99.9)
+MIN_GAP_FRAMES = 5
+SIZE_BINS = ((16.0, "<16"), (32.0, "16-32"), (float("inf"), ">=32"))
+GATE_CLASSES = ("car", "scooter")
+MIN_IMPROVEMENT = {"auc": 0.01, "tpr_at_fpr5": 0.02}
+MAX_OTHER_AUC_DROP = 0.02
+EPS = 1e-9
 
 
 def check_tuning_sequences(seq_names: list[str]) -> None:
@@ -56,6 +68,31 @@ def positive_pairs(boxes: list[dict], fps_by_seq: dict[str, float], min_gap_s: f
     for (seq, _), idx in by_track.items():
         min_gap = min_gap_s * fps_by_seq[seq]
         pairs.extend((a, b) for a, b in combinations(idx, 2) if abs(boxes[a]["frame"] - boxes[b]["frame"]) >= min_gap)
+    return pairs
+
+
+def retention_frames(config: dict) -> dict[str, int]:
+    """Per-class retention in frames = the scenario's track_buffer as is (ADR 0009; no tracker/fps conversion)."""
+    params = config["class_tracking"]["class_tracking_params"]
+    out = {}
+    for cls, p in params.items():
+        value = p.get("track_buffer")
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{cls} 的 track_buffer 必須是正整數幀數：{value!r}")
+        out[cls] = value
+    return out
+
+
+def positive_pairs_in_window(boxes: list[dict], min_gap_frames: int,
+                             retention_by_class: dict[str, int]) -> list[tuple[int, int]]:
+    by_track: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for i, b in enumerate(boxes):
+        by_track[(b["seq"], b["gt_id"])].append(i)
+    pairs = []
+    for idx in by_track.values():
+        max_gap = retention_by_class[boxes[idx[0]]["class"]]
+        pairs.extend((a, b) for a, b in combinations(idx, 2)
+                     if min_gap_frames <= abs(boxes[a]["frame"] - boxes[b]["frame"]) <= max_gap)
     return pairs
 
 
@@ -97,22 +134,97 @@ def summarize(values: np.ndarray) -> dict:
     return {"pairs": int(len(values)), **{f"p{p:g}": round(float(np.percentile(values, p)), 4) for p in PERCENTILES}}
 
 
+def auc(positive: np.ndarray, negative: np.ndarray) -> float | None:
+    """P(positive distance < negative distance), ties count half (Mann-Whitney U via average ranks)."""
+    if len(positive) == 0 or len(negative) == 0:
+        return None
+    ranks = rankdata(np.concatenate([positive, negative]))
+    u_negative = ranks[len(positive):].sum() - len(negative) * (len(negative) + 1) / 2
+    return round(float(u_negative / (len(positive) * len(negative))), 4)
+
+
+def tpr_at_fpr5(positive: np.ndarray, negative: np.ndarray) -> float | None:
+    if len(positive) == 0 or len(negative) == 0:
+        return None
+    return round(float(np.mean(positive < np.percentile(negative, 5))), 4)
+
+
+def size_bin(boxes: list[dict], pair: tuple[int, int]) -> str:
+    shortest = min(min(boxes[i]["w"], boxes[i]["h"]) for i in pair)
+    return next(name for upper, name in SIZE_BINS if shortest < upper)
+
+
+def _separability(features: np.ndarray, boxes: list[dict], pos: list[tuple[int, int]],
+                  neg: list[tuple[int, int]]) -> dict:
+    pos_d, neg_d = distances(features, pos), distances(features, neg)
+    return {"auc": auc(pos_d, neg_d), "tpr_at_fpr5": tpr_at_fpr5(pos_d, neg_d),
+            "positive_pairs": len(pos), "negative_pairs": len(neg)}
+
+
 def class_stats(features: np.ndarray, boxes: list[dict], fps_by_seq: dict[str, float],
-                radius_by_class: dict[str, float], seed: int) -> dict:
-    positives = positive_pairs(boxes, fps_by_seq)
+                radius_by_class: dict[str, float], seed: int, retention_by_class: dict[str, int]) -> dict:
+    positives_1s = positive_pairs(boxes, fps_by_seq)
+    positives = positive_pairs_in_window(boxes, MIN_GAP_FRAMES, retention_by_class)
     hard = hard_negative_pairs(boxes, radius_by_class)
     track_keys = [(b["seq"], b["gt_id"]) for b in boxes]
     out = {}
     for cls in sorted({b["class"] for b in boxes}):
         pos = [p for p in positives if boxes[p[0]]["class"] == cls]
+        pos_1s = [p for p in positives_1s if boxes[p[0]]["class"] == cls]
         neg = [p for p in hard if boxes[p[0]]["class"] == cls]
         kind = "hard"
         if len(neg) < MIN_HARD_NEGATIVES:
             neg = any_negative_pairs([i for i, b in enumerate(boxes) if b["class"] == cls], track_keys, seed)
             kind = "any_fallback"
-        out[cls] = {"positive": summarize(distances(features, pos)), "negative": summarize(distances(features, neg)),
-                    "negative_kind": kind}
+        pos_d, pos_1s_d, neg_d = distances(features, pos), distances(features, pos_1s), distances(features, neg)
+        by_size = {}
+        for _, name in SIZE_BINS:
+            bin_pos = [p for p in pos if size_bin(boxes, p) == name]
+            bin_neg = [p for p in neg if size_bin(boxes, p) == name]
+            if bin_pos or bin_neg:
+                by_size[name] = _separability(features, boxes, bin_pos, bin_neg)
+        out[cls] = {
+            "positive": summarize(pos_d), "positive_1s": summarize(pos_1s_d), "negative": summarize(neg_d),
+            "negative_kind": kind, "retention_frames": retention_by_class[cls], "min_gap_frames": MIN_GAP_FRAMES,
+            "auc": auc(pos_d, neg_d), "tpr_at_fpr5": tpr_at_fpr5(pos_d, neg_d),
+            "auc_1s": auc(pos_1s_d, neg_d), "tpr_at_fpr5_1s": tpr_at_fpr5(pos_1s_d, neg_d),
+            "by_size": by_size,
+        }
     return out
+
+
+def noise_floor(seed_model: dict, base_model: dict) -> dict:
+    """Per-class |difference| of AUC and TPR@FPR5% between two models trained with only the seed changed."""
+    return {cls: {m: round(abs(seed_model[cls][m] - base_model[cls][m]), 4) for m in MIN_IMPROVEMENT}
+            for cls in GATE_CLASSES}
+
+
+def separability_gate(candidate: dict, reference: dict, noise: dict) -> dict:
+    """Spec reid-model gate; inputs are per-class tuning stats (class -> {auc, tpr_at_fpr5, negative_kind})."""
+    reasons = []
+    min_improvement = {cls: {m: round(max(base, 2 * noise[cls][m]), 4) for m, base in MIN_IMPROVEMENT.items()}
+                       for cls in GATE_CLASSES}
+    for cls in GATE_CLASSES:
+        for metric, need in min_improvement[cls].items():
+            gain = candidate[cls][metric] - reference[cls][metric]
+            if gain + EPS < need:
+                reasons.append(f"{cls} {metric} 改善 {gain:+.4f} < 最小改善量 {need:.4f}")
+    for cls, ref in reference.items():
+        if cls in GATE_CLASSES or cls not in candidate:
+            continue
+        if ref.get("negative_kind") != "hard" or candidate[cls].get("negative_kind") != "hard":
+            continue
+        drop = ref["auc"] - candidate[cls]["auc"]
+        if drop > MAX_OTHER_AUC_DROP + EPS:
+            reasons.append(f"{cls} AUC 下降 {drop:.4f} > {MAX_OTHER_AUC_DROP}")
+    return {"passed": not reasons, "reasons": reasons, "min_improvement": min_improvement,
+            "mean_auc": round(float(np.mean([candidate[c]["auc"] for c in GATE_CLASSES])), 4)}
+
+
+def select_best(results: dict[str, dict]) -> str | None:
+    """Among passing candidates, the one with the highest car/scooter mean AUC; None when nobody passes."""
+    passed = {name: r for name, r in results.items() if r["passed"]}
+    return max(passed, key=lambda name: passed[name]["mean_auc"]) if passed else None
 
 
 def candidates(stats: dict) -> dict:

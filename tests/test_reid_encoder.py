@@ -50,21 +50,39 @@ def test_new_format_does_not_need_pickle_classes(new_weight, monkeypatch) -> Non
     Custom_ReID(str(new_weight))
 
 
-def test_crop_coordinates_match_reid(new_weight, monkeypatch) -> None:
+def record_crops(monkeypatch) -> list:
     calls = []
     real = encoders.save_one_box
 
     def recording(xyxy, im, **kwargs):
-        calls.append((xyxy.clone(), kwargs))
-        return real(xyxy, im, **kwargs)
+        crop = real(xyxy, im, **kwargs)
+        calls.append((xyxy.clone(), kwargs, crop))
+        return crop
 
     monkeypatch.setattr(encoders, "save_one_box", recording)
-    Custom_ReID(str(new_weight))(frame(), DETS)
+    return calls
+
+
+def test_crop_is_tight_box(new_weight, monkeypatch) -> None:
+    calls = record_crops(monkeypatch)
+    image = frame()
+    Custom_ReID(str(new_weight))(image, DETS)
     expected = xywh2xyxy(torch.from_numpy(DETS[:, :4]))
     assert len(calls) == 3
-    for (xyxy, kwargs), want in zip(calls, expected):
+    for (xyxy, kwargs, _), want in zip(calls, expected):
         assert torch.equal(xyxy, want)
-        assert set(kwargs) == {"save", "BGR"}
+        assert kwargs["gain"] == 1.0 and kwargs["pad"] == 0
+    assert np.array_equal(calls[0][2], image[50:110, 80:120])
+
+
+def test_legacy_crop_keeps_gain_and_pad(new_weight, monkeypatch) -> None:
+    calls = record_crops(monkeypatch)
+    Custom_ReID(str(new_weight), legacy_crop=True)(frame(), DETS)
+    assert len(calls) == 3
+    for _, kwargs, _ in calls:
+        assert kwargs["gain"] == 1.02 and kwargs["pad"] == 10
+    height, width = calls[0][2].shape[:2]
+    assert height > 60 and width > 40
 
 
 def test_legacy_full_model_pickle_still_loads(tmp_path) -> None:

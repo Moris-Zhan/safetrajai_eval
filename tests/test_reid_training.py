@@ -176,3 +176,155 @@ def test_pack_reuses_other_version_and_reads_only_missing(tmp_path, monkeypatch)
     verify_pack(pack, rows)
     for row in rows:
         assert np.array_equal(pack.read_bgr(row["crop_path"]), cv2.imread(str(crop_root / row["crop_path"])))
+
+
+def record_letterbox_inputs(monkeypatch) -> list:
+    from safetrajai.reid.training import data
+
+    shapes = []
+    real = data.letterbox
+    monkeypatch.setattr(data, "letterbox", lambda bgr, size: shapes.append(bgr.shape[:2]) or real(bgr, size))
+    return shapes
+
+
+def synthetic_pack(tmp_path: Path) -> tuple[list[dict], CropPack]:
+    manifest, crop_root = write_synthetic_version(tmp_path, IDENTITIES)
+    rows = read_manifest(manifest)
+    pack_manifest(rows, crop_root, tmp_path / "pack", "vtest")
+    return rows, CropPack(tmp_path / "pack")
+
+
+def test_downscale_shrinks_shortest_side_into_range() -> None:
+    from safetrajai.reid.training.data import downscale_to_side
+
+    image = np.zeros((90, 60, 3), dtype=np.uint8)
+    assert downscale_to_side(image, 20).shape[:2] == (30, 20)
+    small = np.zeros((30, 12, 3), dtype=np.uint8)
+    assert downscale_to_side(small, 20) is small
+
+
+def test_dataset_downscale_selected_crop_lands_in_range(tmp_path, monkeypatch) -> None:
+    from safetrajai.reid.training.data import Downscale
+
+    rows, pack = synthetic_pack(tmp_path)
+    shapes = record_letterbox_inputs(monkeypatch)
+    dataset = ManifestDataset(rows, pack, identity_labels(rows), 32, build_transform([0.5] * 3, [0.5] * 3, train=False),
+                              downscale=Downscale(prob=1.0, min_side=8, max_side=12))
+    for i in range(len(dataset)):
+        dataset[i]
+    assert len(shapes) == len(rows)
+    assert all(8 <= min(shape) <= 12 for shape in shapes)
+
+
+def test_dataset_downscale_never_enlarges(tmp_path, monkeypatch) -> None:
+    from safetrajai.reid.training.data import Downscale
+
+    rows, pack = synthetic_pack(tmp_path)
+    shapes = record_letterbox_inputs(monkeypatch)
+    dataset = ManifestDataset(rows, pack, identity_labels(rows), 32, build_transform([0.5] * 3, [0.5] * 3, train=False),
+                              downscale=Downscale(prob=1.0, min_side=30, max_side=40))
+    for i in range(len(dataset)):
+        dataset[i]
+    assert shapes == [pack.read_bgr(r["crop_path"]).shape[:2] for r in rows]
+
+
+def test_dataset_downscale_prob_zero_matches_plain(tmp_path) -> None:
+    from safetrajai.reid.training.data import Downscale
+
+    rows, pack = synthetic_pack(tmp_path)
+    transform = build_transform([0.5] * 3, [0.5] * 3, train=False)
+    plain = ManifestDataset(rows, pack, identity_labels(rows), 32, transform)
+    off = ManifestDataset(rows, pack, identity_labels(rows), 32, transform,
+                          downscale=Downscale(prob=0.0, min_side=8, max_side=12))
+    for i in range(len(rows)):
+        assert torch.equal(plain[i][0], off[i][0])
+
+
+def test_fixed_downscale_val_is_deterministic(tmp_path, monkeypatch) -> None:
+    from safetrajai.reid.training.data import Downscale
+
+    rows, pack = synthetic_pack(tmp_path)
+    shapes = record_letterbox_inputs(monkeypatch)
+    dataset = ManifestDataset(rows, pack, identity_labels(rows), 32, build_transform([0.5] * 3, [0.5] * 3, train=False),
+                              downscale=Downscale(prob=1.0, min_side=8, max_side=20), fixed=True)
+    first = [dataset[i][0] for i in range(len(rows))]
+    second = [dataset[i][0] for i in range(len(rows))]
+    assert all(torch.equal(a, b) for a, b in zip(first, second))
+    assert shapes[:len(rows)] == shapes[len(rows):]
+    assert all(8 <= min(shape) <= 20 for shape in shapes)
+    assert len({min(shape) for shape in shapes}) > 1
+
+
+def write_synthetic_index(tmp_path: Path, manifest: Path, crop_root: Path) -> tuple[Path, Path]:
+    """Index rows for every manifest crop (identities of one class overlap in time and sit 50px apart)."""
+    from collections import defaultdict as dd
+
+    from safetrajai.reid.dataset_index import index_path, write_index
+    from safetrajai.reid.training.sampler import sequence_from_crop_path
+
+    by_sequence = dd(list)
+    for row in read_manifest(manifest):
+        sequence = sequence_from_crop_path(row["crop_path"])
+        track = int(row["identity"].rsplit("_track", 1)[1])
+        frame = int(Path(row["crop_path"]).stem) * 5 + 1
+        x = 100 + 50 * track
+        by_sequence[sequence].append({
+            "crop_path": row["crop_path"], "identity": row["identity"], "class": row["class"], "camera": "C000054",
+            "sequence": sequence, "date": "20250623", "frame": frame, "time_s": frame / 10,
+            "x1": x, "y1": 100, "x2": x + 20, "y2": 140, "score": 0.9,
+        })
+    for sequence, rows in by_sequence.items():
+        write_index(index_path(crop_root, sequence), rows)
+    roi_dir = tmp_path / "roi"
+    roi_dir.mkdir()
+    (roi_dir / "C000054.yaml").write_text("camera: C000054\nimage_size: [1280, 720]\npolygon: []\n")
+    track_config = tmp_path / "track.yaml"
+    track_config.write_text("class_tracking:\n  class_tracking_params:\n"
+                            "    car: {norm_factor: 80.0}\n    scooter: {norm_factor: 200.0}\n")
+    return roi_dir, track_config
+
+
+def test_train_with_downscale_and_distractors_records_settings(tmp_path) -> None:
+    import json
+
+    from safetrajai.reid.encoders import Custom_ReID
+
+    manifest, crop_root = write_synthetic_version(tmp_path, IDENTITIES)
+    roi_dir, track_config = write_synthetic_index(tmp_path, manifest, crop_root)
+    common = ["--version", "vtest", "--splits-root", str(tmp_path / "splits"), "--pack-dir", str(tmp_path / "pack")]
+    run_script("pack_manifest.py", *common, "--crop-root", str(crop_root))
+
+    out_dir = tmp_path / "class_reid_weights" / "both"
+    run_script("train_reid.py", *common, "--output", str(out_dir), "--arch", "resnet18", "--no-pretrained",
+               "--input-size", "32", "--epochs", "1", "--p", "2", "--k", "2", "--workers", "0",
+               "--downscale-prob", "0.5", "--downscale-min", "8", "--downscale-max", "16",
+               "--distractor-fraction", "1.0", "--cooccur-min-frames", "5", "--pair-max-frame-gap", "5",
+               "--crop-root", str(crop_root), "--roi-dir", str(roi_dir), "--track-config", str(track_config))
+
+    record = json.loads((out_dir / "train_record.json").read_text(encoding="utf-8"))
+    assert record["resolution_augmentation"] == {"enabled": True, "prob": 0.5, "min_side": 8, "max_side": 16}
+    sampling = record["distractor_sampling"]
+    assert sampling["enabled"] and sampling["fraction"] == 1.0
+    assert sampling["cooccur_min_frames"] == 5 and sampling["pair_max_frame_gap"] == 5
+    assert sampling["radius_px"]["car@C000054"] == 320.0
+    assert sampling["identities_with_distractors"] > 0
+    assert record["select_by"] == "reduced_val"
+    epoch = record["epochs"][0]
+    assert epoch["val"]["overall"]["mAP"] is not None and epoch["reduced_val"]["overall"]["mAP"] is not None
+    assert epoch["distractor"]["distractor_identities"] > 0
+    assert record["best_reduced_val"] == epoch["reduced_val"]
+
+    encoder = Custom_ReID(str(out_dir / "model.pt"))
+    frame = np.random.default_rng(0).integers(0, 255, (120, 160, 3), dtype=np.uint8)
+    assert len(encoder(frame, np.array([[40.0, 40.0, 20.0, 30.0, 0]]))) == 1
+
+
+def test_select_epoch_by_reduced_val() -> None:
+    from safetrajai.reid.training.train import TrainConfig, selection_map
+
+    raw = {epoch: 0.5 for epoch in range(1, 31)} | {20: 0.9}
+    reduced = {epoch: 0.3 for epoch in range(1, 31)} | {25: 0.6}
+    default = TrainConfig(manifest="", pack_dir="", output_dir="", arch="x").select_by
+    best = max(raw, key=lambda e: selection_map(raw[e], reduced[e], default))
+    assert best == 25
+    assert max(raw, key=lambda e: selection_map(raw[e], reduced[e], "val")) == 20

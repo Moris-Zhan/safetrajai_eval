@@ -6,13 +6,19 @@
   - pack.json    資料集版本、manifest 列數、打包張數、位元組數、從磁碟讀取張數、複用的版本、耗時；
                  最後寫出，存在即代表打包完成
 訓練與 val 只經由快取讀取影像，快取只含 manifest 列出的裁切。
+
+解析度增強（change align-reid-training-domain D1）：letterbox 之前把裁切等比例縮小到最短邊落在
+[min_side, max_side]；訓練時以機率 prob 隨機抽，縮小版 val（fixed=True）每張裁切依 crop_path 雜湊固定。
 """
 
 from __future__ import annotations
 
 import csv
 import json
+import random
 import time
+import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -128,21 +134,64 @@ def build_transform(mean: list[float], std: list[float], train: bool) -> v2.Comp
     return v2.Compose(steps)
 
 
+@dataclass(frozen=True)
+class Downscale:
+    prob: float
+    min_side: int
+    max_side: int
+
+
+def downscale_to_side(bgr: np.ndarray, side: int) -> np.ndarray:
+    """Shrinks so the shortest side equals side; crops already at or below side are returned unchanged."""
+    height, width = bgr.shape[:2]
+    shortest = min(height, width)
+    if shortest <= side:
+        return bgr
+    scale = side / shortest
+    size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(bgr, size, interpolation=cv2.INTER_AREA)
+
+
+def fixed_side(crop_path: str, downscale: Downscale) -> int:
+    rng = np.random.default_rng(zlib.crc32(crop_path.encode("utf-8")))
+    return int(rng.integers(downscale.min_side, downscale.max_side + 1))
+
+
 class ManifestDataset(Dataset):
-    """Items are (image tensor, label, row index); images come only from the pack."""
+    """Items are (image tensor, label, row index); images come only from the pack.
+
+    downscale: optional resolution augmentation applied before letterbox; fixed=True makes it deterministic per
+    crop_path and always applied (reduced-resolution val).
+    """
 
     def __init__(self, rows: list[dict], pack: CropPack, labels: dict[tuple[str, str], int],
-                 input_size: int, transform: v2.Compose):
+                 input_size: int, transform: v2.Compose, downscale: Downscale | None = None, fixed: bool = False):
         self.rows = rows
         self.pack = pack
         self.labels = [labels[(r["class"], r["identity"])] for r in rows]
         self.input_size = input_size
         self.transform = transform
+        self.downscale = downscale
+        self.fixed = fixed
 
     def __len__(self) -> int:
         return len(self.rows)
 
+    def _target_side(self, crop_path: str) -> int | None:
+        if self.downscale is None:
+            return None
+        if self.fixed:
+            return fixed_side(crop_path, self.downscale)
+        if random.random() < self.downscale.prob:
+            return random.randint(self.downscale.min_side, self.downscale.max_side)
+        return None
+
     def __getitem__(self, i: int):
-        rgb = letterbox(self.pack.read_bgr(self.rows[i]["crop_path"]), self.input_size)
+        crop_path = self.rows[i]["crop_path"]
+        bgr = self.pack.read_bgr(crop_path)
+        side = self._target_side(crop_path)
+        if side is not None:
+            bgr = downscale_to_side(bgr, side)
+        rgb = letterbox(bgr, self.input_size)
         image = self.transform(torch.from_numpy(rgb).permute(2, 0, 1).contiguous())
         return image, self.labels[i], i
