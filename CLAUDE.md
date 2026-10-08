@@ -59,9 +59,12 @@ python scripts/reid_data/build_reid_split.py --version <v> [--exclude-cameras <c
 
 # Re-ID 模型訓練：manifest → 本機快取（只讀一次掛載磁碟）→ 訓練 → val 評估
 python scripts/reid_train/pack_manifest.py --version <v> [--reuse-version <v0>]   # ~/.cache/safetrajai/reid_packs/<v>/；--reuse-version 只補讀缺少的裁切
-python scripts/reid_train/train_reid.py --version <v> --output models/class_reid_weights/<run>  # 背景執行，30 epoch 約 25～45 分鐘
+python scripts/reid_train/train_reid.py --version <v> --output models/class_reid_weights/<run>  # 背景執行，30 epoch 約 25～45 分鐘（單獨一個任務）
+#   [--downscale-prob 0.5]（解析度增強，最短邊 --downscale-min/--downscale-max 預設 8～40px）
+#   [--distractor-fraction 0.5]（干擾物取樣，讀 crops/_index/ 與 config/roi/）  [--select-by reduced_val|val]（預設縮小版 val）
 python scripts/reid_train/eval_reid.py --weights models/class_reid_weights/<run>/model.pt --version <v>  # val mAP／Rank-1，只作參考
-python scripts/reid_train/fusion_distance_stats.py --out <json>   # 調參序列 GT 的外觀距離分布與融合門檻候選（拒絕保留序列）
+python scripts/reid_train/fusion_distance_stats.py --out <json>   # 調參序列 GT 的外觀距離分布、AUC、TPR@FPR5%、融合門檻候選（拒絕保留序列）
+#   [--legacy-crop]（量測參考用的舊裁切）  [--reference <json> --noise-reference <seed_json> <base_json>]（外觀分離度關卡判定）
 
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
@@ -132,6 +135,7 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
   - 啟用條件（spec `reid-model`）：在調參序列上與驗收基準比較，不變差，而且 IDSW 減少或 IDP 上升；只有 AssA／TP 上升、沒有 GT 的類別不啟用；沒有類別符合時全部關閉。目前 `botsort_reid_timm.yaml` 的 6 類都關閉。
   - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在原本的融合下幾乎沒有作用：外觀距離只作用在 IoU 已重疊的配對上。
   - change `reid-center-gate-fusion` 新增選用的逐類別參數（未設定時距離矩陣逐位元不變）：`reid_center_gate_px`／`reid_center_gate_px_per_frame`（只對遺失中的軌跡，以中心距離閘門擴大外觀的作用範圍；放寬量是每幀像素 × 遺失幀數，舊名稱 `reid_center_gate_px_per_s` 會報錯）與 `appearance_veto_sim`（外觀否決）。在 C000025 上閘門讓 car、scooter 的 IDSW 明顯增加，否決沒有效果。瓶頸在模型：C000025 上同一條 GT 軌跡相隔 ≥ 1 秒的外觀距離，和鄰近的不同物體高度重疊（`fusion_distance_stats.py` 可量測）；下一步應改善模型或資料，而不是再調融合。
+  - change `align-reid-training-domain` 依此在訓練與推論端對齊評估鏡頭（解析度增強、干擾物取樣、推論改用緊框），並在追蹤驗收前加上外觀分離度關卡（見下方 Re-ID）。四個候選都沒有通過關卡，沒有做追蹤驗收，config 不變。
   - 外觀門檻的方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向（容許的外觀距離上限為 1 − 值，值越大越嚴）；新增外觀門檻時沿用這個方向。
   - 啟用 ReID 會讓每幀追蹤時間增加數倍（凍結的 `init_track` 對每個框各呼叫一次 encoder）。
 - 驗證方式：先跑單一序列或目標類別，比較同一基準下的 HOTA、AssA、IDSW，再用疊圖影片檢查 ID switch 和跨類別誤配。
@@ -139,8 +143,12 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 ### Re-ID
 
 - **`Custom_ReID` 支援兩種權重格式**（`models/class_reid_weights/` 之下的路徑才會走 `Custom_ReID`）：
-  - 新格式 `safetrajai-reid-v1`（`scripts/reid_train/train_reid.py` 產生的 `model.pt`）：state_dict＋設定（`arch`、`embed_dim`、`input_size`、`mean`、`std`、`manifest_version`），以 `weights_only=True` 讀取、不依賴 pickle 類別路徑；每個框以與 `ReID` 相同的 `xywh2xyxy`＋`save_one_box` 裁切，letterbox 到 `input_size`、正規化、批次推論，回傳每個框一個 L2 正規化特徵。同目錄的 `train_record.json` 記錄資料集版本、超參數與種子。
+  - 新格式 `safetrajai-reid-v1`（`scripts/reid_train/train_reid.py` 產生的 `model.pt`）：state_dict＋設定（`arch`、`embed_dim`、`input_size`、`mean`、`std`、`manifest_version`），以 `weights_only=True` 讀取、不依賴 pickle 類別路徑；每個框以 `xywh2xyxy` 後的框**緊框**裁切（`save_one_box` 的 `gain=1.0, pad=0`，與訓練裁切一致；change `align-reid-training-domain`），letterbox 到 `input_size`、正規化、批次推論，回傳每個框一個 L2 正規化特徵。`Custom_ReID(..., legacy_crop=True)` 恢復舊的 `gain=1.02, pad=10`，只供 `fusion_distance_stats.py --legacy-crop` 量測參考，情境設定無法開啟。同目錄的 `train_record.json` 記錄資料集版本、超參數、種子、解析度增強與干擾物取樣設定，以及每個 epoch 的原始 val 與縮小版 val 的 mAP。
   - 目前的模型：`models/class_reid_weights/dinov2s_v3/model.pt`（DINOv2 ViT-S/14，`v3`，val mAP 0.783）；`dinov2s_v2` 是 `v2` 的對照組。情境設定 `config/botsort_reid_timm.yaml`（R1 追蹤參數；目前 6 類 ReID 都關閉，等同驗收基準，檔頭記錄重新驗收的方式）。
+  - 實驗權重（change `align-reid-training-domain`，都**未通過**外觀分離度關卡，不可用於追蹤設定）：`dinov2s_v3_lowres`（解析度增強）、`dinov2s_v3_distractor`（干擾物取樣）、`dinov2s_v3_both`（兩者）、`dinov2s_v3_seed1`（只換種子、`--select-by val`，用來估雜訊底線）。
+- **外觀分離度關卡**（spec `reid-model`）：新模型或新裁切方式在追蹤驗收前，先以 `fusion_distance_stats.py` 在調參序列上量測。正樣本是同一條 GT 軌跡、間隔 5 幀～該類別 `track_buffer` 幀；負樣本是干擾物（同幀、同類別、中心距離 ≤ 2×`norm_factor`）。參考是 `dinov2s_v3` 舊裁切；car 與 scooter 的 AUC、TPR@FPR5% 都要高出最小改善量（AUC 0.01、TPR 0.02 與 2 倍雜訊底線取大者），其他有 ≥ 30 對干擾物的類別 AUC 下降 ≤ 0.02。val mAP 不能當關卡依據。
+  - 結果：lowres／both 讓 car、scooter 大幅改善（both：car AUC +0.031、TPR +0.145），但 small_truck AUC 下降約 0.03（只有 43 對干擾物，下降集中在最短邊 < 16px 的 13 對），依規則不通過；distractor 與緊框 `dinov2s_v3` 的 car 未達最小改善量（TPR@FPR5% 反而下降）。結果不代表追蹤 IDSW 會改善（沒有做追蹤驗收）。下一步可另開 change 補 small_truck 資料，或事先訂定各尺寸組的樣本充分性門檻；不要看到結果才放寬規則。
+  - 訓練新參數預設關閉，但 `--select-by` 預設是縮小版 val；要重現 `dinov2s_v3` 的設定時加 `--select-by val`。干擾物取樣比例受干擾物數限制（中位數 5），P=32 的理論上限約 0.196，實測約 0.18。
   - 舊格式：完整模型 pickle，行為不變（只處理第一個框）。
 - **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：舊格式的 `best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。

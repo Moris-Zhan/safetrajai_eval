@@ -19,10 +19,10 @@
 
 ## 3. 追蹤驗收（只在 2.4 有候選通過時）
 
-- [ ] 3.1 依 D6 以通過的候選跑調參序列的 40 組網格與同批基準，逐類別依 `reid-model` spec 判定並記錄每幀追蹤時間；沒有候選通過關卡時記錄跳過；結果寫入 `verification.md`
-- [ ] 3.2 有類別通過時做合併驗證與保留序列，更新 `config/botsort_reid_timm.yaml`；沒有類別通過時 config 維持全部關閉；以 smoke 的 config 檢查通過、`config/botsort_reid.yaml` 與 golden configs 未改變作為驗證；結果寫入 `verification.md`
+- [x] 3.1 依 D6 以通過的候選跑調參序列的 40 組網格與同批基準，逐類別依 `reid-model` spec 判定並記錄每幀追蹤時間；沒有候選通過關卡時記錄跳過；結果寫入 `verification.md`
+- [x] 3.2 有類別通過時做合併驗證與保留序列，更新 `config/botsort_reid_timm.yaml`；沒有類別通過時 config 維持全部關閉；以 smoke 的 config 檢查通過、`config/botsort_reid.yaml` 與 golden configs 未改變作為驗證；結果寫入 `verification.md`
 
 ## 4. 文件與收尾
 
-- [ ] 4.1 更新 CLAUDE.md 的 Re-ID 章節（推論端緊框、訓練新參數與指令、外觀分離度關卡、結果）與 `src/safetrajai/reid/HANDOFF.md`
-- [ ] 4.2 撰寫 `verification.md` 的總結；跑 `pytest` 與 `openspec validate align-reid-training-domain --strict` 確認通過
+- [x] 4.1 更新 CLAUDE.md 的 Re-ID 章節（推論端緊框、訓練新參數與指令、外觀分離度關卡、結果）與 `src/safetrajai/reid/HANDOFF.md`
+- [x] 4.2 撰寫 `verification.md` 的總結；跑 `pytest` 與 `openspec validate align-reid-training-domain --strict` 確認通過
