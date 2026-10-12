@@ -7,6 +7,9 @@ reid-model「候選模型先通過外觀分離度關卡」；change align-reid-t
   只供與先前的量測比較。
 - 干擾物（negative）：同一幀、同類別、中心距離 ≤ 2×該類別 norm_factor 的不同 GT 軌跡；少於 30 對時改用
   同類別任意不同 GT 軌跡的配對（隨機抽樣），並標示 negative_kind = "any_fallback"。
+  negative_object_pairs＝干擾物來自的不同 GT 物體配對數（同一組物體的多幀只算一組；退回時為 0），關卡以它
+  判斷證據是否足夠（change separability-gate-object-pairs）。
+- GT id < 0 的框沒有身分，量測前以 drop_unlabeled 排除，不參與任何配對。
 - 外觀分離度：AUC（正樣本距離小於干擾物距離的機率，相同算一半）與 TPR@FPR5%（正樣本距離小於干擾物 P5 的
   比例）；另依配對中較小的框的最短邊分 <16、16-32、>=32 回報，只供參考。
 只接受調參序列（C000025 的 145630、150634 時段）；保留序列或其他序列一律拒絕。
@@ -33,6 +36,7 @@ SIZE_BINS = ((16.0, "<16"), (32.0, "16-32"), (float("inf"), ">=32"))
 GATE_CLASSES = ("car", "scooter")
 MIN_IMPROVEMENT = {"auc": 0.01, "tpr_at_fpr5": 0.02}
 MAX_OTHER_AUC_DROP = 0.02
+MIN_OBJECT_PAIRS = 10
 EPS = 1e-9
 
 
@@ -58,6 +62,20 @@ def read_mot_gt(path: Path, seq: str) -> list[dict]:
                 "cx": left + w / 2, "cy": top + h / 2, "w": w, "h": h,
             })
     return boxes
+
+
+def drop_unlabeled(boxes: list[dict]) -> tuple[list[dict], dict[str, int]]:
+    """Removes GT boxes without an identity (gt_id < 0); returns kept boxes and skipped counts per class."""
+    kept = [b for b in boxes if b["gt_id"] >= 0]
+    skipped: dict[str, int] = defaultdict(int)
+    for b in boxes:
+        if b["gt_id"] < 0:
+            skipped[b["class"]] += 1
+    return kept, dict(skipped)
+
+
+def object_pair_count(boxes: list[dict], pairs: list[tuple[int, int]]) -> int:
+    return len({(boxes[a]["seq"], *sorted((boxes[a]["gt_id"], boxes[b]["gt_id"]))) for a, b in pairs})
 
 
 def positive_pairs(boxes: list[dict], fps_by_seq: dict[str, float], min_gap_s: float = 1.0) -> list[tuple[int, int]]:
@@ -172,9 +190,11 @@ def class_stats(features: np.ndarray, boxes: list[dict], fps_by_seq: dict[str, f
         pos_1s = [p for p in positives_1s if boxes[p[0]]["class"] == cls]
         neg = [p for p in hard if boxes[p[0]]["class"] == cls]
         kind = "hard"
+        object_pairs = object_pair_count(boxes, neg)
         if len(neg) < MIN_HARD_NEGATIVES:
             neg = any_negative_pairs([i for i, b in enumerate(boxes) if b["class"] == cls], track_keys, seed)
             kind = "any_fallback"
+            object_pairs = 0
         pos_d, pos_1s_d, neg_d = distances(features, pos), distances(features, pos_1s), distances(features, neg)
         by_size = {}
         for _, name in SIZE_BINS:
@@ -184,7 +204,8 @@ def class_stats(features: np.ndarray, boxes: list[dict], fps_by_seq: dict[str, f
                 by_size[name] = _separability(features, bin_pos, bin_neg)
         out[cls] = {
             "positive": summarize(pos_d), "positive_1s": summarize(pos_1s_d), "negative": summarize(neg_d),
-            "negative_kind": kind, "retention_frames": retention_by_class[cls], "min_gap_frames": MIN_GAP_FRAMES,
+            "negative_kind": kind, "negative_object_pairs": object_pairs,
+            "retention_frames": retention_by_class[cls], "min_gap_frames": MIN_GAP_FRAMES,
             "auc": auc(pos_d, neg_d), "tpr_at_fpr5": tpr_at_fpr5(pos_d, neg_d),
             "auc_1s": auc(pos_1s_d, neg_d), "tpr_at_fpr5_1s": tpr_at_fpr5(pos_1s_d, neg_d),
             "by_size": by_size,
@@ -199,11 +220,19 @@ def noise_floor(seed_model: dict, base_model: dict) -> dict:
 
 
 def separability_gate(candidate: dict, reference: dict, noise: dict) -> dict:
-    """Spec reid-model gate; inputs are per-class tuning stats (class -> {auc, tpr_at_fpr5, negative_kind})."""
+    """Spec reid-model gate; inputs are per-class tuning stats (class -> {auc, tpr_at_fpr5, negative_object_pairs}).
+
+    Evidence is counted in distinct GT object pairs: car/scooter need MIN_OBJECT_PAIRS in both reference and
+    candidate; other classes below it are reported in unchecked_classes instead of being judged.
+    """
     reasons = []
+    unchecked = {}
     min_improvement = {cls: {m: round(max(base, 2 * noise[cls][m]), 4) for m, base in MIN_IMPROVEMENT.items()}
                        for cls in GATE_CLASSES}
     for cls in GATE_CLASSES:
+        pairs = min(reference[cls].get("negative_object_pairs", 0), candidate[cls].get("negative_object_pairs", 0))
+        if pairs < MIN_OBJECT_PAIRS:
+            reasons.append(f"{cls} 干擾物物體配對 {pairs} 組 < {MIN_OBJECT_PAIRS}，證據不足")
         for metric, need in min_improvement[cls].items():
             gain = candidate[cls][metric] - reference[cls][metric]
             if gain + EPS < need:
@@ -211,12 +240,17 @@ def separability_gate(candidate: dict, reference: dict, noise: dict) -> dict:
     for cls, ref in reference.items():
         if cls in GATE_CLASSES or cls not in candidate:
             continue
-        if ref.get("negative_kind") != "hard" or candidate[cls].get("negative_kind") != "hard":
+        pairs = min(ref.get("negative_object_pairs", 0), candidate[cls].get("negative_object_pairs", 0))
+        if pairs < MIN_OBJECT_PAIRS:
+            change = (round(candidate[cls]["auc"] - ref["auc"], 4)
+                      if ref.get("auc") is not None and candidate[cls].get("auc") is not None else None)
+            unchecked[cls] = {"object_pairs": pairs, "auc_change": change}
             continue
         drop = ref["auc"] - candidate[cls]["auc"]
         if drop > MAX_OTHER_AUC_DROP + EPS:
             reasons.append(f"{cls} AUC 下降 {drop:.4f} > {MAX_OTHER_AUC_DROP}")
     return {"passed": not reasons, "reasons": reasons, "min_improvement": min_improvement,
+            "unchecked_classes": unchecked,
             "mean_auc": round(float(np.mean([candidate[c]["auc"] for c in GATE_CLASSES])), 4)}
 
 

@@ -130,15 +130,19 @@ def test_class_stats_reports_auc_tpr_and_size_bins(tmp_path) -> None:
     assert car["by_size"]["16-32"]["auc"] == 1.0
 
 
-def metrics(car_auc, car_tpr, scooter_auc, scooter_tpr, others=None) -> dict:
-    out = {"car": {"auc": car_auc, "tpr_at_fpr5": car_tpr, "negative_kind": "hard"},
-           "scooter": {"auc": scooter_auc, "tpr_at_fpr5": scooter_tpr, "negative_kind": "hard"}}
+def other(auc_value: float, object_pairs: int) -> dict:
+    return {"auc": auc_value, "tpr_at_fpr5": 0.2, "negative_object_pairs": object_pairs}
+
+
+def metrics(car_auc, car_tpr, scooter_auc, scooter_tpr, others=None, scooter_pairs=367) -> dict:
+    out = {"car": {"auc": car_auc, "tpr_at_fpr5": car_tpr, "negative_object_pairs": 754},
+           "scooter": {"auc": scooter_auc, "tpr_at_fpr5": scooter_tpr, "negative_object_pairs": scooter_pairs}}
     out.update(others or {})
     return out
 
 
-REFERENCE = metrics(0.80, 0.30, 0.70, 0.20, {"person": {"auc": 0.75, "tpr_at_fpr5": 0.2, "negative_kind": "hard"},
-                                              "truck": {"auc": 0.9, "tpr_at_fpr5": 0.5, "negative_kind": "any_fallback"}})
+REFERENCE = metrics(0.80, 0.30, 0.70, 0.20, {"person": other(0.75, 20), "small_truck": other(0.99, 2),
+                                              "truck": other(0.9, 0)})
 NO_NOISE = {cls: {"auc": 0.0, "tpr_at_fpr5": 0.0} for cls in ("car", "scooter")}
 
 
@@ -177,10 +181,9 @@ def test_gate_limits_drop_of_other_classes_with_enough_distractors() -> None:
     from safetrajai.reid.fusion_stats import separability_gate
 
     good = metrics(0.85, 0.40, 0.75, 0.30)
-    dropped = good | {"person": {"auc": 0.72, "tpr_at_fpr5": 0.2, "negative_kind": "hard"},
-                      "truck": {"auc": 0.5, "tpr_at_fpr5": 0.1, "negative_kind": "any_fallback"}}
+    dropped = good | {"person": other(0.72, 20), "truck": other(0.5, 0)}
     assert not separability_gate(dropped, REFERENCE, NO_NOISE)["passed"]
-    fine = dropped | {"person": {"auc": 0.74, "tpr_at_fpr5": 0.2, "negative_kind": "hard"}}
+    fine = dropped | {"person": other(0.74, 20)}
     assert separability_gate(fine, REFERENCE, NO_NOISE)["passed"]
 
 
@@ -195,3 +198,66 @@ def test_select_best_keeps_highest_mean_auc_or_none() -> None:
     assert results["a"]["mean_auc"] == pytest.approx(0.80) and results["b"]["mean_auc"] == pytest.approx(0.83)
     assert select_best(results) == "b"
     assert select_best({"c": results["c"]}) is None
+
+
+def test_unlabeled_boxes_are_dropped_and_counted(tmp_path) -> None:
+    from safetrajai.reid.fusion_stats import drop_unlabeled
+
+    write_gt(tmp_path / "gt.txt", [(1, -1, 100, 100, 4), (1, 5, 110, 100, 4), (2, -1, 100, 100, 4),
+                                   (2, 5, 112, 100, 4), (1, -1, 300, 300, 5), (1, 7, 50, 50, 2)])
+    boxes, skipped = drop_unlabeled(read_mot_gt(tmp_path / "gt.txt", TUNE_SEQ))
+    assert all(b["gt_id"] >= 0 for b in boxes) and len(boxes) == 3
+    assert skipped == {"small_truck": 2, "bus": 1}
+    features = np.ones((len(boxes), 4), dtype=np.float32) / 2
+    stats = class_stats(features, boxes, {TUNE_SEQ: 5.0}, {"small_truck": 200.0, "car": 160.0}, seed=0,
+                        retention_by_class={"small_truck": 15, "car": 15})
+    assert stats["small_truck"]["negative"]["pairs"] == 0
+
+
+def test_object_pairs_count_each_track_pair_once(tmp_path) -> None:
+    seq_b = TUNE_SEQ.replace("_15s_1", "_15s_2")
+    write_gt(tmp_path / "a.txt", [(f, i, 100 + 20 * (i == 27), 100, 4) for f in range(1, 18) for i in (24, 27)])
+    write_gt(tmp_path / "b.txt", [(f, i, 100 + 20 * (i == 27), 100, 4) for f in range(1, 25) for i in (5, 27)])
+    boxes = read_mot_gt(tmp_path / "a.txt", TUNE_SEQ) + read_mot_gt(tmp_path / "b.txt", seq_b)
+    features = np.eye(3, dtype=np.float32)[[{24: 0, 27: 1, 5: 2}[b["gt_id"]] for b in boxes]]
+    stats = class_stats(features, boxes, {TUNE_SEQ: 5.0, seq_b: 5.0}, {"small_truck": 200.0}, seed=0,
+                        retention_by_class={"small_truck": 15})
+    assert stats["small_truck"]["negative"]["pairs"] == 41
+    assert stats["small_truck"]["negative_kind"] == "hard"
+    assert stats["small_truck"]["negative_object_pairs"] == 2
+
+
+def test_fallback_has_no_object_pairs(tmp_path) -> None:
+    rows = [(f, i, 100 + 1000 * i, 100, 6) for f in range(1, 11) for i in (1, 2)]
+    write_gt(tmp_path / "gt.txt", rows)
+    boxes = read_mot_gt(tmp_path / "gt.txt", TUNE_SEQ)
+    features = np.eye(2, dtype=np.float32)[[b["gt_id"] - 1 for b in boxes]]
+    stats = class_stats(features, boxes, {TUNE_SEQ: 5.0}, {"truck": 200.0}, seed=0, retention_by_class={"truck": 15})
+    assert stats["truck"]["negative_kind"] == "any_fallback"
+    assert stats["truck"]["negative_object_pairs"] == 0
+
+
+def test_gate_skips_classes_with_too_few_object_pairs() -> None:
+    from safetrajai.reid.fusion_stats import separability_gate
+
+    candidate = metrics(0.85, 0.40, 0.75, 0.30, {"person": other(0.75, 20), "small_truck": other(0.96, 2)})
+    result = separability_gate(candidate, REFERENCE, NO_NOISE)
+    assert result["passed"]
+    assert result["unchecked_classes"]["small_truck"] == {"object_pairs": 2, "auc_change": -0.03}
+
+
+def test_gate_fails_when_well_supported_class_drops() -> None:
+    from safetrajai.reid.fusion_stats import separability_gate
+
+    candidate = metrics(0.85, 0.40, 0.75, 0.30, {"person": other(0.72, 20)})
+    result = separability_gate(candidate, REFERENCE, NO_NOISE)
+    assert not result["passed"] and any("person" in r for r in result["reasons"])
+
+
+def test_gate_fails_when_gate_class_lacks_object_pairs() -> None:
+    from safetrajai.reid.fusion_stats import separability_gate
+
+    candidate = metrics(0.85, 0.40, 0.75, 0.30, scooter_pairs=6)
+    result = separability_gate(candidate, REFERENCE, NO_NOISE)
+    assert not result["passed"]
+    assert any("scooter" in r and "物體配對" in r for r in result["reasons"])

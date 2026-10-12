@@ -44,7 +44,8 @@ from safetrajai.evaluation.dataset_layout import discover_source_sequences, sour
 from safetrajai.paths import CONFIG_DIR, PROJECT_ROOT
 from safetrajai.reid.encoders import Custom_ReID
 from safetrajai.reid.fusion_stats import (
-    any_negative_pairs, candidates, check_tuning_sequences, class_stats, distances, noise_floor, read_mot_gt,
+    any_negative_pairs, candidates, check_tuning_sequences, class_stats, distances, drop_unlabeled, noise_floor,
+    read_mot_gt,
     retention_frames, separability_gate, summarize,
 )
 from safetrajai.reid.training.data import (
@@ -132,9 +133,13 @@ def main() -> None:
 
     encoder = Custom_ReID(args.weights, legacy_crop=args.legacy_crop)
     boxes, features, fps_by_seq = [], [], {}
+    skipped_unlabeled: dict[str, int] = defaultdict(int)
     for video in videos:
         seq = video.stem
-        seq_boxes = read_mot_gt(source_gt_dir(tune_root, "mot_annotations_all8", seq) / "gt.txt", seq)
+        gt_path = source_gt_dir(tune_root, "mot_annotations_all8", seq) / "gt.txt"
+        seq_boxes, skipped = drop_unlabeled(read_mot_gt(gt_path, seq))
+        for cls, count in skipped.items():
+            skipped_unlabeled[cls] += count
         cap = cv2.VideoCapture(str(video))
         fps_by_seq[seq] = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
@@ -149,6 +154,7 @@ def main() -> None:
         "weights": args.weights, "crop": "legacy" if args.legacy_crop else "tight", "config": args.config,
         "tune_sequences": [v.stem for v in videos], "fps": fps_by_seq,
         "hard_negative_radius_px": radius_by_class, "retention_frames": retention_by_class,
+        "skipped_unlabeled_boxes": dict(skipped_unlabeled),
         "version": args.version, "seed": args.seed,
         "per_class": {cls: {"tune": tune.get(cls), "val": val.get(cls)} for cls in sorted(set(tune) | set(val))},
         "candidates": candidates(tune),
