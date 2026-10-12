@@ -320,6 +320,7 @@ python scripts/run_evaluation.py --config <config>           # 只對既有 stag
 | `holdout` | 152639 | `…_152639_15s_1`、`_15s_2` | 149 | 3,550 | 保留序列，不用於調參；`fusion_distance_stats.py` 會拒絕讀取 |
 
 - GT 列數是 `gt/gt.txt` 的總列數，含 ROI 外的框。stage2 會把 ROI 外的 GT 標成 ignore 再評估，所以下表的 GT 數比這裡少。
+- **bus 的軌跡驗證只能靠 holdout**：GT 中的 bus 只有 2 條軌跡。tune 的 `…_150634_15s_2`（id 29，62 列）全部在 ROI 外，評估時被忽略；holdout 的 `…_152639_15s_2`（id 21，42 列，由上往下駛過畫面）有 21 列的中心點在 ROI 內，是唯一能實際評估 bus 的資料。
 - 用 `SOURCE_VIDEO_DIR` 指向子集目錄，就能只評估該子集，例如 `./dataset/eval/cctv_all8_subsets/tune/`。不設定時會評估全部 6 段序列。
 
 #### 目前的追蹤基準分數
@@ -335,7 +336,7 @@ Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/co
 | bus | — | — | 0 | — | 0 |
 | truck | 93.54 | 93.86 | 0 | 1.000 | 81 |
 
-- tune 子集沒有 bus 的 GT。GT 欄是 TrackEval 輸出的 GT 數。
+- bus 為 0：tune 子集唯一的 bus（`…_150634_15s_2`，GT id 29，62 列）是停在畫面上緣（中心 y 約 39～54、框約 16×23 px）的遠處車輛，中心點全部在 ROI 外，被 stage2 標成 ignore。GT 欄是 TrackEval 輸出的 GT 數（ROI 處理後）。
 - holdout 子集尚未評估（`baseline_holdout.yaml` 已產生、未執行），所以目前沒有保留序列上的分數。
 - `bytetrack.yaml`、`botsort_noreid.yaml` 目前沒有保存的評估結果。
 - 這是 stage2 的 ROI 忽略區域處理後的分數。新設定要和這個基準比較時，請在同一個子集、同一個偵測模型上重跑。
