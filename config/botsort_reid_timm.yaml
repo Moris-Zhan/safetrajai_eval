@@ -11,9 +11,12 @@
 #   - change reid-center-gate-fusion：遺失中軌跡的中心距離閘門讓 car、scooter 的 IDSW 明顯增加，
 #     其他類別不變；外觀否決沒有效果。Re-ID 模型在 C000025 上分不開鄰近的同類物體
 #     （正樣本與硬負樣本的外觀距離高度重疊），見該 change 的 verification.md。
+#   - change separability-gate-object-pairs：dinov2s_v3_both（解析度增強＋干擾物取樣，外觀分離度關卡通過）
+#     的 40 組網格（閘門、否決、原本融合 × 5 類）沒有任何類別通過；閘門仍讓 car、scooter 的 IDSW 明顯增加。
 # - 候選的 Re-ID 模型：models/class_reid_weights/dinov2s_v3/model.pt（DINOv2 ViT-S/14，資料集版本 v3，
-#   state_dict＋設定格式，由 Custom_ReID 載入）。要重新驗收時，逐類別設定 use_reid: true、model 與
-#   reid_center_gate_px／appearance_veto_sim 等參數，再依 spec reid-model 判定。
+#   state_dict＋設定格式，由 Custom_ReID 載入）。要重新驗收時，以 scripts/reid_train/acceptance_grid.py
+#   產生逐類別設定（use_reid: true、model 與 reid_center_gate_px／appearance_veto_sim 等參數）並彙總，
+#   再依 spec reid-model 判定。
 # =============================================================================
 
 paths:

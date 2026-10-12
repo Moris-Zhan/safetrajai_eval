@@ -9,6 +9,7 @@ safetrajai/reid/
 ├── encoders.py   推論期特徵抽取：ReID（ultralytics YOLO 當 encoder）與 Custom_ReID（新格式 state_dict＋設定，或舊的完整模型 pickle）
 ├── model.py      舊格式 Custom_ReID 使用的 ReIDNet 等類別定義；utils/model.py 是它的 pickle 相容 shim
 ├── fusion_stats.py  外觀距離分布、AUC、TPR@FPR5%、分尺寸回報、雜訊底線與外觀分離度關卡判定（純函式）
+├── acceptance.py  追蹤驗收的設定覆寫、彙總與逐類別判定（scripts/reid_train/acceptance_grid.py 使用）
 └── training/     manifest 資料集與本機快取、解析度增強與縮小版 val（data）、PK 與干擾物取樣（sampler）、
                   骨幹＋BNNeck 與權重格式（model）、CE＋三元組（losses）、val 檢索評估（evaluate）、訓練流程（train）
 ```
@@ -66,9 +67,10 @@ python scripts/reid_train/train_reid.py --version v3 --output models/class_reid_
 新模型（或新的推論裁切方式）在追蹤驗收前，先在調參序列（C000025 145630、150634 時段；保留序列由程式拒絕）上量測：
 
 - 正樣本：同一條 GT 軌跡、間隔 5 幀～該類別 `track_buffer` 幀（直接取 `--config`，預設 `botsort_reid_timm.yaml`，ADR 0009 不換算）；另回報「≥ 1 秒」的結果，可與 `reid-center-gate-fusion` 比較。
-- 負樣本（干擾物）：同幀、同類別、中心距離 ≤ 2×`norm_factor` 的不同 GT 軌跡；不足 30 對時退回任意配對，且不列入關卡的「其他類別」條件。
+- 負樣本（干擾物）：同幀、同類別、中心距離 ≤ 2×`norm_factor` 的不同 GT 軌跡；不足 30 對時退回任意配對（只影響融合門檻候選）。每個類別回報干擾物來自的不同 GT 物體配對數（`negative_object_pairs`）。
+- GT id < 0（沒有身分）的框在量測前排除，輸出 `skipped_unlabeled_boxes`；GT 檔不修改。
 - 指標：AUC、TPR@FPR5%，並依較小框的最短邊分 < 16px、16～32px、≥ 32px 回報（只供參考）。
-- 判定：參考是 `dinov2s_v3` 以 `--legacy-crop` 量測；雜訊底線是 `dinov2s_v3_seed1` 與 `dinov2s_v3`（都是緊框）的差距。car 與 scooter 的 AUC、TPR@FPR5% 都要比參考高出 max(0.01／0.02, 2×雜訊底線)，其他類別 AUC 下降 ≤ 0.02；多個通過時取 car、scooter 平均 AUC 最高者。val mAP 不作為依據。
+- 判定：參考是 `dinov2s_v3` 以 `--legacy-crop` 量測；雜訊底線是 `dinov2s_v3_seed1` 與 `dinov2s_v3`（都是緊框）的差距。car 與 scooter 的 AUC、TPR@FPR5% 都要比參考高出 max(0.01／0.02, 2×雜訊底線)，且物體配對 ≥ 10 組；其他類別物體配對 ≥ 10 組才檢查 AUC 下降 ≤ 0.02，不足者列在 `unchecked_classes`；多個通過時取 car、scooter 平均 AUC 最高者。val mAP 不作為依據。
 
 ```bash
 python scripts/reid_train/fusion_distance_stats.py --legacy-crop --out runs/reid_domain/dinov2s_v3_legacy.json
@@ -78,9 +80,16 @@ python scripts/reid_train/fusion_distance_stats.py --weights models/class_reid_w
   --out runs/reid_domain/<run>_tight.json
 ```
 
-**目前結果（change `align-reid-training-domain`）**：四個候選（`dinov2s_v3` 緊框、`_lowres`、`_distractor`、`_both`）都沒有通過，沒有做追蹤驗收，`botsort_reid_timm.yaml` 不變。lowres／both 的 car、scooter 大幅改善，只因 small_truck AUC 下降約 0.03（43 對干擾物，下降集中在最短邊 < 16px 的 13 對）而不通過。詳細數字見該 change 的 `verification.md`；後續方向是補 small_truck 資料，或事先訂定各尺寸組的樣本充分性門檻。
+**目前結果**：change `align-reid-training-domain` 以幀配對判定時四個候選都沒有通過（lowres／both 只因 small_truck 的 43 對干擾物下降約 0.03）。change `separability-gate-object-pairs` 發現那 43 對只來自 3 組物體配對（含一組 GT id -1），改以物體配對判定後 `_lowres`、`_both` 通過，`_both` 進入追蹤驗收，但 40 組網格沒有任何類別通過（見下一節），`botsort_reid_timm.yaml` 不變。數字見兩個 change 的 `verification.md`。
 
-## 六、已隔離的資產
+## 六、追蹤驗收工具（`acceptance.py`、`scripts/reid_train/acceptance_grid.py`）
+
+- `configs`：以 `botsort_reid_timm.yaml` 為底套用 `--set CLASS.KEY=VALUE`，為 tune／holdout 子集各寫一份設定到 `runs/reid_domain/accept/configs/`，寫出後以 `load_track_config()` 驗證。
+- 執行時把 stdout 存成 `<OUTPUT_ROOT>/run.log`（每幀追蹤時間由其中的 `track avg` 解析）。
+- `summarize`：IDSW、CLEAR TP 加總，IDP 由 IDTP／IDFP 加總計算，HOTA、AssA 依 GT 框數加權；逐類別依 spec 判定（不變差，且 IDSW 減少或 IDP 上升；沒有 GT 不啟用）。
+- `dinov2s_v3_both` 的 40 組結果：原本融合與否決與基準相同或變差，閘門讓 car、scooter 的 IDSW 明顯增加（scooter 4 → 28～40）；開啟 Re-ID 的類別每幀追蹤時間約為基準的 1.2～12 倍（car 最慢）。
+
+## 七、已隔離的資產
 
 - `models/yolo-reid/temp/`：舊 YOLO-as-encoder 訓練產出的權重。
 - `models/class_reid_weights/temp/`：舊 `ReIDNet` 完整模型權重；`smoke_domain_both`（冒煙訓練）與 `dinov2s_v3_lowres_oom`（OOM 中止的不完整權重）。

@@ -1,5 +1,16 @@
 # Verification
 
+## 總結
+
+| 項目 | 結果 |
+|---|---|
+| 程式 | `fusion_stats` 排除 GT id < 0 的框並回報干擾物的 GT 物體配對數；關卡的其他類別改以 ≥ 10 組物體配對才檢查 AUC 下降，car、scooter 不足 10 組時不能通過。新增追蹤驗收工具 `acceptance.py`／`acceptance_grid.py`。凍結方法未修改。 |
+| 重新判定 | 跳過 scooter、small_truck 各 2 個沒有身分的框；small_truck 只剩 2 組物體配對，不列入判定。`dinov2s_v3_lowres`、`dinov2s_v3_both` 通過，`select_best` 選 `both`；緊框 `dinov2s_v3` 與 `distractor` 仍因 car 不通過。 |
+| 追蹤驗收 | 基準可重現（調參 IDSW 6、TP 2502）。`both` 的 40 組網格**沒有任何類別通過**：原本融合與否決沒有作用，閘門讓 car、scooter 的 IDSW 明顯增加（scooter 4 → 28～40）。外觀分離度的改善沒有轉換成追蹤上的改善。 |
+| 設定 | `config/botsort_reid_timm.yaml` 維持 6 類 `use_reid: false`，只更新檔頭；其他情境設定與 golden 未改變。 |
+| 測試 | `pytest` 422 passed、11 skipped；`openspec validate separability-gate-object-pairs --strict` 通過。 |
+| 後續 | 外觀分離度（car AUC 0.97）提高後追蹤仍沒有改善，代表關卡量的東西與閘門實際面對的配對可能不一致：關卡量的是同幀的 GT 干擾物，閘門處理的是「遺失中的軌跡 vs 新偵測」（未驗證的推測，本 change 沒有分析錯配來源）。若要繼續，建議先從驗收輸出中找出閘門造成的錯配、量測那些配對的外觀距離，再決定模型或融合方向。 |
+
 ## 1. 量測與關卡規則
 
 - `pytest`：405 passed、11 skipped，tracker override 方法的 AST 檢查通過。
@@ -60,3 +71,27 @@
 - **基準可重現**：6 類加總 IDSW 6、CLEAR TP 2502，與 `train-reid-timm`／`reid-center-gate-fusion` 的調參基準相同。
 - `a_car_1w`：car IDSW 2 → 10、IDP 0.9963 → 0.9941、AssA 92.19 → 91.43、TP 1349 → 1347，不通過；其他類別與基準相同（未開啟 Re-ID）。
 - 時間：基準每幀追蹤 0.0087 秒、整組 30 秒；開啟一類 Re-ID 每幀 0.0497 秒（約 5.7 倍）、整組 42 秒（兩組平行）。
+
+## 4. 追蹤驗收（調參序列，`dinov2s_v3_both`）
+
+### 4.1 40 組網格
+
+候選門檻取自以新程式量測的 `runs/reid_domain/v2/dinov2s_v3_both_tight.json`（寬／嚴 `appearance_thresh`：person 0.7188／0.7741、car 0.6619／0.7012、scooter 0.6311／0.7150、small_truck 0.6631／0.7348、truck 0.6565／0.7059；否決為正樣本 1 − P99／1 − P99.9）。40 組以 `acceptance_grid.py configs` 產生，6 組平行（15:17～15:23），與 3.2 的基準比較；彙總在 `runs/reid_domain/accept/grid_tune.{csv,md}`。每組只開一個類別，其他類別的指標全部與基準相同。
+
+基準（調參）：person IDSW 0、car 2、scooter 4、small_truck 0、truck 0（共 6）。
+
+| 類別 | A 閘門（1×／2× × 寬／嚴）IDSW | C 否決（P99／P99.9）IDSW | 原本融合（寬／嚴）IDSW | 判定 |
+|---|---|---|---|---|
+| person | 0、0、1、0 | 0、0 | 0、0 | 無通過（2w 變差，其他與基準相同） |
+| car | 10、3、18、18 | 3、2 | 2、2 | 無通過（閘門與 P99 否決變差，其他與基準相同） |
+| scooter | 32、29、40、28 | 4、4 | 4、4 | 無通過（閘門大幅變差：IDP 0.967 → 0.63～0.83、TP 825 → 644～752） |
+| small_truck | 1、0、1、0 | 0、0 | 0、0 | 無通過（寬門檻閘門變差，其他與基準相同） |
+| truck | 0、0、0、0 | 0、0 | 0、0 | 無通過（全部與基準相同） |
+
+- 每幀追蹤時間：基準 0.0087 秒；開啟 Re-ID 時 car 約 0.09～0.11 秒、scooter 0.04～0.05、person 0.03、small_truck 0.014、truck 0.011。
+- **沒有任何類別通過**：沒有一組讓 IDSW 減少或 IDP 上升。原本融合方式與否決完全沒有作用；閘門擴大外觀的作用範圍後，car、scooter 的串錯明顯增加，與 `reid-center-gate-fusion` 用 `dinov2s_v3` 時的結果相同。外觀分離度的改善（both：car AUC 0.942 → 0.973）沒有轉換成追蹤上的改善。
+
+### 4.2 設定
+
+- 沒有類別通過，依 spec 不做合併驗證與保留序列；`config/botsort_reid_timm.yaml` 維持 6 類 `use_reid: false`，只更新檔頭說明。
+- 驗證：`git diff` 只有 `config/botsort_reid_timm.yaml` 的檔頭註解改變（無設定值改變），`config/botsort_reid.yaml` 與 `tests/golden/` 未改變；`pytest tests/test_smoke.py -k config` 43 passed。

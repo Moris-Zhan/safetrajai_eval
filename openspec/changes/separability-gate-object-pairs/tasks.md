@@ -18,9 +18,9 @@
 
 ## 4. 追蹤驗收（只在 2.2 有候選通過時）
 
-- [ ] 4.1 以最佳候選重跑 `fusion_distance_stats.py` 取得候選門檻，執行 D5 的 40 組網格與同批基準，逐類別依 `reid-model` spec 判定並記錄每幀追蹤時間；結果寫入 `verification.md`；沒有候選通過時記錄跳過
-- [ ] 4.2 有類別通過時做合併驗證與保留序列，更新 `config/botsort_reid_timm.yaml`（啟用類別、模型路徑、參數與檔頭說明）；沒有類別通過時維持 6 類關閉、只更新檔頭；以 smoke 的 config 檢查通過、`config/botsort_reid.yaml` 與 golden configs 未改變作為驗證；結果寫入 `verification.md`
+- [x] 4.1 以最佳候選重跑 `fusion_distance_stats.py` 取得候選門檻，執行 D5 的 40 組網格與同批基準，逐類別依 `reid-model` spec 判定並記錄每幀追蹤時間；結果寫入 `verification.md`；沒有候選通過時記錄跳過
+- [x] 4.2 有類別通過時做合併驗證與保留序列，更新 `config/botsort_reid_timm.yaml`（啟用類別、模型路徑、參數與檔頭說明）；沒有類別通過時維持 6 類關閉、只更新檔頭；以 smoke 的 config 檢查通過、`config/botsort_reid.yaml` 與 golden configs 未改變作為驗證；結果寫入 `verification.md`
 
 ## 5. 收尾
 
-- [ ] 5.1 更新 CLAUDE.md 的 Re-ID 章節與 `src/safetrajai/reid/HANDOFF.md`（驗收工具、判定結果、`botsort_reid_timm.yaml` 現況）；撰寫 `verification.md` 的總結；跑 `pytest` 與 `openspec validate separability-gate-object-pairs --strict` 確認通過
+- [x] 5.1 更新 CLAUDE.md 的 Re-ID 章節與 `src/safetrajai/reid/HANDOFF.md`（驗收工具、判定結果、`botsort_reid_timm.yaml` 現況）；撰寫 `verification.md` 的總結；跑 `pytest` 與 `openspec validate separability-gate-object-pairs --strict` 確認通過
