@@ -325,7 +325,9 @@ python scripts/run_evaluation.py --config <config>           # 只對既有 stag
 
 #### 目前的追蹤基準分數
 
-Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_tune.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，資料是 `cctv_all8` 的 **tune 子集**（4 段 15 秒序列，見上一小節）。逐序列 Excel 在 `runs/reid_domain/accept/baseline/tune/`，彙總在 `runs/reid_domain/accept/grid_tune.md`。
+Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_{tune,holdout}.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，兩個子集的設定只差 `SOURCE_VIDEO_DIR` 與輸出位置。逐序列 Excel 在 `runs/reid_domain/accept/baseline/{tune,holdout}/`，彙總在 `runs/reid_domain/accept/grid_tune.md` 與 `baseline_holdout.md`。
+
+**tune 子集**（4 段序列）：
 
 | 類別 | HOTA | AssA | IDSW | IDP | GT |
 |---|---:|---:|---:|---:|---:|
@@ -336,8 +338,20 @@ Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/co
 | bus | — | — | 0 | — | 0 |
 | truck | 93.54 | 93.86 | 0 | 1.000 | 81 |
 
-- bus 為 0：tune 子集唯一的 bus（`…_150634_15s_2`，GT id 29，62 列）是停在畫面上緣（中心 y 約 39～54、框約 16×23 px）的遠處車輛，中心點全部在 ROI 外，被 stage2 標成 ignore。GT 欄是 TrackEval 輸出的 GT 數（ROI 處理後）。
-- holdout 子集尚未評估（`baseline_holdout.yaml` 已產生、未執行），所以目前沒有保留序列上的分數。
+**holdout 子集**（2 段序列；bus 只能在這裡驗證）：
+
+| 類別 | HOTA | AssA | IDSW | IDP | GT |
+|---|---:|---:|---:|---:|---:|
+| person | 92.10 | 92.22 | 0 | 1.000 | 56 |
+| car | 83.75 | 85.96 | 1 | 0.992 | 729 |
+| scooter | 76.41 | 82.85 | 2 | 0.948 | 459 |
+| small_truck | 96.72 | 96.80 | 0 | 1.000 | 76 |
+| **bus** | **94.97** | **94.97** | **0** | **1.000** | **21** |
+| truck | — | — | 0 | — | 0 |
+
+- tune 的 bus 為 0：tune 子集唯一的 bus（`…_150634_15s_2`，GT id 29，62 列）是停在畫面上緣（中心 y 約 39～54、框約 16×23 px）的遠處車輛，中心點全部在 ROI 外，被 stage2 標成 ignore。GT 欄是 TrackEval 輸出的 GT 數（ROI 處理後）。
+- holdout 的 bus：`…_152639_15s_2` 的 GT id 21，原有 42 列，其中 21 列的中心點在 ROI 外被忽略，剩下 21 列全部配對成功（TP 21），沒有 ID switch。只有 1 條軌跡、21 幀，分數只能當作單一案例的訊號，不足以代表 bus 類別的整體表現。holdout 沒有 truck 的 GT。
+- holdout 於 2026-10-12 首次執行，只作為最終確認，不可拿來調參。
 - `bytetrack.yaml`、`botsort_noreid.yaml` 目前沒有保存的評估結果。
 - 這是 stage2 的 ROI 忽略區域處理後的分數。新設定要和這個基準比較時，請在同一個子集、同一個偵測模型上重跑。
 
