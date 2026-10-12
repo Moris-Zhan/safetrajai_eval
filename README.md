@@ -299,9 +299,32 @@ python scripts/run_evaluation.py --config <config>           # 只對既有 stag
 
 輸出在 `runs/track_eval/`。要縮小範圍，在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列。調整追蹤參數用 `scripts/grid_search_*.py`（`--dry-run` 先看組合數）。
 
+#### 評測資料集
+
+追蹤評估一律使用 `config/datasets.yaml` 的 `cctv_all8`（`role: eval`，附人工 GT，只用於評估，不能進任何訓練資料）：
+
+| 項目 | 內容 |
+|---|---|
+| dataset id | `cctv_all8`（情境 config 以 `paths.dataset: cctv_all8` 引用） |
+| 本機路徑 | `dataset/eval/cctv_all8/`：`annotations_all8/`（YOLO 格式＋序列影片）、`mot_annotations_all8/`（MOT GT） |
+| 來源 | HF `Moris555/safetrajai-eval`，tag `gt-2026-09-23`（見第 5 節） |
+| 鏡頭 | C000025（中華三路 民生二路，東北角），2025-12-09 拍攝 |
+| 序列 | 6 段 15 秒片段，約 5 fps（每段 71～75 幀），640×480 |
+| 類別 | 6 類（person、car、scooter、small_truck、bus、truck） |
+
+6 段序列依時段分成兩個子集（`subsets.yaml`，本機以 symlink 放在 `dataset/eval/cctv_all8_subsets/`，重建方式見 5.3）：
+
+| 子集 | 時段 | 序列 | 幀數 | GT 列數 | 用途 |
+|---|---|---|---:|---:|---|
+| `tune` | 145630、150634 | `…_145630_15s_1`、`_15s_2`、`…_150634_15s_1`、`_15s_2` | 292 | 6,851 | 調參與驗收比較，下表的基準分數來自這裡 |
+| `holdout` | 152639 | `…_152639_15s_1`、`_15s_2` | 149 | 3,550 | 保留序列，不用於調參；`fusion_distance_stats.py` 會拒絕讀取 |
+
+- GT 列數是 `gt/gt.txt` 的總列數，含 ROI 外的框。stage2 會把 ROI 外的 GT 標成 ignore 再評估，所以下表的 GT 數比這裡少。
+- 用 `SOURCE_VIDEO_DIR` 指向子集目錄，就能只評估該子集，例如 `./dataset/eval/cctv_all8_subsets/tune/`。不設定時會評估全部 6 段序列。
+
 #### 目前的追蹤基準分數
 
-Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_tune.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，資料是評估鏡頭 C000025 的 **tune 子集**（4 段 15 秒序列）。逐序列 Excel 在 `runs/reid_domain/accept/baseline/tune/`，彙總在 `runs/reid_domain/accept/grid_tune.md`。
+Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_tune.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，資料是 `cctv_all8` 的 **tune 子集**（4 段 15 秒序列，見上一小節）。逐序列 Excel 在 `runs/reid_domain/accept/baseline/tune/`，彙總在 `runs/reid_domain/accept/grid_tune.md`。
 
 | 類別 | HOTA | AssA | IDSW | IDP | GT |
 |---|---:|---:|---:|---:|---:|
