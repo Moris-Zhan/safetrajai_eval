@@ -196,7 +196,7 @@ Repo：<https://huggingface.co/datasets/Moris555/safetrajai-source>（tag `reid-
 | `dataset/reid/crops/_index/` | 39 份來源序列的框座標索引（干擾物取樣用；不含 JPEG） | `dataset/reid/crops/_index/` |
 | `dataset/reid/{auto_exclusions,exclusions,fragment_merges}.csv` | 自動排除、人工排除、碎片合併清單 | `dataset/reid/` |
 | `dataset/reports/reid/` | 標記與抽查 CSV、`fragment_features.npz` | `dataset/reports/reid/` |
-| `models/class_reid_weights/<run>/` | `model.pt`＋`train_record.json`，共 6 組 | `models/class_reid_weights/` |
+| `models/class_reid_weights/<run>/` | `model.pt`＋`train_record.json`，共 6 組（tag 快照；`main` 上只有 `dinov2s_v3` 在原位，其餘 5 組在 `temp/`） | `models/class_reid_weights/` |
 | `config/` | 9 支來源鏡頭的 ROI 與資料準備設定（上傳當時的快照） | **不覆蓋**，repo 內已有版控版本 |
 | `inventory.json` | 每個檔案的路徑與位元組數 | 供下載後核對 |
 
@@ -212,10 +212,13 @@ Repo：<https://huggingface.co/datasets/Moris555/safetrajai-source>（tag `reid-
 
 | Run | 狀態 |
 |---|---|
-| `dinov2s_v3` | 目前使用的模型（DINOv2 ViT-S/14，val mAP 0.783），`config/botsort_reid_timm.yaml` 引用 |
-| `dinov2s_v2` | v2 對照組 |
-| `dinov2s_v3_seed1` | 換種子的雜訊對照 |
-| `dinov2s_v3_lowres`、`dinov2s_v3_distractor`、`dinov2s_v3_both` | 實驗候選，**未通過**外觀分離度關卡，不可部署到追蹤 |
+| `dinov2s_v3` | 唯一保留的模型（DINOv2 ViT-S/14，val mAP 0.783）；`fusion_distance_stats.py` 的預設權重，`config/botsort_reid_timm.yaml` 只在註解中列為候選，沒有任何類別載入 |
+| `dinov2s_v2` | v2 對照組，追蹤上與 v3 平手；**已隔離** |
+| `dinov2s_v3_seed1` | 換種子的雜訊對照；**已隔離** |
+| `dinov2s_v3_distractor` | 實驗候選，未通過外觀分離度關卡；**已隔離** |
+| `dinov2s_v3_lowres`、`dinov2s_v3_both` | 實驗候選，改以物體配對判定後通過外觀分離度關卡，但 `_both` 的追蹤驗收沒有任何類別通過；**已隔離** |
+
+2026-10-12 起，已隔離的 5 組在本機與 HF `main` 都移到 `models/class_reid_weights/temp/`（檔案內容不變，原因與還原指令見 `temp/DO_NOT_USE.md`），不可用於情境設定。tag `reid-v3-2026-10-08` 仍是原本的佈局，下面的下載指令會把 6 組都放在原位；只需要目前模型時，請照 6.2 的說明縮小 `allow_patterns`。
 
 val mAP 只是參考，不等於追蹤驗收；目前追蹤 config 的 6 類 ReID 仍全部關閉。
 
@@ -289,12 +292,30 @@ EOF
 ```bash
 python track_eval.py --config config/bytetrack.yaml         # stage1 追蹤 + stage2 TrackEval
 python track_eval.py --config config/botsort_noreid.yaml
-python track_eval.py --config config/botsort_reid_timm.yaml # 需要 models/class_reid_weights/dinov2s_v3/
+python track_eval.py --config config/botsort_reid_timm.yaml # Re-ID 驗收基準（6 類 ReID 都關閉）
 python track_eval.py --config config/collision_detect.yaml  # stage1 + stage3（TTC／PET）
 python scripts/run_evaluation.py --config <config>           # 只對既有 stage1 輸出重跑 stage2
 ```
 
 輸出在 `runs/track_eval/`。要縮小範圍，在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列。調整追蹤參數用 `scripts/grid_search_*.py`（`--dry-run` 先看組合數）。
+
+#### 目前的追蹤基準分數
+
+Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_tune.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，資料是評估鏡頭 C000025 的 **tune 子集**（4 段 15 秒序列）。逐序列 Excel 在 `runs/reid_domain/accept/baseline/tune/`，彙總在 `runs/reid_domain/accept/grid_tune.md`。
+
+| 類別 | HOTA | AssA | IDSW | IDP | GT |
+|---|---:|---:|---:|---:|---:|
+| person | 87.10 | 87.15 | 0 | 0.978 | 178 |
+| car | 88.82 | 92.19 | 2 | 0.996 | 1,355 |
+| scooter | 76.68 | 80.73 | 4 | 0.967 | 865 |
+| small_truck | 88.70 | 90.66 | 0 | 1.000 | 70 |
+| bus | — | — | 0 | — | 0 |
+| truck | 93.54 | 93.86 | 0 | 1.000 | 81 |
+
+- tune 子集沒有 bus 的 GT。GT 欄是 TrackEval 輸出的 GT 數。
+- holdout 子集尚未評估（`baseline_holdout.yaml` 已產生、未執行），所以目前沒有保留序列上的分數。
+- `bytetrack.yaml`、`botsort_noreid.yaml` 目前沒有保存的評估結果。
+- 這是 stage2 的 ROI 忽略區域處理後的分數。新設定要和這個基準比較時，請在同一個子集、同一個偵測模型上重跑。
 
 ### 7.2 Re-ID 訓練與驗證（需要第 6 節資料）
 
