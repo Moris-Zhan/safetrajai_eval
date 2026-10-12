@@ -351,7 +351,7 @@ Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/co
 
 - tune 的 bus 為 0：tune 子集唯一的 bus（`…_150634_15s_2`，GT id 29，62 列）是停在畫面上緣（中心 y 約 39～54、框約 16×23 px）的遠處車輛，中心點全部在 ROI 外，被 stage2 標成 ignore。GT 欄是 TrackEval 輸出的 GT 數（ROI 處理後）。
 - holdout 的 bus：`…_152639_15s_2` 的 GT id 21，原有 42 列，其中 21 列的中心點在 ROI 外被忽略，剩下 21 列全部配對成功（TP 21），沒有 ID switch。只有 1 條軌跡、21 幀，分數只能當作單一案例的訊號，不足以代表 bus 類別的整體表現。holdout 沒有 truck 的 GT。
-- holdout 於 2026-10-12 首次執行，只作為最終確認，不可拿來調參。
+- holdout 的基準最早在 2026-09-28 由 change `train-reid-timm` 執行過（見該 change 的 `verification.md` 3.1）；2026-10-12 重跑的結果逐類別完全相同。holdout 只作為最終確認，不可拿來調參。
 - `bytetrack.yaml`、`botsort_noreid.yaml` 目前沒有保存的評估結果。
 - 這是 stage2 的 ROI 忽略區域處理後的分數。新設定要和這個基準比較時，請在同一個子集、同一個偵測模型上重跑。
 
