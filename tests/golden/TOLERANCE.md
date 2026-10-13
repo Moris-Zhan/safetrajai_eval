@@ -65,4 +65,18 @@ Re-ID 裁切蒐集改為拒絕評估鏡頭（C000025），golden 的 `botsort_sa
 - 逐項說明見 `openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md`。
 - 2026-09-24 整理 `runs/` 時，`reid1` 以外的舊 run（`before1`、`after1`、`after2`、`after1_mot17`、`after2_mot17`、`reid2`）已移到 `runs/tmp/refactor_golden/`。`compare.py` 只讀 `runs/refactor_golden/`，需要與舊 run 比對時，先把它搬回該目錄。
 
-之後的比對一律使用 `python tests/golden/compare.py reid1 <run>`。
+（已被下一節取代：基準改為 `georef1`。）
+
+## 基準切換：reid1 → georef1（2026-10-13，change `camera-homography-georef`）
+
+Homography 改以鏡頭為鍵（`config/homography/<camera>.yaml`）、驗證報表新增欄位與點數規則，homography 驗證輸出因此刻意改變，golden 基準改為 `georef1`。
+
+- 自比：以最終程式碼連跑 `georef1`、`georef1b`，`compare.py georef1 georef1b` 全部為 0 差異，容忍度仍為 0。
+- 與 `reid1` 相同：mot_tracks、yolo_labels、trackeval、conflict_events（stage3 以新的鏡頭解析入口取得相同矩陣）、reid_crops、other 全部 0 差異。
+- 與 `reid1` 不同（預期）：
+  - `homography`：`summary.csv` 改為鏡頭鍵的新欄位（`camera`、`scale_check`、`m_per_pixel`、`check_*`、`train_residual_*`、`_m`）；C000025 只有 2 個 check points，改為 `too_few_checkpoints`；C000297 的 `.npy` check points 轉入後開始驗證，多出 `stats.xlsx` 與 6 張誤差熱力圖。
+  - `grid_search`：`best_params_scooter.txt` 多一行 `'track_buffer': 120,`（數值差異 0）。這是 change `track-buffer-in-frames`（2026-10-06）就已存在、記錄在其 verification.md 的差異，與本 change 無關，這次一併納入基準。
+- **之後的預期差異**：`summary.csv` 的 `scale_check`、`m_per_pixel` 與 `_m` 欄位直接取自鏡頭設定。任何鏡頭的 `latlon`、`scale_check` 或 check points 改變，homography 類別都會出現差異，屬於預期變更，要重建基準並在這裡記錄。
+- 逐項說明見 `openspec/changes/camera-homography-georef/verification.md`。
+
+之後的比對一律使用 `python tests/golden/compare.py georef1 <run>`。

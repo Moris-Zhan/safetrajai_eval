@@ -73,9 +73,9 @@ _DEFAULTS: dict = {
     "save_reid_crops": False,
     "reid_crop_dir":   "./dataset/reid/crops",
     # 碰撞偵測（safetrajai/collision/）
-    "homography_points_dir":      "config/homography_points",
-    # 既有已算好的 Homography 矩陣（26 個路口，見 markdown/ARCHITECTURE.md「Homography 資料」），
-    # resolve_homography() 優先用這份，找不到對應路口才退回 homography_points_dir 的人工點選
+    # 以鏡頭為鍵的 Homography 設定（config/homography/<camera>.yaml，見
+    # safetrajai/collision/homography/camera_config.py）；matrix_tag 指向下面目錄的既有矩陣
+    "homography_camera_dir":      "config/homography",
     "homography_matrices_dir":    "models/homography/matrices",
     "homography_satellite_dir":   "models/homography/satellite_images",
     "collision_max_ttc_frames":   30,
@@ -176,7 +176,12 @@ class AppConfig:
 
         # collision 區塊（safetrajai/collision/ 的碰撞偵測參數）
         collision = raw.get("collision", {}) or {}
-        d["homography_points_dir"]       = collision.get("homography_points_dir", d["homography_points_dir"])
+        if "homography_points_dir" in collision:
+            raise ValueError(
+                "collision.homography_points_dir 已不再支援；Homography 改以鏡頭為鍵，"
+                "請改用 collision.homography_camera_dir（預設 config/homography）"
+            )
+        d["homography_camera_dir"]       = collision.get("homography_camera_dir", d["homography_camera_dir"])
         d["homography_matrices_dir"]     = collision.get("homography_matrices_dir", d["homography_matrices_dir"])
         d["homography_satellite_dir"]    = collision.get("homography_satellite_dir", d["homography_satellite_dir"])
         d["collision_max_ttc_frames"]    = collision.get("max_ttc_frames",   d["collision_max_ttc_frames"])

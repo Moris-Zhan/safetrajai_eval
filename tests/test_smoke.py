@@ -276,3 +276,31 @@ def test_frozen_methods_reject_unlisted_changes(tmp_path, old_path, new_path, cl
         path = tmp_path / "tampered.py"
         path.write_text(ast.unparse(ast.fix_missing_locations(changed)), encoding="utf-8")
         assert method_bodies(path.read_text(), class_name)[method] != expected[method]
+
+
+def test_env_file_is_git_ignored() -> None:
+    result = subprocess.run(["git", "check-ignore", "-q", ".env"], cwd=REPO_ROOT)
+    assert result.returncode == 0
+
+
+def test_tracked_files_contain_no_google_api_key() -> None:
+    result = subprocess.run(
+        ["git", "grep", "-I", "-l", "-E", "AIza[0-9A-Za-z_-]{35}"], cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    assert result.stdout.strip() == ""
+
+
+HOMOGRAPHY_CAMERA_PATHS = sorted((REPO_ROOT / "config" / "homography").glob("*.yaml"))
+
+
+@pytest.mark.parametrize("camera_path", HOMOGRAPHY_CAMERA_PATHS, ids=lambda p: p.name)
+def test_homography_camera_config_loads(camera_path: Path) -> None:
+    from safetrajai.collision.homography.camera_config import load_camera_config
+
+    load_camera_config(camera_path)
+
+
+@pytest.mark.parametrize("camera_path", HOMOGRAPHY_CAMERA_PATHS, ids=lambda p: p.name)
+def test_homography_camera_config_does_not_reference_quarantined_assets(camera_path: Path) -> None:
+    values = yaml_string_values(yaml.safe_load(camera_path.read_text(encoding="utf-8")) or {})
+    assert [v for v in values if "/temp/" in v or v.startswith("temp/")] == []

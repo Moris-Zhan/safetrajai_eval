@@ -47,6 +47,13 @@ python scripts/grid_search_botsort_reid.py --target-class person
 # Homography 驗證（輸出到 models/homography/validation_output/）
 python scripts/validate_homography.py
 
+# Homography 鏡頭設定（config/homography/<camera>.yaml）：遷移 → 經緯度 → 比例尺檢查；後兩者會連網
+python scripts/migrate_homography_config.py [--dry-run]           # tag 鍵資料 → 鏡頭鍵設定（只寫新檔，衝突時不寫）
+python scripts/geocode_cameras.py [--cameras <cam...>]            # 候選表 models/homography/geocode_candidates.csv
+python scripts/geocode_cameras.py --apply [--accept <cam...>]     # 只寫入 status=ok 的列或使用者確認過的鏡頭
+python scripts/check_homography_scale.py --camera <cam> --points X1,Y1 X2,Y2 --reference-m 3.5 --feature 車道寬  # 寫入 scale_check
+python scripts/download_satellite.py --camera <cam> --purpose verify|basemap [--replace]  # Demo Key 只能 verify
+
 # Re-ID 資料工具：蒐集 → 標記 → 自動排除 → 抽查 → 排除 → 碎片合併 → manifest
 python scripts/reid_data/detect_contamination.py                  # DINOv2 標記，輸出 dataset/reports/reid/
 python scripts/reid_data/apply_auto_exclusions.py [--apply]       # 由標記整份重算 dataset/reid/auto_exclusions.csv
@@ -76,7 +83,7 @@ python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <pa
 ### 測試與回歸驗證
 
 - `pytest`：smoke 測試（`tests/test_smoke.py`），涵蓋全部模組 import、全部 config 載入、類別 ID 契約、tracker override 方法的 AST 不變性、`sys.path` 掃描、`scripts/**/*.py --help`。幾秒內跑完，任何結構調整後都要跑。
-- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 16 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py reid1 <run>` 與基準比對（基準於 2026-09-24 由 `after1` 改為 `reid1`：裁切情境改在來源鏡頭 C000043 上蒐集，原因見 `tests/golden/TOLERANCE.md`）。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
+- 黃金比對（golden output）：`tests/golden/run_all.sh <run>` 以 5 個情境＋grid search＋homography 驗證跑一次完整流程（平行執行，約 16 分鐘，輸出在 `runs/refactor_golden/<run>/`），再用 `python tests/golden/compare.py georef1 <run>` 與基準比對（基準於 2026-10-13 由 `reid1` 改為 `georef1`：homography 驗證報表改以鏡頭為鍵並新增欄位；鏡頭設定的 `latlon`／`scale_check`／check points 改變時，homography 類別的差異屬於預期，需重建基準。原因見 `tests/golden/TOLERANCE.md`）。基準自比的容忍度為 0（見 `tests/golden/TOLERANCE.md`），任何非零差異都代表行為改變。
 - **禁止大量 I/O**：`dataset/`、`models/`、`runs/` 位於掛載磁碟，檔案數以百萬計（例如 Re-ID 裁切）。禁止對整個目錄樹逐檔讀取內容，例如全量 `sha256sum`／`md5sum`、全量 `du`、`find … -exec cat`、大範圍 `rsync --checksum`，這類操作容易造成磁碟損壞。需要核對搬移或複製結果時，只比對路徑清單與檔案數（`find -type f | wc -l`、只列路徑不讀內容），同一磁碟內的 `mv` 不需要核對內容；真的需要比對內容時，只針對少數指定檔案（例如單支影片或權重），並先向使用者確認範圍。長時間的背景讀寫任務要先告知使用者。
 - **隔離慣例**：有疑慮、不可使用的權重或資料一律用 `mv` 移到所在目錄下的 `temp/`（不刪除），並在 `temp/DO_NOT_USE.md` 逐項記錄原路徑、日期、原因與還原指令；config 不得引用 `temp/` 內的路徑（smoke 測試檢查）。評估資料集的人工 GT 內容不可修改。
 - 改動演算法時，驗證方式仍是實際跑受影響的 stage 再比對輸出。想縮小範圍時，直接在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列，或調整 `eval_flags.run_det_eval`／`run_track_eval`。全量序列、grid search 和重跑 stage1 都很耗時，也可能覆寫既有輸出，執行前要先確認範圍。
@@ -99,13 +106,16 @@ src/safetrajai/
                              training/（manifest 資料集與本機快取、PK 取樣、骨幹＋BNNeck、CE＋三元組、val 評估）
   roi.py                     以鏡頭為鍵的 ROI 解析（config/roi/<camera>.yaml），stage1 繪製／裁切、stage2、stage3 共用
   grid_search/core.py        grid search 共用邏輯，scripts/grid_search_*.py 只保留 PARAM_GRIDS + argparse
-  collision/                 stage3：MOT 軌跡 → TTC/PET 衝突事件、熱區圖；homography/ 子套件負責轉換／點選／驗證
+  collision/                 stage3：MOT 軌跡 → TTC/PET 衝突事件、熱區圖；homography/ 子套件負責轉換／點選／驗證、
+                             以鏡頭為鍵的設定（camera_config）、公尺換算（georef）、經緯度查詢（geocode）、
+                             底圖下載（satellite）、比例尺比對（scale_match）
+  secrets.py                 外部服務金鑰（環境變數優先，其次 repo 根目錄 .env；不輸出金鑰值）
   evaluation/                stage2 共用：config_loader、dataset_layout（路徑組裝純函式）、mot_converter、trackeval_runner、
                              ignore_region（TrackEval 前的忽略區域前處理）、dataset_prep（人工 GT 的 detection 評估資料集）、excel_export
   visualization/drawing.py   ROI 與追蹤框繪製
 utils/model.py               pickle 相容 shim（見下方 Re-ID）
 third_party/trackeval/       vendored TrackEval
-config/                      情境設定檔（每檔自包含）+ datasets.yaml（dataset id 對照表）+ roi/（以鏡頭為鍵的 ROI）+ homography_points/checkpoints
+config/                      情境設定檔（每檔自包含）+ datasets.yaml（dataset id 對照表）+ roi/（以鏡頭為鍵的 ROI）+ homography/、homography_checkpoints/（以鏡頭為鍵）
 tests/                       smoke 測試與 golden 比對工具
 ```
 
@@ -176,5 +186,6 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 
 - 程式碼與設定檔中的 `collision`（`safetrajai/collision/`、`config/collision_detect.yaml`）指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（見 `docs/adr/0003`）。
 - 輸入只讀 stage1 的 7 欄 MOT 軌跡。事件請讀 `ttc_events.{json,csv}`、`pet_events.{json,csv}`，不要依賴舊 log 的 `colision_occur_sec`（PET 的這個欄位可能記的是 frame，而不是秒）。
-- Homography 屬於鏡頭。查找順序：既有鏡頭矩陣（`models/homography/`）→ `config/homography_points/<seq>.yaml` 人工點選（目前以序列為鍵，是已知落差，見 `CONTEXT.md`）→ 都沒有時直接用 CCTV 原始像素座標。套用矩陣時，TTC 的 bounds 要用衛星圖尺寸；速度和方向要從轉換後的位置重新差分；輸出的事件點則要用反矩陣投影回 CCTV 像素座標。
-- 誤差單位是像素，不是公尺。未經實測校正的事件數只能當作技術訊號，不能當成正式的安全結論。
+- Homography 屬於鏡頭，設定在 `config/homography/<camera>.yaml`（鏡頭編號為鍵，與 ROI 相同；由 `scripts/migrate_homography_config.py` 從 26 個既有矩陣產生）。查找順序：設定的 `matrix_tag` 指向的既有矩陣（`models/homography/matrices/`，檔案不存在時報錯）→ 設定內的人工對應點 `cctv_points`／`map_points` → 都沒有時直接用 CCTV 原始像素座標。舊的 `config/homography_points/<seq>.yaml` 不再讀取，存在時報錯。套用矩陣時，TTC 的 bounds 要用衛星圖尺寸；速度和方向要從轉換後的位置重新差分；輸出的事件點則要用反矩陣投影回 CCTV 像素座標。
+- 單位（ADR 0010）：只有指定既有衛星矩陣、有經緯度、而且 `scale_check: passed` 的鏡頭，`georef.meters_per_pixel()` 才回傳公尺換算（`156543.03392·cos(緯度)/2^zoom/scale`）；其餘一律維持像素，不得退回預設值。check points 驗證以鏡頭為鍵（`config/homography_checkpoints/<camera>.yaml`，少於 4 點為點數不足）。未經實測校正的事件數只能當作技術訊號，不能當成正式的安全結論。
+- 外部服務與金鑰：經緯度查詢（`scripts/geocode_cameras.py`，OSM Overpass，查不到時以 Google Geocoding 備援）、比例尺檢查（`scripts/check_homography_scale.py`）與底圖下載（`scripts/download_satellite.py`）都是手動執行，不在 pipeline 中。金鑰從環境變數或 repo 根目錄的 `.env`（git 忽略）讀取：`GOOGLE_MAPS_API_KEY`（billing）、`GOOGLE_MAPS_DEMO_API_KEY`（Maps Demo Key，依條款只能用於測試與原型，只允許 `--purpose verify`，不能下載正式底圖）。程式不得印出金鑰值。Google Static Maps 條款可能限制離線保存與衍生使用，底圖不納入 git。

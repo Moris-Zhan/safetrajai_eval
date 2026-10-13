@@ -12,11 +12,14 @@
     <tag>_pretty_heatmap_{idw,linear,rbf}.png  同上，pretty 風格（含色階圖例）
     <tag>_compare.mp4                     逐幀 warp 比對影片（只有本專案實際有來源影片的
                                            4 個路口會產生，且預設開啟，see generate_videos 參數）
-    summary.csv                           26 個路口的驗證狀態彙總（validated 與否、reprojection 誤差統計）
+    summary.csv                           每台有矩陣的鏡頭一列（config/homography/<camera>.yaml）：
+                                           validated、reason、scale_check、m_per_pixel、
+                                           check_*（驗證誤差）、train_residual_*（擬合殘差）、
+                                           公尺欄位（_m，m_per_pixel 不可用時留空）
 
-沒有 check points 的路口（見 config/homography_checkpoints/README.md）在 summary.csv
-裡 validated 欄位會是 False，reason 會標示原因（no_checkpoints / no_matrix），
-不代表矩陣有問題，只是還沒有驗證資料。
+沒有 check points 的鏡頭（見 config/homography_checkpoints/README.md）在 summary.csv
+裡 validated 欄位會是 False，reason 會標示原因（no_checkpoints / too_few_checkpoints /
+no_matrix），不代表矩陣有問題，只是還沒有足夠的驗證資料。
 """
 
 from __future__ import annotations
@@ -27,10 +30,11 @@ from typing import Any, Dict, List
 
 import cv2
 
+from safetrajai.collision.homography.camera_config import list_camera_configs
 from safetrajai.collision.homography.pick_aid import USABLE_INTERSECTIONS
-from safetrajai.collision.homography.points import list_available_tags
-from safetrajai.collision.homography.validation import validate_tag
+from safetrajai.collision.homography.validation import validate_camera
 
+CAMERA_DIR = Path("config/homography")
 MATRICES_DIR = Path("models/homography/matrices")
 SATELLITE_DIR = Path("models/homography/satellite_images")
 CHECKPOINTS_DIR = Path("config/homography_checkpoints")
@@ -39,11 +43,13 @@ OUTPUT_DIR = Path("models/homography/validation_output")
 # 只有這幾個路口有 CCTV 來源影片可以讀第一幀畫 overlay，其餘 tag 會是 cctv_frame=None
 _TAG_TO_VIDEO = dict(USABLE_INTERSECTIONS)
 
-_SUMMARY_FIELDS = [
-    "tag", "validated", "reason", "N",
-    "dist_mean_px", "dist_std_px", "dist_median_px",
-    "dist_rmse_px", "dist_p95_px", "dist_max_px",
-]
+_STATS = ("mean", "std", "median", "rmse", "p95", "max")
+_SUMMARY_FIELDS = (
+    ["camera", "tag", "validated", "reason", "scale_check", "m_per_pixel", "check_N", "check_excluded"]
+    + [f"check_dist_{s}_px" for s in _STATS] + [f"check_dist_{s}_m" for s in _STATS]
+    + ["train_residual_N"]
+    + [f"train_residual_{s}_px" for s in _STATS] + [f"train_residual_{s}_m" for s in _STATS]
+)
 
 
 def run_all(generate_videos: bool = True) -> List[Dict[str, Any]]:
@@ -56,7 +62,10 @@ def run_all(generate_videos: bool = True) -> List[Dict[str, Any]]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     results: List[Dict[str, Any]] = []
 
-    for tag in list_available_tags(MATRICES_DIR):
+    for camera_cfg in list_camera_configs(CAMERA_DIR):
+        tag = camera_cfg.matrix_tag
+        if tag is None:
+            continue
         video_path = _TAG_TO_VIDEO.get(tag)
         cctv_frame = None
         if video_path is not None and Path(video_path).exists():
@@ -66,18 +75,17 @@ def run_all(generate_videos: bool = True) -> List[Dict[str, Any]]:
             if ret:
                 cctv_frame = frame
 
-        result = validate_tag(
-            tag, MATRICES_DIR, SATELLITE_DIR, CHECKPOINTS_DIR,
+        result = validate_camera(
+            camera_cfg, MATRICES_DIR, SATELLITE_DIR, CHECKPOINTS_DIR,
             cctv_frame=cctv_frame, output_dir=OUTPUT_DIR,
             cctv_video_path=video_path if generate_videos else None,
         )
         results.append(result)
 
-        if result.get("validated"):
-            print(f"[{tag}] validated  dist_mean={result['dist_mean_px']:.2f}px  "
-                  f"dist_max={result['dist_max_px']:.2f}px")
-        else:
-            print(f"[{tag}] skipped ({result.get('reason')})")
+        status = "validated" if result.get("validated") else f"not validated ({result.get('reason')})"
+        detail = (f"  check_N={result['check_N']}  rmse={result['check_dist_rmse_px']:.2f}px"
+                  if "check_N" in result else "")
+        print(f"[{camera_cfg.camera}] {status}{detail}")
 
     summary_path = OUTPUT_DIR / "summary.csv"
     with summary_path.open("w", newline="", encoding="utf-8") as f:

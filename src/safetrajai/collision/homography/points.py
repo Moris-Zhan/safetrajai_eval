@@ -1,60 +1,36 @@
 """
-Homography 矩陣載入：優先用既有已算好的矩陣，沒有對應路口才退回人工點選流程。
+Homography 矩陣解析：以鏡頭為鍵（config/homography/<camera>.yaml，見 camera_config.py）。
 
-## 1. 既有矩陣（優先，見 models/homography/）
-`models/homography/matrices/H_<tag>.npy` 是從 markdown/reference_results/homongraphy_val/
-搬過來的既有成果，涵蓋 26 個路口（tag 命名規則、資料來源見 markdown/ARCHITECTURE.md
-「Homography 資料」章節）。`find_tag_for_sequence()` 依序列名比對路口名前綴找出對應 tag，
-`resolve_homography()` 會優先用這份；只有 26 個路口以外的新路口才需要走第 2 節的
-人工點選流程。⚠️ 這 26 個路口裡，只有本專案實際有 CCTV 影片的 4 個（C000025、
-C000043、C000054、C000085）才有辦法真的驗證矩陣準確度（見
-safetrajai/collision/homography/validation.py）；其餘 22 個只有矩陣本身，沒有 CCTV 影片
-可以選 check points，屬於「未驗證」狀態，套用時要留意。
+解析順序（spec `camera-homography`）：
+    1. 鏡頭設定的 `matrix_tag` 指向的既有矩陣 `models/homography/matrices/H_<tag>.npy`；
+    2. 鏡頭設定內的人工對應點 `cctv_points`／`map_points` 算出的矩陣；
+    3. 都沒有時回傳 None，下游改用 CCTV 原始像素座標。
 
-## 2. 人工點選（fallback：路口不在既有 26 個之列時使用）
-原始 SafeTrajAI 的選點是 cv2 滑鼠互動視窗，本專案
-headless 環境（無 $DISPLAY）無法直接沿用，改成人工流程：
+`matrix_tag` 指向的檔案不存在時直接報錯，不會靜默退回第 3 步。
+舊的序列鍵對應點檔 `config/homography_points/<seq>.yaml` 不再讀取，存在時報錯。
 
-    1. 打開 stage1 已存的 <seq>/first_frame_with_box.jpg，自己在圖上
-       量測/估計 4 個以上對應點的像素座標。
-    2. 把座標填進 <homography_points_dir>/<seq>.yaml（cctv_points + map_points，
-       見下方格式）。
-    3. resolve_homography() 找不到既有矩陣時，會自動偵測該序列有沒有這份檔案：
-       有 → 算 Homography；沒有 → 回傳 None，該序列跳過 homography，只用原始像素座標。
-
-本專案目前沒有真實地圖底圖，map_points 是使用者自行在同一張 CCTV 畫面上定義的
-「校正後」座標（例如把透視變形的路口攤平成矩形），不是地理座標。
-
-yaml 格式（cctv_points / map_points 需一一對應、順序相同，至少 4 組）：
-    cctv_points:
-      - [x1, y1]
-      - [x2, y2]
-      - [x3, y3]
-      - [x4, y4]
-    map_points:
-      - [x1, y1]
-      - [x2, y2]
-      - [x3, y3]
-      - [x4, y4]
+人工對應點的取得方式：本專案 headless 環境（無 $DISPLAY）不能用滑鼠點選，
+改用 pick_aid.py 產生的並排圖量測座標，填進鏡頭設定的 `cctv_points`／`map_points`。
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
-import yaml
+
+from safetrajai.paths import CONFIG_DIR
 
 from . import compute_homography, load_homography
+from .camera_config import CameraHomographyConfig, load_camera_config_for_sequence
 
-_TAG_SUFFIX_RE = re.compile(r"-\d+-\d+-\d+-\d+$")
+LEGACY_POINTS_DIR = CONFIG_DIR / "homography_points"
 
 
 # =============================================================================
-# 1. 既有矩陣（優先，見 models/homography/）
+# 1. 既有矩陣（models/homography/）
 # =============================================================================
 
 def list_available_tags(matrices_dir: Path) -> List[str]:
@@ -65,25 +41,13 @@ def list_available_tags(matrices_dir: Path) -> List[str]:
     return sorted(p.stem[len("H_"):] for p in matrices_dir.glob("H_*.npy"))
 
 
-def find_tag_for_sequence(seq_name: str, matrices_dir: Path) -> Optional[str]:
-    """依序列名找出對應的既有路口 tag。
-
-    tag 命名規則是 "{路口名}-{SCALE}-{ZOOM}-{寬}-{高}"（例如
-    "C000025 中華三路 民生二路(東北角)-2-20-1280-1280"），本專案序列名（來源影片檔名）
-    是 "{路口名}_{時間戳記}..."（例如
-    "C000025 中華三路 民生二路(東北角)_20251209152639_15s_1"）。兩者的「路口名」
-    部分完全一致，只是後綴不同，用 seq_name 是否以「tag 去掉數字後綴」開頭來比對。
-    """
-    for tag in list_available_tags(matrices_dir):
-        intersection_name = _TAG_SUFFIX_RE.sub("", tag)
-        if seq_name.startswith(intersection_name):
-            return tag
-    return None
+def matrix_path(matrices_dir: Path, tag: str) -> Path:
+    return Path(matrices_dir) / f"H_{tag}.npy"
 
 
 def load_prebuilt_homography(matrices_dir: Path, tag: str) -> np.ndarray:
     """讀取 models/homography/matrices/H_<tag>.npy。"""
-    return load_homography(str(Path(matrices_dir) / f"H_{tag}.npy"))
+    return load_homography(str(matrix_path(matrices_dir, tag)))
 
 
 def prebuilt_satellite_image_path(satellite_images_dir: Path, tag: str) -> Path:
@@ -91,48 +55,51 @@ def prebuilt_satellite_image_path(satellite_images_dir: Path, tag: str) -> Path:
     return Path(satellite_images_dir) / f"{tag}.png"
 
 
-def resolve_homography(
-    seq_name: str, matrices_dir: Path, homography_points_dir: Path,
-) -> Optional[np.ndarray]:
-    """依序列名找出可用的 Homography 矩陣：優先用既有矩陣，找不到才退回人工點選檔案。
-
-    Returns:
-        3x3 矩陣，或 None（兩種來源都沒有時，呼叫端據此退回原始像素座標）。
-    """
-    tag = find_tag_for_sequence(seq_name, matrices_dir)
-    if tag is not None:
-        return load_prebuilt_homography(matrices_dir, tag)
-    return load_homography_for_sequence(homography_points_dir, seq_name)
-
-
 # =============================================================================
-# 2. 人工點選（fallback：路口不在既有 26 個之列時使用）
+# 2. 依鏡頭解析
 # =============================================================================
 
-def homography_points_path(homography_points_dir: Path, seq_name: str) -> Path:
-    """<homography_points_dir>/<seq_name>.yaml 的完整路徑。"""
-    return Path(homography_points_dir) / f"{seq_name}.yaml"
+def assert_no_legacy_point_files(legacy_dir: Path = LEGACY_POINTS_DIR) -> None:
+    """舊的序列鍵對應點檔不再使用；README 以外的 .yaml 一律報錯。"""
+    legacy_dir = Path(legacy_dir)
+    if not legacy_dir.exists():
+        return
+    legacy_files = sorted(p.name for p in legacy_dir.glob("*.yaml"))
+    if legacy_files:
+        raise ValueError(
+            f"{legacy_dir} 下的序列鍵對應點檔已不再使用：{legacy_files}。"
+            "請把 cctv_points／map_points 搬到 config/homography/<camera>.yaml"
+        )
 
 
-def load_homography_for_sequence(homography_points_dir: Path, seq_name: str) -> Optional[np.ndarray]:
-    """若 <homography_points_dir>/<seq_name>.yaml 存在，讀取對應點並算出 Homography 矩陣。
+def homography_from_config(
+    camera_cfg: CameraHomographyConfig, matrices_dir: Path,
+) -> Tuple[Optional[np.ndarray], Optional[str]]:
+    """依鏡頭設定取得 (H, matrix_tag)；人工對應點產生的矩陣 tag 為 None。"""
+    if camera_cfg.matrix_tag is not None:
+        path = matrix_path(matrices_dir, camera_cfg.matrix_tag)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{camera_cfg.path}: matrix_tag 指向的矩陣不存在，預期路徑為 {path}"
+            )
+        return load_homography(str(path)), camera_cfg.matrix_tag
+    if camera_cfg.cctv_points is not None:
+        return compute_homography(camera_cfg.cctv_points, camera_cfg.map_points), None
+    return None, None
 
-    不存在則回傳 None——呼叫端據此判斷該序列是否啟用 homography。
-    """
-    points_path = homography_points_path(homography_points_dir, seq_name)
-    if not points_path.exists():
-        return None
 
-    with points_path.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
-
-    cctv_points = raw.get("cctv_points")
-    map_points = raw.get("map_points")
-    if not cctv_points or not map_points:
-        print(f"⚠️  {points_path} 缺少 cctv_points/map_points，略過 homography")
-        return None
-
-    return compute_homography(cctv_points, map_points)
+def resolve_camera_homography(
+    seq_name: str,
+    camera_dir: Path,
+    matrices_dir: Path,
+    legacy_points_dir: Path = LEGACY_POINTS_DIR,
+) -> Tuple[Optional[np.ndarray], Optional[str]]:
+    """序列所屬鏡頭的 (H, matrix_tag)；鏡頭沒有設定檔或設定中沒有矩陣來源時為 (None, None)。"""
+    assert_no_legacy_point_files(legacy_points_dir)
+    camera_cfg = load_camera_config_for_sequence(camera_dir, seq_name)
+    if camera_cfg is None:
+        return None, None
+    return homography_from_config(camera_cfg, matrices_dir)
 
 
 # =============================================================================
@@ -144,7 +111,7 @@ def save_verification_image(
 ) -> None:
     """把 cctv_points 標在 first_frame 圖上另存一張圖，供人工目視確認座標有沒有標錯位置。
 
-    只標 CCTV 側的點——這是給第 2 節「人工點選」流程用的快速檢查；若要對既有矩陣
+    只標 CCTV 側的點——這是給人工對應點流程用的快速檢查；若要對既有矩陣
     做正式的 reprojection error 驗證，用 safetrajai/collision/homography/validation.py。
     """
     img = cv2.imread(str(first_frame_path))

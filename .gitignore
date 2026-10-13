@@ -34,3 +34,10 @@ ignore/
 # Python packaging
 *.egg-info/
 build/
+
+# Secrets (API keys, NAS credentials)
+.env
+.env.*
+
+# Local reference frames extracted for manual geocoding
+openspec/changes/*/images/

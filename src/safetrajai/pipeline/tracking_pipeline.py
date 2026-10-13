@@ -248,7 +248,7 @@ class TrackingEvalPipeline:
         print(f"\n{'='*70}")
         print(f"  STAGE 3 — Collision Detection (TTC/PET)")
         print(f"  collision_output   : {cfg.collision_output_dir}")
-        print(f"  homography_points  : {cfg.homography_points_dir}")
+        print(f"  homography_cameras : {cfg.homography_camera_dir}")
         print(f"{'='*70}\n")
 
         for seq_dir in seq_dirs:

@@ -2,25 +2,27 @@
 Homography 矩陣驗證：拿獨立於訓練點之外的 check points，套用矩陣做 reprojection，
 量測誤差（像素），評估某個路口的 Homography 矩陣準不準。
 
-移植自 markdown/reference_results/homongraphy_val/homography_validator.py，本專案版本
+移植自 Sub_Module/homongraphy_val/homography_validator.py，本專案版本
 跟原始程式的差異：
-- 只做像素誤差。原始程式的公尺換算需要每個路口的緯度（Web Mercator 公式），
-  來源的 GPS mapping Excel 沒有包在這份快照裡，目前拿不到，見
-  markdown/ARCHITECTURE.md「Homography 資料」章節。
+- 以鏡頭為鍵：check points 從 config/homography_checkpoints/<camera>.yaml 讀，
+  矩陣與比例尺資訊取自 config/homography/<camera>.yaml（spec `camera-homography`）。
+- 公尺欄位只在鏡頭的 m_per_pixel 可用時輸出（見 georef.py：需要緯度，且比例尺檢查通過）；
+  原始程式的換算漏乘 cos(緯度)。
+- 另外輸出訓練點（算 H 用的點）的擬合殘差，欄位以 `train_residual_` 開頭；
+  只有 4 點時 DLT 恰好可解，殘差接近 0 是預期結果，不代表矩陣準確。
 - 拿掉互動式選點 fallback（原始 pick_pairs_simple()，cv2/matplotlib 滑鼠事件，
-  本專案 headless 環境（無 $DISPLAY）無法用）——check points 一律從
-  config/homography_checkpoints/<tag>.yaml 讀，找不到就回傳「未驗證」，不會跳出視窗。
+  本專案 headless 環境（無 $DISPLAY）無法用），找不到 check points 就回傳「未驗證」。
 
-check points 必須是「獨立於訓練點之外」的驗證用點位（不是拿來算 H 的那 4 個訓練點），
-才是有意義的 out-of-sample 驗證；用訓練點驗證會循環論證（誤差趨近於 0，見
-markdown/ARCHITECTURE.md 相關章節的說明）。
+check points 必須是「獨立於訓練點之外」的驗證用點位，才是有意義的 out-of-sample 驗證；
+與訓練點 CCTV 座標相同的 check point 會被排除，並在報表的 `check_excluded` 計數。
+check points 少於 4 點時視為點數不足（`validated=False`），但仍輸出統計。
 
 ⚠️ 本專案能真的產生 check points 的路口只有 4 個（有 CCTV 來源影片可看：C000025、
-C000043、C000054、C000085），其餘 22 個既有矩陣路口沒有影片可點選，
-永遠是「未驗證」狀態，不代表矩陣有問題，只是缺乏驗證資料。
+C000043、C000054、C000085），其餘既有矩陣路口沒有影片可點選，
+是「未驗證」狀態，不代表矩陣有問題，只是缺乏驗證資料。
 
-yaml 格式（config/homography_checkpoints/<tag>.yaml，cctv_points / sat_points
-需一一對應、順序相同，建議至少 6-8 組，越多統計越穩定，且不能跟算 H 用的訓練點重複）：
+yaml 格式（config/homography_checkpoints/<camera>.yaml，cctv_points / sat_points
+需一一對應、順序相同，至少 4 組，建議 8 組以上）：
     cctv_points:
       - [x1, y1]
       ...
@@ -39,23 +41,25 @@ import numpy as np
 import yaml
 
 from . import load_homography
+from .camera_config import CameraHomographyConfig
+from .georef import meters_per_pixel
 
 
 # =============================================================================
 # 1. check points 載入
 # =============================================================================
 
-def checkpoints_path(checkpoints_dir: Path, tag: str) -> Path:
-    """<checkpoints_dir>/<tag>.yaml 的完整路徑。"""
-    return Path(checkpoints_dir) / f"{tag}.yaml"
+def checkpoints_path(checkpoints_dir: Path, camera: str) -> Path:
+    """<checkpoints_dir>/<camera>.yaml 的完整路徑。"""
+    return Path(checkpoints_dir) / f"{camera}.yaml"
 
 
-def load_checkpoints(checkpoints_dir: Path, tag: str) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-    """讀 <checkpoints_dir>/<tag>.yaml，回傳 (cctv_points, sat_points)（皆為 (N,2) array）。
+def load_checkpoints(checkpoints_dir: Path, camera: str) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """讀 <checkpoints_dir>/<camera>.yaml，回傳 (cctv_points, sat_points)（皆為 (N,2) array）。
 
-    找不到檔案，或欄位缺漏/數量不一致，回傳 None（呼叫端視為「該路口尚未提供驗證點」）。
+    找不到檔案，或欄位缺漏/數量不一致，回傳 None（呼叫端視為「該鏡頭尚未提供驗證點」）。
     """
-    path = checkpoints_path(checkpoints_dir, tag)
+    path = checkpoints_path(checkpoints_dir, camera)
     if not path.exists():
         return None
 
@@ -216,8 +220,23 @@ def export_stats_excel(
 # 4. 單一路口的完整驗證流程
 # =============================================================================
 
-def validate_tag(
-    tag: str,
+MIN_CHECKPOINTS = 4
+_STAT_KEYS = ("mean", "std", "median", "rmse", "p95", "max")
+
+
+def _stat_columns(prefix: str, stats: Dict[str, Any], mpp: Optional[float], with_dist: bool) -> Dict[str, Any]:
+    """Flatten reprojection stats into summary columns: `<prefix>_[dist_]<stat>_px` and `_m`."""
+    stem = f"{prefix}_dist" if with_dist else prefix
+    columns: Dict[str, Any] = {f"{prefix}_N": stats["N"]}
+    for key in _STAT_KEYS:
+        px = stats[f"dist_{key}_px"]
+        columns[f"{stem}_{key}_px"] = px
+        columns[f"{stem}_{key}_m"] = px * mpp if mpp is not None else None
+    return columns
+
+
+def validate_camera(
+    camera_cfg: CameraHomographyConfig,
     matrices_dir: Path,
     satellite_dir: Path,
     checkpoints_dir: Path,
@@ -225,12 +244,13 @@ def validate_tag(
     output_dir: Optional[Path] = None,
     cctv_video_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """對單一路口 tag 跑完整驗證：讀矩陣 + check points → 算誤差統計 → （可選）畫 overlay/
+    """對單一鏡頭跑完整驗證：讀矩陣、訓練點與 check points → 算誤差統計 → （可選）畫 overlay/
     輸出 Excel/產生逐幀 warp 比對影片。
 
     Args:
-        cctv_frame: 該路口任一支來源影片的第一幀（BGR）。沒有提供（例如既有 26 路口裡
-            沒有 CCTV 影片的 20 個）就不畫 overlay，只回傳數值統計（若有 check points 的話）。
+        camera_cfg: config/homography/<camera>.yaml（camera_config.load_camera_config()）。
+        cctv_frame: 該鏡頭任一支來源影片的第一幀（BGR）。沒有提供（例如既有 26 路口裡
+            沒有 CCTV 影片的 22 個）就不畫 overlay，只回傳數值統計（若有 check points 的話）。
         output_dir: 提供時把 overlay/熱力圖/Excel/比對影片存到這個目錄下。
         cctv_video_path: 該路口來源影片的完整路徑。提供時（且 output_dir 也提供）會額外產生
             `<tag>_compare.mp4`（見 safetrajai/collision/homography/compare_video.py），逐幀把
@@ -238,29 +258,56 @@ def validate_tag(
             更能看出整支影片時間軸上的對齊狀況。這支影片較耗時，沒有影片路徑就跳過。
 
     Returns:
-        {"tag": tag, "validated": bool, "reason": str（validated=False 時才有）, ...統計欄位}
-        "reason" 可能是 "no_matrix"（matrices_dir 沒有這個 tag 的 H）或
-        "no_checkpoints"（沒有 config/homography_checkpoints/<tag>.yaml，多半是那 20 個
-        沒有 CCTV 影片可點選的路口）。
+        一列彙總：camera、tag、validated、reason（validated=False 時才有）、scale_check、
+        m_per_pixel、check_N、check_excluded、check_dist_<stat>_px／_m、
+        train_residual_N、train_residual_<stat>_px／_m（<stat> 為 mean/std/median/rmse/p95/max；
+        _m 欄位在 m_per_pixel 不可用時為 None）。
+        "reason" 可能是 "no_matrix"、"no_checkpoints" 或 "too_few_checkpoints"（少於 4 點）。
 
     Side effect:
         output_dir 提供時會輸出：overlay 圖、`<tag>_stats.xlsx`（summary + per_point 兩個
         sheet）、IDW/Linear/RBF 誤差熱力圖各兩種風格（`save_error_heatmaps()`，check points
         少於 4 個會自動跳過）、（若也給了 cctv_video_path）逐幀 warp 比對影片。
     """
+    tag = camera_cfg.matrix_tag
+    row: Dict[str, Any] = {
+        "camera": camera_cfg.camera, "tag": tag, "scale_check": camera_cfg.scale_check,
+        "m_per_pixel": meters_per_pixel(camera_cfg),
+    }
     H_path = Path(matrices_dir) / f"H_{tag}.npy"
-    if not H_path.exists():
-        return {"tag": tag, "validated": False, "reason": "no_matrix"}
+    if tag is None or not H_path.exists():
+        return {**row, "validated": False, "reason": "no_matrix"}
     H = load_homography(str(H_path))
+    mpp = row["m_per_pixel"]
 
-    checkpoints = load_checkpoints(checkpoints_dir, tag)
+    train_cctv_path = Path(matrices_dir) / f"pts_cctv_{tag}.npy"
+    train_sat_path = Path(matrices_dir) / f"pts_sate_{tag}.npy"
+    train_cctv = None
+    if train_cctv_path.exists() and train_sat_path.exists():
+        train_cctv = np.load(train_cctv_path).reshape(-1, 2).astype(np.float64)
+        train_sat = np.load(train_sat_path).reshape(-1, 2).astype(np.float64)
+        train_stats, _, _ = compute_reprojection_stats(H, train_cctv, train_sat)
+        row.update(_stat_columns("train_residual", train_stats, mpp, with_dist=False))
+
+    checkpoints = load_checkpoints(checkpoints_dir, camera_cfg.camera)
     if checkpoints is None:
-        return {"tag": tag, "validated": False, "reason": "no_checkpoints"}
+        return {**row, "validated": False, "reason": "no_checkpoints"}
 
     cctv_points, sat_points = checkpoints
+    keep = np.ones(len(cctv_points), dtype=bool)
+    if train_cctv is not None:
+        keep = ~np.array([np.any(np.all(np.isclose(p, train_cctv, atol=1e-6), axis=1)) for p in cctv_points])
+    row["check_excluded"] = int((~keep).sum())
+    cctv_points, sat_points = cctv_points[keep], sat_points[keep]
+    if len(cctv_points) == 0:
+        return {**row, "validated": False, "reason": "no_checkpoints"}
+
     stats, pred_sat, dist = compute_reprojection_stats(H, cctv_points, sat_points)
-    stats["tag"] = tag
-    stats["validated"] = True
+    row.update(_stat_columns("check", stats, mpp, with_dist=True))
+    if len(cctv_points) < MIN_CHECKPOINTS:
+        row.update({"validated": False, "reason": "too_few_checkpoints"})
+    else:
+        row["validated"] = True
 
     if output_dir is not None:
         sat_path = Path(satellite_dir) / f"{tag}.png"
@@ -287,4 +334,4 @@ def validate_tag(
         else:
             print(f"⚠️  {sat_path} 讀取失敗，略過 overlay/熱力圖/Excel/比對影片")
 
-    return stats
+    return row

@@ -4,9 +4,9 @@ safetrajai.collision — 軌跡碰撞偵測（TTC / PET）對外入口。
 流程（見 safetrajai/pipeline/tracking_pipeline.py::TrackingEvalPipeline.run_stage3()）：
     1. trajectory_adapter.load_sequence_tracks()：讀 stage1 軌跡檔（Layer 1 CSV）
        → Layer 2 track dict 清單
-    2. homography_points.load_homography_for_sequence()：該序列有沒有人工填的對應點檔，
-       有就算出 Homography 矩陣 H，並用 trajectory_adapter.add_homography_fields()
-       附加 Homo_* 欄位；沒有就退回原始像素座標
+    2. homography_points.resolve_camera_homography()：依序列所屬鏡頭的
+       config/homography/<camera>.yaml 取得 Homography 矩陣 H，並用
+       trajectory_adapter.add_homography_fields() 附加 Homo_* 欄位；沒有就退回原始像素座標
     3. detection_core.compute_ttc_for_all_pairs() / compute_pet_for_all_pairs()：
        兩兩配對算 TTC / PET 事件
     4. output.py 寫三種輸出：乾淨 CSV/JSON、比照原始欄位風格的 log CSV、熱區圖 PNG
@@ -99,7 +99,7 @@ def run_collision_detection_for_sequence(
 
     Args:
         seq_output_dir: annotation_<seq> 目錄（stage1 輸出）
-        cfg: AppConfig，需要 collision_* 系列參數與 homography_points_dir（見
+        cfg: AppConfig，需要 collision_* 系列參數與 homography_camera_dir（見
              evaluation/config_loader.py）
         fps: 該序列影片的幀率
         bounds: (height, width)——該序列影片解析度。use_homography=False 時直接當
@@ -120,9 +120,8 @@ def run_collision_detection_for_sequence(
     roi = resolve_roi(seq_name, (bounds[1], bounds[0]))
     tracks = load_sequence_tracks(seq_output_dir, cfg, fps, roi)
 
-    tag = homography_points.find_tag_for_sequence(seq_name, cfg.homography_matrices_dir)
-    H = homography_points.resolve_homography(
-        seq_name, cfg.homography_matrices_dir, cfg.homography_points_dir,
+    H, tag = homography_points.resolve_camera_homography(
+        seq_name, cfg.homography_camera_dir, cfg.homography_matrices_dir,
     )
     use_homography = H is not None
     H_inv = homography_mod.invert_homography(H) if use_homography else None
@@ -132,12 +131,11 @@ def run_collision_detection_for_sequence(
         print(f"  [{seq_name}] 用既有已算好的矩陣（tag={tag}），碰撞偵測改用轉換後座標系")
     elif use_homography:
         add_homography_fields(tracks, H, fps)
-        print(f"  [{seq_name}] 找到人工點選的 homography 對應點檔，碰撞偵測改用轉換後座標系")
+        print(f"  [{seq_name}] 用鏡頭設定的人工對應點算出 homography，碰撞偵測改用轉換後座標系")
     else:
         print(
-            f"  [{seq_name}] 沒有可用的 homography 矩陣（既有 26 路口不含此序列，"
-            f"也沒有人工點選對應點檔"
-            f"（{cfg.homography_points_dir}/{seq_name}.yaml），碰撞偵測使用原始像素座標"
+            f"  [{seq_name}] 鏡頭沒有 homography（{cfg.homography_camera_dir}/<camera>.yaml "
+            f"不存在或沒有矩陣來源），碰撞偵測使用原始像素座標"
         )
 
     max_time_diff_frames = int(round(cfg.collision_lookback_sec * fps))

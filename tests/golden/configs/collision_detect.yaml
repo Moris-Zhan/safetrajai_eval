@@ -43,9 +43,9 @@ eval_flags:
 # 碰撞偵測參數（safetrajai/collision/，見 markdown/COLLISION_DETECTION.md）
 # -----------------------------------------------------------------------------
 collision:
-  # 序列名.yaml 若存在於這個目錄下，該序列就會啟用 Homography 座標轉換；
-  # 不存在則該序列退回原始像素座標（見 safetrajai/collision/homography/points.py）
-  homography_points_dir: config/homography_points
+  # 鏡頭鍵的 Homography 設定（<camera>.yaml，見 safetrajai/collision/homography/camera_config.py）；
+  # 鏡頭沒有設定檔時，該鏡頭的序列退回原始像素座標
+  homography_camera_dir: config/homography
 
   # TTC（Time-To-Collision）參數，見 COLLISION_DETECTION.md 第 2 節
   max_ttc_frames: 30      # 模擬時間上限（frame 數）；SafeTrajAI 主流程原本掃 15/30/45/60，這裡先固定一組
