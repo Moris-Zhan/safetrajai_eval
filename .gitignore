@@ -41,3 +41,4 @@ build/
 
 # Local reference frames extracted for manual geocoding
 openspec/changes/*/images/
+openspec/changes/archive/*/images/
