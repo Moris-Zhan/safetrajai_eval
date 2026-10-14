@@ -189,6 +189,10 @@ class AppConfig:
         d["collision_lookback_sec"]      = collision.get("lookback_sec",     d["collision_lookback_sec"])
         d["collision_overlap_threshold"] = collision.get("overlap_threshold", d["collision_overlap_threshold"])
 
+        # conflict_analysis 區塊（safetrajai/collision/conflict/，沒有這個區塊時視為關閉）
+        from safetrajai.collision.conflict.config import load_conflict_config
+        d["conflict_analysis"] = load_conflict_config(raw.get("conflict_analysis"))
+
         # classes_to_run（直接取頂層 key）
         if "classes_to_run" in raw and raw["classes_to_run"]:
             d["classes_to_run"] = {str(k): int(v) for k, v in raw["classes_to_run"].items()}

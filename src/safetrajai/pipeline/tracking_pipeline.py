@@ -50,6 +50,7 @@ from pathlib import Path
 import cv2
 
 from safetrajai.collision import run_collision_detection_for_sequence
+from safetrajai.collision.conflict import run_conflict_analysis_for_sequence
 from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.pipeline import run_eval_pipeline
 from safetrajai.evaluation import dataset_layout
@@ -230,7 +231,9 @@ class TrackingEvalPipeline:
         <benchmark>-<split>/<tracker_name>__<class>/data/<seq>.txt，格式見
         CLAUDE.md「軌跡格式契約」），對每支序列跑一次
         safetrajai.collision.run_collision_detection_for_sequence()，輸出寫到
-        cfg.collision_output_dir/<seq_name>/ 底下。
+        cfg.collision_output_dir/<seq_name>/ 底下。config 的 conflict_analysis.enabled 為 true 時，
+        接著跑 safetrajai.collision.conflict.run_conflict_analysis_for_sequence()（衝突指標，
+        ADR 0011），輸出寫到 cfg.collision_output_dir/<seq_name>/conflict/，不影響既有輸出。
 
         需要 stage1 先跑過（run_det_eval_dir 下要有 annotation_<seq>/trackers/... 與
         first_frame_with_box.jpg），若同一次執行 stages.run_stage1 也是 true，
@@ -270,6 +273,13 @@ class TrackingEvalPipeline:
                 fps=fps,
                 bounds=(height, width),
             )
+            if cfg.conflict_analysis.enabled:
+                run_conflict_analysis_for_sequence(
+                    seq_output_dir=seq_dir,
+                    cfg=cfg,
+                    fps=fps,
+                    bounds=(height, width),
+                )
 
     def run(self):
         """依 config 的 stages.run_stage1 / run_stage2 / run_stage3 決定要跑哪幾階段

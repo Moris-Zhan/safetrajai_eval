@@ -1,0 +1,246 @@
+# =============================================================================
+# config/conflict_analysis.yaml — collision_detect 加上衝突指標分析（change conflict-metrics，ADR 0011）
+#                                （stage1 tracking + stage3 TTC/PET + 衝突指標，stage2 TrackEval 關閉）
+# 用法：python track_eval.py --config config/conflict_analysis.yaml
+#
+# 除了最後的 conflict_analysis: 區塊外，與 config/collision_detect.yaml 完全相同；
+# 既有 stage3 的 TTC/PET 輸出不受影響，衝突指標另外寫到 collision_output/<seq>/conflict/。
+# 只有鏡頭設定（config/homography/<camera>.yaml）有矩陣、經緯度且 scale_check: passed 的
+# 序列才會計算；其餘序列只輸出 conflict/summary.json 並記錄略過原因。
+# 指標只是技術訊號，不能當成正式的安全結論。
+# =============================================================================
+
+
+paths:
+  dataset: cctv_all8
+  TRACKEVAL_OUT_DIR: trackeval_output
+  COLLISION_OUT_DIR: collision_output
+  OUTPUT_ROOT: ./runs/track_eval
+
+
+models:
+  det_model_path: ./models/yolo/yolo11x_dennis.pt
+
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+stages:
+  run_stage1: true
+  run_stage2: false
+  run_stage3: true
+
+eval_flags:
+  run_det_eval:   false
+  run_track_eval: true
+
+
+# -----------------------------------------------------------------------------
+# 碰撞偵測參數（safetrajai/collision/，見 markdown/COLLISION_DETECTION.md）
+# -----------------------------------------------------------------------------
+collision:
+  # 鏡頭鍵的 Homography 設定（<camera>.yaml，見 safetrajai/collision/homography/camera_config.py）；
+  # 鏡頭沒有設定檔時，該鏡頭的序列退回原始像素座標
+  homography_camera_dir: config/homography
+
+  # TTC（Time-To-Collision）參數，見 COLLISION_DETECTION.md 第 2 節
+  max_ttc_frames: 30      # 模擬時間上限（frame 數）；SafeTrajAI 主流程原本掃 15/30/45/60，這裡先固定一組
+  iou_threshold: 0.8      # 判定為碰撞的邊界框 IoU 門檻（原始程式預設值）
+
+  # PET（Post-Encroachment Time）參數，見 COLLISION_DETECTION.md 第 3 節
+  lookback_sec: 3.0       # 允許比對的最大時間差（秒）；SafeTrajAI 主流程原本掃 2.0~4.5，這裡先固定一組
+  # ⚠️ 原始程式 overlap_threshold 預設 0.2 是校準給 Homography 轉換後地圖座標系用的門檻值；
+  # 本專案沒有 homography 對應點時會退回原始像素座標，量級完全不同，這裡先給一個像素尺度的
+  # 起始值，還沒用實際資料驗證過，之後要依實測結果調整
+  overlap_threshold: 30.0
+
+
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+logging:
+  verbose: false
+  debug:   false
+
+tracking_params:
+  tracker: botsort
+  conf:        0.15
+  iou:         0.50
+  imgsz:       640
+  frame_rate:  30
+  gmc_method:  ecc
+
+save params:
+  show: false
+  save: false
+  save_txt: true
+  show_unmatched: false
+  show_removed: false
+  save_reid_crops: false
+  reid_crop_dir: ./dataset/reid/crops
+
+
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（沿用 config/botsort_noreid.yaml，BoTSORT、ReID 全部關閉）
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    bus:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+      use_reid: false
+      proximity_thresh: 0.1
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    small_truck:
+      center_dist_weight: 0.2
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    truck:
+      center_dist_weight: 0.2
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.6
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.3
+      model: models/yolo/yolo11x.pt
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+    model: ./yolo11x-cls-reid.pt
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15
+
+
+# -----------------------------------------------------------------------------
+# 衝突指標分析（safetrajai/collision/conflict/，單位一律是公尺、秒；預設值沿用參考實作 Sub_Module/trajectoryanalyst2）
+# -----------------------------------------------------------------------------
+conflict_analysis:
+  enabled: true
+
+  # 運動學
+  smooth_window_s: 0.6            # 置中移動平均視窗（秒），依 fps 換算成 2*floor(s*fps/2)+1 幀
+  max_gap_frames: 3               # 幀差大於此值時切段，不跨空檔差分
+  min_speed_mps: 0.5              # 速率低於此值時航向未定義
+  min_fps_for_acceleration: 10    # 序列 fps 低於此值時不計算加速度類指標（MTTC、DR、MaxD、DRAC 超限、CI）
+
+  # 配對與衝突類型
+  pair_radius_m: 50.0             # 同幀中心距離超過此值的配對不計算
+  # class_pairs: 預設為 6 類兩兩組合（含同類）排除 person–person；要自訂時列出 [類別, 類別]
+  angle_types:                    # 速度夾角的連續區間上限（度）與類型：[0,30] (30,85] (85,180]
+    - [30, Rear-end]
+    - [85, Lane-change]
+    - [180, Crossing]
+
+  # TTC／MTTC
+  ttc_distance_m: 2.0             # 中心距離小於此值視為命中（參考實作）
+  ttc_distance_mode: fixed        # fixed | class_length（選用：改用兩類別長度一半的和）
+  ttc_horizon_s: 5.0              # 外推上限（秒）
+  ttc_step_s: 0.02                # 外推步進（秒）
+
+  # 追撞鏈（Floyd-Warshall）
+  chain_angle_deg: 30.0           # 夾角超過此值的部分計入成本（度）
+  chain_dist_m: 10.0              # 最小 ΔS 超過此值的部分計入成本（公尺）；角度相符時 ΔS ≤ chain_dist_m + chain_eps 即連通
+  chain_dist_weight: 1.0
+  chain_eps: 3.0                  # 最短路徑總成本不超過此值視為同一追撞鏈
+
+  # PET
+  pet_zone_m: 2.0                 # 衝突區半徑（公尺）
+  pet_max_gap_s: 0.0              # 0 = 只算同時出現過的配對（參考實作）；> 0 時允許的時間間隔（秒）
+
+  # 衝突事件
+  event_threshold_s: 2.5          # TTC 或 MTTC 低於此值的幀才構成事件（秒）
+  event_gap_frames: 2             # 幀差不超過此值時合併為同一事件
+  stat_thresholds_s: [1.0, 1.5, 2.0, 2.5]   # 摘要中以事件數統計的門檻（秒）
+
+  # 類別長度（公尺，只用於 ttc_distance_mode: class_length）與質量（公斤，用於 CI_m），取自參考實作 OBJECT_SIZE
+  object_length_m: {person: 0.4, car: 5.0, scooter: 1.8, small_truck: 6.0, bus: 12.0, truck: 7.0}
+  object_mass_kg: {person: 70, car: 2150, scooter: 200, small_truck: 5000, bus: 16000, truck: 17000}

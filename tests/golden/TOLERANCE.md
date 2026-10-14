@@ -79,4 +79,17 @@ Homography 改以鏡頭為鍵（`config/homography/<camera>.yaml`）、驗證報
 - **之後的預期差異**：`summary.csv` 的 `scale_check`、`m_per_pixel` 與 `_m` 欄位直接取自鏡頭設定。任何鏡頭的 `latlon`、`scale_check` 或 check points 改變，homography 類別都會出現差異，屬於預期變更，要重建基準並在這裡記錄。
 - 逐項說明見 `openspec/changes/camera-homography-georef/verification.md`。
 
-之後的比對一律使用 `python tests/golden/compare.py georef1 <run>`。
+（已被下一節取代：基準改為 `conflict1`。）
+
+## 基準切換：georef1 → conflict1（2026-10-14，change `conflict-metrics`）
+
+新增第 6 個情境 `conflict_analysis`（`tests/golden/configs/conflict_analysis.yaml`，與 `config/conflict_analysis.yaml` 只差輸出路徑）：stage1＋stage3，並開啟公尺單位的衝突指標分析。新增情境會多出整個 `conflict_analysis/` 目錄，golden 基準因此改為 `conflict1`。
+
+- 自比：以最終程式碼連跑 `conflict1`、`conflict1b`，`compare.py conflict1 conflict1b` 全部為 0 差異，容忍度仍為 0。新的 `conflict` 類別有 42 個檔案（C000025 六段序列 × 7 個檔案），兩次執行逐位元相同。
+- 與 `georef1` 相同：既有 5 個情境、grid search、homography 全部 0 差異，沒有只存在於 `georef1` 的檔案。
+- 與 `georef1` 不同（預期，全部位於 `conflict_analysis/`）：只多出新情境的檔案，包括 `mot_tracks` 72、`yolo_labels` 441、`conflict_events` 44、`conflict` 42、`other` 471 個。新情境的既有 stage3 輸出（44 個檔案）與同一次執行的 `collision_detect/collision_output/` 逐位元相同。
+- `compare.py` 調整：新增 `conflict` 類別（`collision_output/<seq>/conflict/`），並修正數值比較把兩個相同的無限大（`inf` 與 `inf`）算成不同的問題（inf − inf 為 NaN）。`pair_frames.csv` 的 TTC 欄位有 `inf`，修正前自比會出現假差異。
+- 耗時：`pipeline_conflict_analysis` 約 426 秒，與 `collision_detect` 平行執行，整體仍約 16 分鐘（最長的是 `botsort_save_reid_crops` 968 秒）。
+- 逐項說明見 `openspec/changes/archive/2026-10-14-conflict-metrics/verification.md`。
+
+之後的比對一律使用 `python tests/golden/compare.py conflict1 <run>`。

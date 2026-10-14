@@ -36,6 +36,7 @@ CATEGORY_ORDER = (
     "trackeval",
     "grid_search",
     "conflict_events",
+    "conflict",
     "reid_crops",
     "homography",
     "other",
@@ -76,6 +77,8 @@ def categorize(relative_path: str) -> str:
         return "grid_search"
     if parts[0] == "homography_validation":
         return "homography"
+    if "collision_output" in parts and "conflict" in parts:
+        return "conflict"
     if "collision_output" in parts:
         return "conflict_events"
     if "trackeval_output" in parts or relative_path.endswith("_summary.txt"):
@@ -120,7 +123,7 @@ def merge(diffs: Iterable[FileDiff]) -> FileDiff:
 def compare_scalars(value_a: Any, value_b: Any) -> FileDiff:
     number_a, number_b = to_float(value_a), to_float(value_b)
     if number_a is not None and number_b is not None:
-        if math.isnan(number_a) and math.isnan(number_b):
+        if (math.isnan(number_a) and math.isnan(number_b)) or number_a == number_b:
             return FileDiff()
         delta = abs(number_a - number_b)
         if math.isnan(delta):

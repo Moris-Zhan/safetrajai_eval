@@ -34,7 +34,7 @@ cd "$REPO_ROOT"
 
 GOLDEN_ROOT="runs/refactor_golden"
 OUT="$GOLDEN_ROOT/$RUN"
-SCENARIOS=(bytetrack botsort_noreid botsort_reid collision_detect botsort_save_reid_crops)
+SCENARIOS=(bytetrack botsort_noreid botsort_reid collision_detect botsort_save_reid_crops conflict_analysis)
 
 PIPELINE_CMD="${PIPELINE_CMD:-python track_eval.py}"
 GRID_SEARCH_CMD="${GRID_SEARCH_CMD:-python scripts/grid_search_bytetrack.py}"
