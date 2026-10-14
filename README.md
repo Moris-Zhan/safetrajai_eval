@@ -386,7 +386,80 @@ HOTA 與 IDSW：
 - 舊設定整體較差，主要來自為 30 fps 設計的追蹤參數（C000025 約 5 fps），不是 ReID 造成的。
 - 剩下的 ID switch（car 3、scooter 6）屬於遮擋或長時間遺失。先前用閘門擴大外觀作用範圍反而讓 IDSW 增加，瓶頸在模型與資料（見 `CLAUDE.md` 的 Re-ID 一節）。下一步應先用疊圖影片檢查這些 ID switch 的情境，而且只在 tune 子集上分析。
 
-### 7.2 Re-ID 訓練與驗證（需要第 6 節資料）
+### 7.2 調參（grid search）
+
+針對**單一類別**掃描追蹤參數。這是參數調整，不是模型訓練；分數是 `HOTA.AssA_mean`（關聯指標，不等於 HOTA）。
+
+| 腳本 | 掃描對象 | 預設設定檔 | 前提 |
+|---|---|---|---|
+| `scripts/grid_search_bytetrack.py` | ByteTrack | `config/grid_search_bytetrack.yaml` | 第 5 節資料、YOLO 權重、長時間 |
+| `scripts/grid_search_botsort.py` | BoTSORT（ReID 關閉） | `config/grid_search_botsort.yaml` | 同上 |
+| `scripts/grid_search_botsort_reid.py` | BoTSORT（ReID 開啟） | `config/botsort_reid.yaml` | 同上，另需 Re-ID 權重 |
+
+```bash
+python scripts/grid_search_bytetrack.py --target-class scooter --dry-run   # 只印組合數，不執行
+python scripts/grid_search_botsort.py --target-class scooter --tracker botsort --max-videos 1   # 最小驗證
+python scripts/grid_search_botsort_reid.py --target-class person --resume --result-csv <csv>    # 續跑
+```
+
+- `--params-subset a,b` 只搜尋指定參數，其餘沿用目前設定；`--resume` 只跳過完全相同、已完成的組合。
+- 全量掃描會跑完整的 stage1＋stage2，耗時，也會寫入 `runs/`，執行前先確認範圍與輸出位置。
+- 每個 trial 結束後都會還原 `CLASS_TRACKING_PARAMS`（成功、跳過或例外皆然）。
+
+### 7.3 衝突事件與 Homography（stage3）
+
+程式碼中的 `collision` 指**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（見 [ADR 0003](docs/adr/0003-collision-name-means-conflict-event.md)）。
+
+| 設定檔 | 階段 | 說明 |
+|---|---|---|
+| `config/collision_detect.yaml` | stage1＋stage3 | TTC／PET 事件，輸出在 `collision_output/<seq>/` |
+| `config/conflict_analysis.yaml` | stage1＋stage3 | 同上，另外計算公尺單位的衝突指標（輸出在 `collision_output/<seq>/conflict/`）；只在 `scale_check: passed` 的鏡頭計算，其餘序列只寫 `summary.json` 並記錄略過原因 |
+
+```bash
+python track_eval.py --config config/conflict_analysis.yaml
+```
+
+衝突指標只是技術訊號，不能當成正式的安全結論（見 [ADR 0010](docs/adr/0010-meters-for-georeferenced-cameras.md)、[ADR 0011](docs/adr/0011-conflict-metrics-follow-reference-implementation.md)）。
+
+**Homography 鏡頭設定**（`config/homography/<camera>.yaml`）依下列順序操作；腳本都在 repo 根目錄執行：
+
+| 步驟 | 腳本 | 用途 | 前提 |
+|---|---|---|---|
+| 驗證 | `scripts/validate_homography.py` | 批次驗證既有矩陣，輸出到 `models/homography/validation_output/`（**會覆寫該目錄既有輸出**；沒有參數，不要用 `--help` 試探） | `models/homography/`；比對影片需要來源影片 |
+| 1 遷移 | `scripts/migrate_homography_config.py` | 舊的 tag 鍵資料 → 鏡頭鍵設定，只寫新檔，衝突時不寫；先用 `--dry-run` | 無 |
+| 2 經緯度 | `scripts/geocode_cameras.py` | 查詢鏡頭經緯度，先產生候選表 `models/homography/geocode_candidates.csv`，再用 `--apply [--accept <cam...>]` 寫入 | 連網（OSM Overpass）；Google 備援需 `GOOGLE_MAPS_API_KEY` 或 `GOOGLE_MAPS_DEMO_API_KEY`，`--no-google` 可關閉備援 |
+| 3 比例尺 | `scripts/check_homography_scale.py` | 以已知長度地物（如車道寬）核對比例尺，結果寫入 `scale_check`；`--dry-run` 只印結果 | 連網與 Google 金鑰（影像比對；`--skip-image-match` 可略過） |
+| 底圖 | `scripts/download_satellite.py` | 下載衛星圖，`--purpose verify\|basemap` | 連網；`basemap` 只接受 `GOOGLE_MAPS_API_KEY`，Demo Key 只能用於 `verify` |
+
+- 金鑰從環境變數或 repo 根目錄的 `.env`（已被 git 忽略）讀取，程式不會印出金鑰值；README 與紀錄中也不要貼金鑰。
+- 這三個連網腳本都是手動執行，不在 pipeline 中。Google Static Maps 的條款可能限制離線保存與衍生使用，底圖不納入 git。
+- 沒有 `scale_check: passed` 的鏡頭，單位維持像素，不會退回預設比例（ADR 0010）。
+
+### 7.4 Re-ID 資料
+
+資料流程依序是 **蒐集 → 標記 → 自動排除 → 抽查 → 人工排除 → 碎片合併 → manifest**。各步驟的細節、輸出目錄與資料量見 [`scripts/reid_data/README.md`](scripts/reid_data/README.md)。腳本都在 repo 根目錄執行；寫入類的腳本不帶 `--apply` 時只列印計畫（dry-run）。
+
+| 步驟 | 腳本／設定 | 用途 | 前提 |
+|---|---|---|---|
+| 1 蒐集 | `config/reid_crops.yaml`（`python track_eval.py --config config/reid_crops.yaml`） | 只跑 stage1，從來源鏡頭蒐集裁切到 `dataset/reid/crops/` | 來源影片（第 3 節，不在 HF）、YOLO 權重、長時間 |
+| 2 標記 | `scripts/reid_data/detect_contamination.py` | 以 DINOv2 標記污染身分，輸出到 `dataset/reports/reid/` | 個別裁切 JPEG；第一次使用從 HF Hub 下載 DINOv2（連網）；HF 還原的資料不足以執行 |
+| 3 自動排除 | `scripts/reid_data/apply_auto_exclusions.py [--apply]` | 由標記整份重算 `auto_exclusions.csv` | 只讀報表與 CSV |
+| 4 抽查 | `scripts/reid_data/generate_identity_review.py --audit-only` | 產生抽查頁與 `audit_sample.csv`（勾選＝排除） | 個別裁切 JPEG；HF 還原的資料不足以執行 |
+| 4 抽查 | `scripts/reid_data/summarize_audit.py --confirm-csv <csv...>` | 每支鏡頭的不合格率（> 10% 要處理） | 只讀 CSV |
+| 5 人工排除 | `scripts/reid_data/apply_review_exclusions.py --confirm-csv <csv> [--apply]` | 合併進 `exclusions.csv` | 只讀 CSV |
+| 6 碎片合併 | `scripts/reid_data/extract_fragment_features.py` | 只讀碎片候選端點裁切的 DINOv2 特徵 | 個別裁切 JPEG；HF 還原的資料不足以執行 |
+| 6 碎片合併 | `scripts/reid_data/build_fragment_merges.py [--sample N --seed S \| --calibrate <csv> \| --apply]` | 產生碎片合併清單 `fragment_merges.csv`；`--sample` 會複製裁切到確認頁，所以需要個別裁切 JPEG | `--calibrate`／`--apply` 只讀特徵與 CSV |
+| 7 manifest | `scripts/reid_data/build_reid_split.py --version <v> [--merges dataset/reid/fragment_merges.csv]` | 兩份排除清單都套用，依 `config/reid_split.yaml` 切分 train／val | 產生新版本需要 `crops/`，HF 還原的資料不足以執行（見 6.4）；直接使用下載的 manifest 即可 |
+
+蒐集用的其他情境設定：
+
+| 設定檔 | 說明 |
+|---|---|
+| `config/botsort_save_reid_crops.yaml` | BoTSORT＋`save_reid_crops`，只跑 stage1。資料來源是**評估資料集** `cctv_all8`，裁切不得用於訓練 |
+| `config/botsort_save_reid_crops_video.yaml` | 同上，來源改為 `reid_sources`、`frame_rate: 30`、輸出放在 `runs/`；只保留作為對照，正式訓練資料請用 `config/reid_crops.yaml` |
+| `config/reid_split.yaml` | 資料集版本的切分規則（哪些鏡頭＋日期為 val、每身分最少／最多張數），由 `build_reid_split.py` 讀取 |
+
+### 7.5 Re-ID 訓練與驗證（需要第 6 節資料）
 
 ```bash
 # val 評估既有模型（mAP／Rank-1，只作參考）
@@ -402,6 +475,64 @@ python scripts/reid_train/fusion_distance_stats.py --out runs/reid_stats/<name>.
 ```
 
 新模型要上線，須依 spec `reid-model` 的條件在調參序列上與驗收基準比較：結果不變差，而且 IDSW 減少或 IDP 上升。只有 val mAP 上升不算通過。
+
+其餘兩支腳本：
+
+| 腳本 | 用途 | 前提 |
+|---|---|---|
+| `scripts/reid_train/pack_manifest.py --version <v> [--reuse-version <v0>]` | 依 manifest 把裁切打包成本機快取 `~/.cache/safetrajai/reid_packs/<v>/`（只從掛載磁碟各讀一次） | **HF 還原後不要執行**：打包檔已還原，而且個別裁切 JPEG 不在 HF，重新打包會失敗（見 6.4） |
+| `scripts/reid_train/acceptance_grid.py {configs,summarize}` | 追蹤驗收：`configs` 以 `config/botsort_reid_timm.yaml` 為底，產生每個子集的驗收設定；`summarize` 彙總逐類別結果並依 spec 判定（輸出 CSV＋Markdown） | 第 5 節的 tune／holdout 子集、YOLO 權重；執行驗收設定要跑 stage1＋stage2，耗時 |
+
+```bash
+# 產生驗收設定 → 以 track_eval.py 執行 → 彙總
+python scripts/reid_train/acceptance_grid.py configs --name <run> --set CLASS.KEY=VALUE
+python track_eval.py --config runs/reid_domain/accept/configs/<run>_tune.yaml > runs/reid_domain/accept/<run>/tune/run.log 2>&1
+python scripts/reid_train/acceptance_grid.py summarize --baseline baseline --runs <run> --out <prefix>
+```
+
+holdout 子集只作最終確認，不可拿來調參。目前 `config/botsort_reid_timm.yaml` 的 6 類 ReID 都關閉。
+
+### 7.6 工具
+
+| 腳本 | 用途 | 前提 |
+|---|---|---|
+| `scripts/run_pipeline.py` | 與 `python track_eval.py` 等價的入口（同一個 `safetrajai.cli.run_pipeline.main()`），參數相同：`--config <path>` | 同 7.1 |
+| `scripts/roi/make_roi_picker.py --camera <camera>` | 產生 ROI 離線點選頁（單檔 HTML，首幀內嵌），輸出到 `runs/roi_picker/`；在本機瀏覽器點出多邊形頂點後，把產生的 YAML 放回 `config/roi/<camera>.yaml`。完整步驟見 [`Markdown/USAGE.md`](Markdown/USAGE.md) 第 5.2 節 | `dataset/raw/videos/<camera>/` 的來源影片；不需要網路 |
+| `scripts/visualize_gt_on_video.py` | 把**人工 GT**（`gt/gt.txt`，可帶 class 欄）疊在序列影片上 | 第 5 節資料 |
+| `scripts/visualize_gt_on_class_video.py` | 把**追蹤結果**（`trackers/mot_challenge/<benchmark>-<split>/YOLO11x__<class>/data/<seq>.txt`，每類一檔）合併疊在序列影片上，用來檢查 ID switch 與跨類別誤配 | 已跑過 stage1／stage2 的輸出 |
+
+```bash
+python scripts/roi/make_roi_picker.py --camera C000054
+python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
+python scripts/visualize_gt_on_class_video.py --trackeval_root <path> --video_path <path> --output_video <path>
+```
+
+兩支疊圖腳本另有 `--color_by {class,id}`、`--class_names`、`--show_class_filter`、`--no_id`、`--no_legend` 等顯示選項，見各自的 `--help`。
+
+### 7.7 測試
+
+測試分三層。前兩層都在 `track_eval` 環境、repo 根目錄執行 `pytest`，不需要資料集、權重或 GPU；第三層才需要完整資料。
+
+| 層級 | 指令 | 耗時 | 前提 | 何時跑 |
+|---|---|---|---|---|
+| smoke | `pytest tests/test_smoke.py` | 秒級 | 安裝即可 | 任何結構調整後 |
+| 單元 | `pytest`（含 smoke 與下列單元測試） | 秒級～分鐘 | 不需要資料／權重 | 提交前 |
+| golden 比對 | `tests/golden/run_all.sh <run>`，再 `python tests/golden/compare.py <基準> <run>` | 約 16 分鐘 | 完整資料（第 5 節）、YOLO 權重 | 改動演算法或 stage 行為後 |
+
+**smoke**（`tests/test_smoke.py`）：全部模組可 import、全部 config 可載入、類別 ID 契約、tracker override 方法的 AST 不變性（ADR 0004）、`sys.path` 掃描、有 argparse 的腳本 `--help` 可執行。其中「被隔離的 Re-ID 權重仍可載入」在權重檔不存在時會被略過（`skipif`），不是失敗。另有少數參數組合不適用（例如不迭代類別的腳本、不是追蹤情境的設定）而被略過，`pytest` 結尾出現 `skipped` 屬正常。
+
+**單元測試**依領域分組：
+
+| 領域 | 測試檔 |
+|---|---|
+| Re-ID 資料與訓練 | `tests/test_reid_*.py`（manifest、切分、污染標記、自動排除、抽查、碎片合併、編碼、融合、外觀距離統計、訓練、驗收） |
+| Homography／georef | `tests/test_homography_*.py`、`test_geocode_cameras.py`、`test_satellite_download.py`、`test_scale_match.py`、`test_secrets.py` |
+| 衝突指標 | `tests/test_conflict_metrics.py` |
+| ROI／資料集路徑／忽略區域 | `tests/test_roi_and_layout.py`、`test_ignore_region.py` |
+| tracker 保留期限 | `tests/test_tracker_retention.py` |
+| 文件 | `tests/test_readme_coverage.py`：`scripts/` 的每支腳本與 `config/` 的每份設定都必須出現在本 README；新增入口卻沒寫文件時會失敗，確實不適合列入的才寫進該檔的 `EXEMPT`（要附理由） |
+
+**golden 比對**確認重構或調整後的輸出與基準逐位元一致：`run_all.sh` 以 6 個情境＋grid search＋homography 驗證跑一次完整流程，輸出在 `runs/refactor_golden/<run>/`（先用 `--dry-run` 看會執行哪些步驟）。基準自比的容忍度為 0，任何非零差異都代表行為改變；基準名稱、更換基準的原因與預期差異見 [`tests/golden/TOLERANCE.md`](tests/golden/TOLERANCE.md)。全量執行耗時，也會寫入 `runs/`，執行前先確認範圍。
 
 ## 8. 資料使用規則
 
