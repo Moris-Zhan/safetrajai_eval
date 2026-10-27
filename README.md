@@ -530,6 +530,7 @@ python scripts/visualize_gt_on_class_video.py --trackeval_root <path> --video_pa
 | 衝突指標 | `tests/test_conflict_metrics.py` |
 | ROI／資料集路徑／忽略區域 | `tests/test_roi_and_layout.py`、`test_ignore_region.py` |
 | tracker 保留期限 | `tests/test_tracker_retention.py` |
+| 追蹤設定與 grid search | `tests/test_track_config.py`（設定載入與驗證、全域參數更新、查表退回預設、載入順序契約）、`test_grid_search_core.py`（參數組合、AssA 萃取、trial 參數修補與還原、resume） |
 | 文件 | `tests/test_readme_coverage.py`：`scripts/` 的每支腳本與 `config/` 的每份設定都必須出現在本 README；新增入口卻沒寫文件時會失敗，確實不適合列入的才寫進該檔的 `EXEMPT`（要附理由） |
 
 **golden 比對**確認重構或調整後的輸出與基準逐位元一致：`run_all.sh` 以 6 個情境＋grid search＋homography 驗證跑一次完整流程，輸出在 `runs/refactor_golden/<run>/`（先用 `--dry-run` 看會執行哪些步驟）。基準自比的容忍度為 0，任何非零差異都代表行為改變；基準名稱、更換基準的原因與預期差異見 [`tests/golden/TOLERANCE.md`](tests/golden/TOLERANCE.md)。全量執行耗時，也會寫入 `runs/`，執行前先確認範圍。
