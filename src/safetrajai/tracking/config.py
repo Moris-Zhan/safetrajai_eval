@@ -101,6 +101,13 @@ def _validate_fusion_params(class_name: str, params: dict[str, Any]) -> None:
             raise ValueError(f"class_tracking_params['{class_name}'].{key} 必須是數字且 {rule}，目前為 {value!r}")
 
 
+def _to_float(value: Any, label: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{label} 必須是數字，目前為 {value!r}") from None
+
+
 def load_track_config(path: str | Path | None = None) -> Path:
     """
     從 YAML 載入 tracking 設定，並寫入全域參數（class-aware tracking 用）。
@@ -174,30 +181,31 @@ def load_track_config(path: str | Path | None = None) -> Path:
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValueError(f"類別 {class_name!r} 的 track_buffer 必須是正整數幀數，目前為 {value!r}")
 
+    # 在修改任何全域參數之前，先完成所有驗證與型別轉換
+    for name, params in ctp.items():
+        # 每個 class 的設定必須是 dict（包含不在 class_names 的類別）
+        if not isinstance(params, dict):
+            raise ValueError(f"class_tracking_params['{name}'] 必須為 mapping")
+
+    new_class_names = _coerce_class_names(cn)
+    # 強制 key 為 string（避免 int / str 混亂）
+    new_class_params = {str(name): dict(params) for name, params in ctp.items()}
+    new_conf_thresh = {str(name): _to_float(val, f"class_conf_thresh['{name}']") for name, val in cct.items()}
+
     # 預設 conf threshold（若沒寫就用 0.15）
-    dct = float(data.get("default_conf_thresh", 0.15))
+    dct = _to_float(data.get("default_conf_thresh", 0.15), "default_conf_thresh")
 
     # =========================
     # 3️⃣ 更新 CLASS_NAMES
     # =========================
-    # 清空舊資料
     CLASS_NAMES.clear()
-
-    # 將 YAML 中 class_names 做型別轉換（例如 key 轉 int）
-    CLASS_NAMES.update(_coerce_class_names(cn))
+    CLASS_NAMES.update(new_class_names)
 
     # =========================
     # 4️⃣ 更新 CLASS_TRACKING_PARAMS
     # =========================
     CLASS_TRACKING_PARAMS.clear()
-
-    for name, params in ctp.items():
-        # 每個 class 的設定必須是 dict
-        if not isinstance(params, dict):
-            raise ValueError(f"class_tracking_params['{name}'] 必須為 mapping")
-
-        # 強制 key 為 string（避免 int / str 混亂）
-        CLASS_TRACKING_PARAMS[str(name)] = dict(params)
+    CLASS_TRACKING_PARAMS.update(new_class_params)
 
     # =========================
     # 5️⃣ 更新 DEFAULT_TRACKING_PARAMS
@@ -209,10 +217,7 @@ def load_track_config(path: str | Path | None = None) -> Path:
     # 6️⃣ 更新 CLASS_CONF_THRESH
     # =========================
     CLASS_CONF_THRESH.clear()
-
-    for name, val in cct.items():
-        # 確保 value 是 float
-        CLASS_CONF_THRESH[str(name)] = float(val)
+    CLASS_CONF_THRESH.update(new_conf_thresh)
 
     # =========================
     # 7️⃣ 設定 default conf threshold

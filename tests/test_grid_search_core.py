@@ -92,7 +92,6 @@ def test_extract_assa_mean_returns_none_when_a_level_is_missing(results: Any) ->
 
 # Known gap G4 (openspec change add-config-and-grid-search-unit-tests, design.md): desired behavior, expected to fail
 # until extract_assa_mean stops falling back to an arbitrary entry.
-@pytest.mark.xfail(strict=True, reason="G4: a missing target class falls back to the first entry, e.g. a combined average")
 def test_extract_assa_mean_does_not_borrow_another_entry_when_the_class_is_missing() -> None:
     sequences = {"COMBINED_SEQ": {"cls_comb_cls_av": {"HOTA": {"AssA": np.array([0.7])}}}}
     results = trackeval_results(None, sequences=sequences)
@@ -158,14 +157,17 @@ def test_resolve_gt_source_root_returns_none_when_nothing_matches(tmp_path: Path
     assert core._resolve_gt_source_root(gt_cfg(tmp_path), "no_such_sequence") is None
 
 
-# Known gap G3 (openspec change add-config-and-grid-search-unit-tests, design.md): desired behavior, expected to fail
-# until the prefix fallback refuses ambiguous matches.
-@pytest.mark.xfail(strict=True, reason="G3: the 20-character prefix fallback can return another sequence's GT directory")
 def test_resolve_gt_source_root_does_not_return_a_sibling_sequence(tmp_path: Path) -> None:
     prefix = "C000025 sequence_dup"
     for name in (f"{prefix}_1", f"{prefix}_2"):
         (tmp_path / "mot_out" / name).mkdir(parents=True)
     assert core._resolve_gt_source_root(gt_cfg(tmp_path), f"{prefix}_3") is None
+
+
+def test_resolve_gt_source_root_accepts_a_single_prefix_candidate(tmp_path: Path) -> None:
+    prefix = "C000025 sequence_dup"
+    (tmp_path / "mot_out" / f"{prefix}_1").mkdir(parents=True)
+    assert core._resolve_gt_source_root(gt_cfg(tmp_path), f"{prefix}_3") == str(tmp_path / "mot_out" / f"{prefix}_1")
 
 
 def det_cfg(tmp_path: Path) -> SimpleNamespace:
@@ -287,9 +289,6 @@ def test_without_a_usable_score_the_result_is_minus_infinity(
     assert run_score(tmp_path, {"match_thresh": 0.5}, videos=videos) == float("-inf")
 
 
-# Known gap G2 (openspec change add-config-and-grid-search-unit-tests, design.md): desired behavior, expected to fail
-# until score_params removes the key it added for a class that had no entry before the trial.
-@pytest.mark.xfail(strict=True, reason="G2: a class without an entry is restored as {} instead of being removed")
 def test_class_without_an_entry_is_removed_again_after_the_trial(
     trial_env: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -368,12 +367,24 @@ def test_without_resume_every_combination_is_scored_again(monkeypatch: pytest.Mo
     assert len(calls) == 4
 
 
-# Known gap G5 (openspec change add-config-and-grid-search-unit-tests, design.md): desired behavior, expected to fail
-# until a failed trial (-inf) is no longer counted as completed. The expectation itself is still to be confirmed.
-@pytest.mark.xfail(strict=True, reason="G5: a failed (-inf) trial is skipped by --resume as if it had completed")
 def test_resume_retries_a_failed_trial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     install_scores(monkeypatch, {(1, 10): float("-inf")})
     make_runner(tmp_path, grid={"a": [1], "b": [10]}).run()
     calls = install_scores(monkeypatch, SCORE_TABLE)
     make_runner(tmp_path, grid={"a": [1], "b": [10]}, resume=True).run()
     assert {"a": 1, "b": 10} in calls
+
+
+def test_resume_ignores_failed_rows_for_results_and_best_and_keeps_them_in_the_csv(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    install_scores(monkeypatch, {(1, 10): float("-inf"), (1, 20): 0.4})
+    make_runner(tmp_path, grid={"a": [1], "b": [10, 20]}).run()
+    calls = install_scores(monkeypatch, SCORE_TABLE)
+    runner = make_runner(tmp_path, grid={"a": [1], "b": [10, 20]}, resume=True)
+    assert [entry["params"] for entry in runner.results_] == [{"a": 1, "b": 20}]
+    assert runner.best_params_ == {"a": 1, "b": 20}
+    outcome = runner.run()
+    assert calls == [{"a": 1, "b": 10}]
+    assert [entry["combo_id"] for entry in outcome["all_results"]].count(runner.grid.combo_id({"a": 1, "b": 10})) == 1
+    assert [row["score"] for row in read_rows(tmp_path)] == ["-inf", "0.400000", "0.100000"]

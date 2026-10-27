@@ -253,9 +253,6 @@ def test_botsort_keeps_the_class_set_it_was_created_with(tmp_path: Path) -> None
     assert sorted(rebuilt.CLASS_KEYS) == ["bus", "car", "person"]
 
 
-# Known gap G1 (see openspec change add-config-and-grid-search-unit-tests, design.md): these checks describe the
-# desired behavior. They are expected to fail until config.py validates everything before touching its globals.
-@pytest.mark.xfail(strict=True, reason="G1: params of a class missing from class_names are checked after globals are cleared")
 def test_non_mapping_params_for_unlisted_class_leave_globals_unchanged(tmp_path: Path) -> None:
     section = minimal_section()
     section["class_tracking_params"]["bus"] = 5
@@ -265,11 +262,19 @@ def test_non_mapping_params_for_unlisted_class_leave_globals_unchanged(tmp_path:
     assert capture_state() == before
 
 
-@pytest.mark.xfail(strict=True, reason="G1: confidence thresholds are converted to float after globals are cleared")
 def test_non_numeric_confidence_threshold_leaves_globals_unchanged(tmp_path: Path) -> None:
     section = minimal_section()
     section["class_conf_thresh"] = {"person": "not a number", "car": 0.2}
     before = capture_state()
     with pytest.raises(ValueError):
+        config.load_track_config(write_config(tmp_path, section))
+    assert capture_state() == before
+
+
+@pytest.mark.parametrize("value", [None, [0.3], "not a number"])
+def test_non_numeric_default_confidence_threshold_leaves_globals_unchanged(tmp_path: Path, value: Any) -> None:
+    section = {**minimal_section(), "default_conf_thresh": value}
+    before = capture_state()
+    with pytest.raises(ValueError, match="default_conf_thresh"):
         config.load_track_config(write_config(tmp_path, section))
     assert capture_state() == before

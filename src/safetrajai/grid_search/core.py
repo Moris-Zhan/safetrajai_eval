@@ -21,6 +21,7 @@ import copy
 import csv
 import itertools
 import json
+import math
 import random
 import shutil
 import string
@@ -144,12 +145,6 @@ def extract_assa_mean(
             # 第四層：class
             cls_val = seq_val.get(target_class)
             if cls_val is None:
-                # TrackEval 有時用 cls index string
-                for v in seq_val.values():
-                    if isinstance(v, dict):
-                        cls_val = v
-                        break
-            if cls_val is None:
                 continue
 
             # 第五層：metric family → HOTA → AssA
@@ -194,9 +189,9 @@ def _resolve_gt_source_root(cfg, seq_stem: str) -> str | None:
     if candidate.exists():
         return str(candidate)
 
-    # fallback: glob 比對前綴（容許 seq_stem 含特殊字元）
+    # fallback: glob 比對前綴；有歧義（多個候選）時不猜，避免取到別段序列的 GT
     matches = sorted(mot_dir.glob(f"{seq_stem[:20]}*"))
-    if matches:
+    if len(matches) == 1:
         return str(matches[0])
 
     return None
@@ -427,6 +422,7 @@ def score_params(
         所有序列的 HOTA.AssA_mean 平均值；若無有效結果回傳 -inf。
     """
     # ── 1. Patch CLASS_TRACKING_PARAMS ───────────────────────────────────────
+    had_entry = target_class in tracker_config_module.CLASS_TRACKING_PARAMS
     original_params = copy.deepcopy(
         tracker_config_module.CLASS_TRACKING_PARAMS.get(target_class, {})
     )
@@ -534,7 +530,10 @@ def score_params(
         traceback.print_exc()
     finally:
         # ── 4. 還原 CLASS_TRACKING_PARAMS ────────────────────────────────────
-        tracker_config_module.CLASS_TRACKING_PARAMS[target_class] = original_params
+        if had_entry:
+            tracker_config_module.CLASS_TRACKING_PARAMS[target_class] = original_params
+        else:
+            tracker_config_module.CLASS_TRACKING_PARAMS.pop(target_class, None)
 
     if not scores:
         return float("-inf")
@@ -621,20 +620,25 @@ class GridSearchRunner:
             self._load_existing_results()
 
     def _load_existing_results(self):
-        """讀取已完成的試驗結果，供 resume 時跳過。"""
+        """讀取已成功完成的試驗結果，供 resume 時跳過；失敗列（-inf / nan）略過，該組合會重跑。"""
+        failed_count = 0
         with open(self.result_csv, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 combo_id = row.get("combo_id", "")
                 score    = float(row.get("score", float("-inf")))
                 params   = json.loads(row.get("params", "{}"))
+                if not math.isfinite(score):
+                    failed_count += 1
+                    continue
                 self._done_ids.add(combo_id)
                 self.results_.append({"combo_id": combo_id, "score": score, "params": params})
                 if score > self.best_score_:
                     self.best_score_  = score
                     self.best_params_ = params
 
-        print(f"  [resume] Loaded {len(self._done_ids)} completed trials from {self.result_csv}")
+        print(f"  [resume] Loaded {len(self._done_ids)} completed trials from {self.result_csv}"
+              f" (ignored {failed_count} failed trials, they will be rerun)")
 
     def _append_csv(self, combo_id: str, score: float, params: dict, elapsed: float):
         """將一筆試驗結果追加寫入 CSV。"""
