@@ -125,7 +125,7 @@ tests/                       smoke 測試與 golden 比對工具
 - 每個 `config/*.yaml` 都是完整、自包含的情境設定：一般設定（`paths`、`models`、`stages`、`eval_flags`、`tracking_params`…）加上 `class_tracking:` 章節。這些區塊名稱是穩定介面，不能改名。新實驗請另外建檔，不要覆寫既有的基準情境。
 - 一般設定由 `safetrajai/evaluation/config_loader.py::load_config()` 讀取；`paths.dataset: <id>` 會去查 `config/datasets.yaml`，取得 `root`／`run_det_eval_dir`／`run_track_eval_dir`，也可以逐欄位顯式覆寫。每個資料集還有 `role`（`eval`：附人工 GT、只用於評估；`source`：用來產生訓練資料）、`layout`（`annotated` 是 `annotation_<seq>/` 結構，`raw` 是 `dataset/raw/videos/<camera>/` 平放影片）與 `cameras`；eval 與 source 的鏡頭不得重疊，評估鏡頭（目前是 C000025）不能進任何訓練資料，smoke 測試會檢查。
 - ROI（關注區域）屬於鏡頭，定義在 `config/roi/<camera>.yaml`（`camera`、`image_size`、`polygon`），依序列名稱第一個空白前的鏡頭編號查找；沒有檔案時以整張影像為 ROI，`image_size` 與影片不符時報錯。情境 config 不再支援頂層 `det_corner`，出現會直接報錯。
-- `class_tracking:` 由 `safetrajai/tracking/config.py::load_track_config()` 讀取，寫入模組層級的 `CLASS_TRACKING_PARAMS`。**這個函式必須在 `create_tracker()`／`Detector` 建立之前呼叫**；順序錯了不會報錯，只會悄悄用到空的或舊的參數。`--track-config` 不指定時，會直接讀 `--config` 檔本身的 `class_tracking:`。
+- `class_tracking:` 由 `safetrajai/tracking/config.py::load_track_config()` 讀取，寫入模組層級的 `CLASS_TRACKING_PARAMS`。**這個函式必須在 `create_tracker()`／`Detector` 建立之前呼叫**；順序錯了不會報錯：模組在 import 時已載入預設的 `config/bytetrack.yaml`，所以只會悄悄用到這份預設參數（或先前載入的設定），而不是指定的情境。BoTSORT 在建立時就固定類別集合（`CLASS_KEYS`），之後再載入設定不會更新已建立的 tracker，要使用新設定必須重新建立。`--track-config` 不指定時，會直接讀 `--config` 檔本身的 `class_tracking:`。
 - `stages.run_stage1/2/3` 控制要跑哪幾個階段；`eval_flags.run_det_eval/run_track_eval` 只控制 stage2 裡面的子工作，兩者語意不要混用。
 
 ### 路徑慣例（`safetrajai/evaluation/dataset_layout.py`）
