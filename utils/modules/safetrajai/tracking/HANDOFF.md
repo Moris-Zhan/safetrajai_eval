@@ -122,7 +122,7 @@ def get_dists(self, tracks, detections):
 ### 3.1 檔案結構
 
 ```
-src/safetrajai/tracking/              # 現況路徑（本文件寫成時仍叫 trackers/，後續歷經 trackers/ → tracker/ → 舊版 tracker 模組 → src/safetrajai/tracking/ 多次搬移）
+utils/modules/safetrajai/tracking/    # 現況路徑（本文件寫成時仍叫 trackers/，後續歷經 trackers/ → tracker/ → 舊版 tracker 模組 → src/safetrajai/tracking/ → utils/modules/safetrajai/tracking/ 多次搬移）
 ├── __init__.py                  # 工廠函式 + 全域基礎參數
 ├── config.py                    # 類別專屬參數定義（核心配置檔）
 ├── class_aware_botsort.py       # 繼承 BOTSORT，override update()

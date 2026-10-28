@@ -10,7 +10,7 @@
 
 另有一條 Re-ID 支線：從來源鏡頭蒐集裁切 → 品質把關 → manifest → 訓練 DINOv2 Re-ID 模型，供 BoTSORT 的逐類別 `use_reid` 使用。
 
-固定 6 類，類別 ID 是跨模組契約（`src/safetrajai/classes.py`）：`person=0`、`car=1`、`scooter=2`、`small_truck=3`、`bus=4`、`truck=5`。
+固定 6 類，類別 ID 是跨模組契約（`utils/modules/safetrajai/classes.py`）：`person=0`、`car=1`、`scooter=2`、`small_truck=3`、`bus=4`、`truck=5`。
 
 - 術語（鏡頭、序列、軌跡、身分、衝突事件…）：[`CONTEXT.md`](CONTEXT.md)
 - 架構決策：[`docs/adr/`](docs/adr/)
@@ -36,7 +36,7 @@
 
 ```
 track_eval.py              主入口（相容 wrapper → safetrajai.cli.run_pipeline）
-src/safetrajai/            主套件
+utils/modules/safetrajai/            主套件
   pipeline/                stage1/2/3 調度、單序列追蹤、Re-ID 裁切蒐集
   detection/               YOLO 推論＋逐類別信心門檻
   tracking/                class-aware ByteTrack／BoTSORT（override 方法凍結，見 ADR 0004）
@@ -44,14 +44,14 @@ src/safetrajai/            主套件
   evaluation/              stage2：路徑組裝、MOT 轉換、ROI 忽略區域、TrackEval、Excel
   collision/               stage3：TTC／PET、熱區圖、homography/
   grid_search/             追蹤參數 grid search 共用邏輯
-scripts/                   CLI：run_pipeline、run_evaluation、grid_search_*、reid_data/、reid_train/
-config/                    情境設定檔、datasets.yaml、roi/<camera>.yaml、homography_*
+scripts/                   CLI，依功能分資料夾：pipeline/、grid_search/、homography/、visualization/、picker/、reid_data/、reid_train/
+config/                    情境設定檔（tracking/、grid_search/、reid/、collision/）、datasets.yaml、roi/<camera>.yaml、homography_*
 tests/                     smoke 測試、單元測試、golden 比對
-third_party/trackeval/     修改過的 vendored TrackEval（唯讀）
+utils/modules/_vendor/trackeval/     修改過的 vendored TrackEval（唯讀）
 openspec/                  規格驅動的變更（proposal／design／specs／tasks）
 ```
 
-`dataset/`、`models/`、`runs/`、`video/` 不進版控，由第 5、6 節從 Hugging Face 還原。
+`dataset/`、`models/`、`runs/` 不進版控，由第 5、6 節從 Hugging Face 還原。
 
 ## 2. 安裝
 
@@ -212,7 +212,7 @@ Repo：<https://huggingface.co/datasets/Moris555/safetrajai-source>（tag `reid-
 
 | Run | 狀態 |
 |---|---|
-| `dinov2s_v3` | 唯一保留的模型（DINOv2 ViT-S/14，val mAP 0.783）；`fusion_distance_stats.py` 的預設權重，`config/botsort_reid_timm.yaml` 只在註解中列為候選，沒有任何類別載入 |
+| `dinov2s_v3` | 唯一保留的模型（DINOv2 ViT-S/14，val mAP 0.783）；`fusion_distance_stats.py` 的預設權重，`config/tracking/botsort_reid_timm.yaml` 只在註解中列為候選，沒有任何類別載入 |
 | `dinov2s_v2` | v2 對照組，追蹤上與 v3 平手；**已隔離** |
 | `dinov2s_v3_seed1` | 換種子的雜訊對照；**已隔離** |
 | `dinov2s_v3_distractor` | 實驗候選，未通過外觀分離度關卡；**已隔離** |
@@ -251,7 +251,7 @@ EOF
 
 - 只需要追蹤推論時，可把第一段的 `allow_patterns` 縮成 `["models/class_reid_weights/dinov2s_v3/**"]`，並略過打包檔。
 - `snapshot_download` 會在 `local_dir` 下建立 `.cache/huggingface/` 存放下載 metadata，可以保留（重新下載時用來跳過已完成的檔案）。
-- `config/` 刻意不下載：repo 內 `config/roi/`、`config/reid_*.yaml`、`config/fragment_merge.yaml` 已有版控版本。若要確認上傳當時的設定，可另外下載到暫存目錄比對。
+- `config/` 刻意不下載：repo 內 `config/roi/`、`config/reid_*.yaml`、`config/reid/fragment_merge.yaml` 已有版控版本。若要確認上傳當時的設定，可另外下載到暫存目錄比對。
 
 ### 6.3 核對
 
@@ -280,7 +280,7 @@ EOF
 - **不要再執行 `pack_manifest.py`**：打包檔已還原，而且個別裁切 JPEG 不在 HF，重新打包會失敗。`v3/pack.json` 記錄的 `reused_from: v2` 只是歷史，v3 打包檔本身是完整的。
 - 訓練讀「打包檔＋manifest」；干擾物取樣另外讀 `dataset/reid/crops/_index/` 與 `config/roi/`，兩者都已還原。
 - `train_record.json` 中的絕對路徑是原機器的紀錄，不影響載入。
-- 需要讀取個別裁切的工具（`detect_contamination.py`、`generate_identity_review.py`、`extract_fragment_features.py`，以及用 `build_reid_split.py` 產生新版本）無法只靠 HF 資料執行，必須先取得來源影片，用 `config/reid_crops.yaml` 重新蒐集裁切。
+- 需要讀取個別裁切的工具（`detect_contamination.py`、`generate_identity_review.py`、`extract_fragment_features.py`，以及用 `build_reid_split.py` 產生新版本）無法只靠 HF 資料執行，必須先取得來源影片，用 `config/reid/reid_crops.yaml` 重新蒐集裁切。
 - 排除與合併清單是上傳當時的快照；用它們重算 v1／v2 不保證與凍結的 manifest 一致，請直接使用下載的 manifest。
 
 ## 7. 執行
@@ -290,14 +290,14 @@ EOF
 ### 7.1 追蹤＋評估（需要第 5 節資料與 YOLO 權重）
 
 ```bash
-python track_eval.py --config config/bytetrack.yaml         # stage1 追蹤 + stage2 TrackEval
-python track_eval.py --config config/botsort_noreid.yaml
-python track_eval.py --config config/botsort_reid_timm.yaml # Re-ID 驗收基準（6 類 ReID 都關閉）
-python track_eval.py --config config/collision_detect.yaml  # stage1 + stage3（TTC／PET）
-python scripts/run_evaluation.py --config <config>           # 只對既有 stage1 輸出重跑 stage2
+python track_eval.py --config config/tracking/bytetrack.yaml         # stage1 追蹤 + stage2 TrackEval
+python track_eval.py --config config/tracking/botsort_noreid.yaml
+python track_eval.py --config config/tracking/botsort_reid_timm.yaml # Re-ID 驗收基準（6 類 ReID 都關閉）
+python track_eval.py --config config/collision/collision_detect.yaml  # stage1 + stage3（TTC／PET）
+python scripts/pipeline/run_evaluation.py --config <config>           # 只對既有 stage1 輸出重跑 stage2
 ```
 
-輸出在 `runs/track_eval/`。要縮小範圍，在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列。調整追蹤參數用 `scripts/grid_search_*.py`（`--dry-run` 先看組合數）。
+輸出在 `runs/track_eval/`。要縮小範圍，在 config 的 `paths:` 加 `SOURCE_VIDEO_DIR` 指定單一序列。調整追蹤參數用 `scripts/grid_search/grid_search_*.py`（`--dry-run` 先看組合數）。
 
 #### 評測資料集
 
@@ -325,7 +325,7 @@ python scripts/run_evaluation.py --config <config>           # 只對既有 stag
 
 #### 目前的追蹤基準分數
 
-Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_{tune,holdout}.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，兩個子集的設定只差 `SOURCE_VIDEO_DIR` 與輸出位置。逐序列 Excel 在 `runs/reid_domain/accept/baseline/{tune,holdout}/`，彙總在 `runs/reid_domain/accept/grid_tune.md` 與 `baseline_holdout.md`。
+Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/configs/baseline_{tune,holdout}.yaml`，由 `acceptance_grid.py configs --name baseline` 以 `config/tracking/botsort_reid_timm.yaml` 為底產生（追蹤參數相同，6 類 ReID 都關閉）。偵測模型為 `yolo11x_dennis.pt`，兩個子集的設定只差 `SOURCE_VIDEO_DIR` 與輸出位置。逐序列 Excel 在 `runs/reid_domain/accept/baseline/{tune,holdout}/`，彙總在 `runs/reid_domain/accept/grid_tune.md` 與 `baseline_holdout.md`。
 
 **tune 子集**（4 段序列）：
 
@@ -361,10 +361,10 @@ Re-ID 追蹤驗收的基準（2026-10-12）：設定 `runs/reid_domain/accept/co
 
 | 組別 | 來源設定 | 差異 |
 |---|---|---|
-| `timm_off` | `config/botsort_reid_timm.yaml` 原樣 | 主 baseline，6 類 ReID 關閉 |
+| `timm_off` | `config/tracking/botsort_reid_timm.yaml` 原樣 | 主 baseline，6 類 ReID 關閉 |
 | `timm_v3_on` | 同上 | 只改 6 類 `use_reid: true`、`model: models/class_reid_weights/dinov2s_v3/model.pt`；融合維持原本設定（沒有閘門、沒有否決） |
-| `legacy_off` | `config/botsort_noreid.yaml` | 舊情境（`frame_rate: 30`、`gmc_method: ecc`、`track_buffer` 90／60） |
-| `legacy_on` | `config/botsort_reid.yaml` | 舊情境開 ReID（YOLO 當編碼器），`track_buffer` 也改成 120，不是純 ReID 的差異 |
+| `legacy_off` | `config/tracking/botsort_noreid.yaml` | 舊情境（`frame_rate: 30`、`gmc_method: ecc`、`track_buffer` 90／60） |
+| `legacy_on` | `config/tracking/botsort_reid.yaml` | 舊情境開 ReID（YOLO 當編碼器），`track_buffer` 也改成 120，不是純 ReID 的差異 |
 
 HOTA 與 IDSW：
 
@@ -392,14 +392,14 @@ HOTA 與 IDSW：
 
 | 腳本 | 掃描對象 | 預設設定檔 | 前提 |
 |---|---|---|---|
-| `scripts/grid_search_bytetrack.py` | ByteTrack | `config/grid_search_bytetrack.yaml` | 第 5 節資料、YOLO 權重、長時間 |
-| `scripts/grid_search_botsort.py` | BoTSORT（ReID 關閉） | `config/grid_search_botsort.yaml` | 同上 |
-| `scripts/grid_search_botsort_reid.py` | BoTSORT（ReID 開啟） | `config/botsort_reid.yaml` | 同上，另需 Re-ID 權重 |
+| `scripts/grid_search/grid_search_bytetrack.py` | ByteTrack | `config/grid_search/grid_search_bytetrack.yaml` | 第 5 節資料、YOLO 權重、長時間 |
+| `scripts/grid_search/grid_search_botsort.py` | BoTSORT（ReID 關閉） | `config/grid_search/grid_search_botsort.yaml` | 同上 |
+| `scripts/grid_search/grid_search_botsort_reid.py` | BoTSORT（ReID 開啟） | `config/tracking/botsort_reid.yaml` | 同上，另需 Re-ID 權重 |
 
 ```bash
-python scripts/grid_search_bytetrack.py --target-class scooter --dry-run   # 只印組合數，不執行
-python scripts/grid_search_botsort.py --target-class scooter --tracker botsort --max-videos 1   # 最小驗證
-python scripts/grid_search_botsort_reid.py --target-class person --resume --result-csv <csv>    # 續跑
+python scripts/grid_search/grid_search_bytetrack.py --target-class scooter --dry-run   # 只印組合數，不執行
+python scripts/grid_search/grid_search_botsort.py --target-class scooter --tracker botsort --max-videos 1   # 最小驗證
+python scripts/grid_search/grid_search_botsort_reid.py --target-class person --resume --result-csv <csv>    # 續跑
 ```
 
 - `--params-subset a,b` 只搜尋指定參數，其餘沿用目前設定；`--resume` 只跳過完全相同、已完成的組合。
@@ -412,11 +412,11 @@ python scripts/grid_search_botsort_reid.py --target-class person --resume --resu
 
 | 設定檔 | 階段 | 說明 |
 |---|---|---|
-| `config/collision_detect.yaml` | stage1＋stage3 | TTC／PET 事件，輸出在 `collision_output/<seq>/` |
-| `config/conflict_analysis.yaml` | stage1＋stage3 | 同上，另外計算公尺單位的衝突指標（輸出在 `collision_output/<seq>/conflict/`）；只在 `scale_check: passed` 的鏡頭計算，其餘序列只寫 `summary.json` 並記錄略過原因 |
+| `config/collision/collision_detect.yaml` | stage1＋stage3 | TTC／PET 事件，輸出在 `collision_output/<seq>/` |
+| `config/collision/conflict_analysis.yaml` | stage1＋stage3 | 同上，另外計算公尺單位的衝突指標（輸出在 `collision_output/<seq>/conflict/`）；只在 `scale_check: passed` 的鏡頭計算，其餘序列只寫 `summary.json` 並記錄略過原因 |
 
 ```bash
-python track_eval.py --config config/conflict_analysis.yaml
+python track_eval.py --config config/collision/conflict_analysis.yaml
 ```
 
 衝突指標只是技術訊號，不能當成正式的安全結論（見 [ADR 0010](docs/adr/0010-meters-for-georeferenced-cameras.md)、[ADR 0011](docs/adr/0011-conflict-metrics-follow-reference-implementation.md)）。
@@ -425,11 +425,11 @@ python track_eval.py --config config/conflict_analysis.yaml
 
 | 步驟 | 腳本 | 用途 | 前提 |
 |---|---|---|---|
-| 驗證 | `scripts/validate_homography.py` | 批次驗證既有矩陣，輸出到 `models/homography/validation_output/`（**會覆寫該目錄既有輸出**；沒有參數，不要用 `--help` 試探） | `models/homography/`；比對影片需要來源影片 |
-| 1 遷移 | `scripts/migrate_homography_config.py` | 舊的 tag 鍵資料 → 鏡頭鍵設定，只寫新檔，衝突時不寫；先用 `--dry-run` | 無 |
-| 2 經緯度 | `scripts/geocode_cameras.py` | 查詢鏡頭經緯度，先產生候選表 `models/homography/geocode_candidates.csv`，再用 `--apply [--accept <cam...>]` 寫入 | 連網（OSM Overpass）；Google 備援需 `GOOGLE_MAPS_API_KEY` 或 `GOOGLE_MAPS_DEMO_API_KEY`，`--no-google` 可關閉備援 |
-| 3 比例尺 | `scripts/check_homography_scale.py` | 以已知長度地物（如車道寬）核對比例尺，結果寫入 `scale_check`；`--dry-run` 只印結果 | 連網與 Google 金鑰（影像比對；`--skip-image-match` 可略過） |
-| 底圖 | `scripts/download_satellite.py` | 下載衛星圖，`--purpose verify\|basemap` | 連網；`basemap` 只接受 `GOOGLE_MAPS_API_KEY`，Demo Key 只能用於 `verify` |
+| 驗證 | `scripts/homography/validate_homography.py` | 批次驗證既有矩陣，輸出到 `models/homography/validation_output/`（**會覆寫該目錄既有輸出**；沒有參數，不要用 `--help` 試探） | `models/homography/`；比對影片需要來源影片 |
+| 1 遷移 | `scripts/homography/migrate_homography_config.py` | 舊的 tag 鍵資料 → 鏡頭鍵設定，只寫新檔，衝突時不寫；先用 `--dry-run` | 無 |
+| 2 經緯度 | `scripts/homography/geocode_cameras.py` | 查詢鏡頭經緯度，先產生候選表 `models/homography/geocode_candidates.csv`，再用 `--apply [--accept <cam...>]` 寫入 | 連網（OSM Overpass）；Google 備援需 `GOOGLE_MAPS_API_KEY` 或 `GOOGLE_MAPS_DEMO_API_KEY`，`--no-google` 可關閉備援 |
+| 3 比例尺 | `scripts/homography/check_homography_scale.py` | 以已知長度地物（如車道寬）核對比例尺，結果寫入 `scale_check`；`--dry-run` 只印結果 | 連網與 Google 金鑰（影像比對；`--skip-image-match` 可略過） |
+| 底圖 | `scripts/homography/download_satellite.py` | 下載衛星圖，`--purpose verify\|basemap` | 連網；`basemap` 只接受 `GOOGLE_MAPS_API_KEY`，Demo Key 只能用於 `verify` |
 
 - 金鑰從環境變數或 repo 根目錄的 `.env`（已被 git 忽略）讀取，程式不會印出金鑰值；README 與紀錄中也不要貼金鑰。
 - 這三個連網腳本都是手動執行，不在 pipeline 中。Google Static Maps 的條款可能限制離線保存與衍生使用，底圖不納入 git。
@@ -441,7 +441,7 @@ python track_eval.py --config config/conflict_analysis.yaml
 
 | 步驟 | 腳本／設定 | 用途 | 前提 |
 |---|---|---|---|
-| 1 蒐集 | `config/reid_crops.yaml`（`python track_eval.py --config config/reid_crops.yaml`） | 只跑 stage1，從來源鏡頭蒐集裁切到 `dataset/reid/crops/` | 來源影片（第 3 節，不在 HF）、YOLO 權重、長時間 |
+| 1 蒐集 | `config/reid/reid_crops.yaml`（`python track_eval.py --config config/reid/reid_crops.yaml`） | 只跑 stage1，從來源鏡頭蒐集裁切到 `dataset/reid/crops/` | 來源影片（第 3 節，不在 HF）、YOLO 權重、長時間 |
 | 2 標記 | `scripts/reid_data/detect_contamination.py` | 以 DINOv2 標記污染身分，輸出到 `dataset/reports/reid/` | 個別裁切 JPEG；第一次使用從 HF Hub 下載 DINOv2（連網）；HF 還原的資料不足以執行 |
 | 3 自動排除 | `scripts/reid_data/apply_auto_exclusions.py [--apply]` | 由標記整份重算 `auto_exclusions.csv` | 只讀報表與 CSV |
 | 4 抽查 | `scripts/reid_data/generate_identity_review.py --audit-only` | 產生抽查頁與 `audit_sample.csv`（勾選＝排除） | 個別裁切 JPEG；HF 還原的資料不足以執行 |
@@ -449,15 +449,15 @@ python track_eval.py --config config/conflict_analysis.yaml
 | 5 人工排除 | `scripts/reid_data/apply_review_exclusions.py --confirm-csv <csv> [--apply]` | 合併進 `exclusions.csv` | 只讀 CSV |
 | 6 碎片合併 | `scripts/reid_data/extract_fragment_features.py` | 只讀碎片候選端點裁切的 DINOv2 特徵 | 個別裁切 JPEG；HF 還原的資料不足以執行 |
 | 6 碎片合併 | `scripts/reid_data/build_fragment_merges.py [--sample N --seed S \| --calibrate <csv> \| --apply]` | 產生碎片合併清單 `fragment_merges.csv`；`--sample` 會複製裁切到確認頁，所以需要個別裁切 JPEG | `--calibrate`／`--apply` 只讀特徵與 CSV |
-| 7 manifest | `scripts/reid_data/build_reid_split.py --version <v> [--merges dataset/reid/fragment_merges.csv]` | 兩份排除清單都套用，依 `config/reid_split.yaml` 切分 train／val | 產生新版本需要 `crops/`，HF 還原的資料不足以執行（見 6.4）；直接使用下載的 manifest 即可 |
+| 7 manifest | `scripts/reid_data/build_reid_split.py --version <v> [--merges dataset/reid/fragment_merges.csv]` | 兩份排除清單都套用，依 `config/reid/reid_split.yaml` 切分 train／val | 產生新版本需要 `crops/`，HF 還原的資料不足以執行（見 6.4）；直接使用下載的 manifest 即可 |
 
 蒐集用的其他情境設定：
 
 | 設定檔 | 說明 |
 |---|---|
-| `config/botsort_save_reid_crops.yaml` | BoTSORT＋`save_reid_crops`，只跑 stage1。資料來源是**評估資料集** `cctv_all8`，裁切不得用於訓練 |
-| `config/botsort_save_reid_crops_video.yaml` | 同上，來源改為 `reid_sources`、`frame_rate: 30`、輸出放在 `runs/`；只保留作為對照，正式訓練資料請用 `config/reid_crops.yaml` |
-| `config/reid_split.yaml` | 資料集版本的切分規則（哪些鏡頭＋日期為 val、每身分最少／最多張數），由 `build_reid_split.py` 讀取 |
+| `config/reid/botsort_save_reid_crops.yaml` | BoTSORT＋`save_reid_crops`，只跑 stage1。資料來源是**評估資料集** `cctv_all8`，裁切不得用於訓練 |
+| `config/reid/botsort_save_reid_crops_video.yaml` | 同上，來源改為 `reid_sources`、`frame_rate: 30`、輸出放在 `runs/`；只保留作為對照，正式訓練資料請用 `config/reid/reid_crops.yaml` |
+| `config/reid/reid_split.yaml` | 資料集版本的切分規則（哪些鏡頭＋日期為 val、每身分最少／最多張數），由 `build_reid_split.py` 讀取 |
 
 ### 7.5 Re-ID 訓練與驗證（需要第 6 節資料）
 
@@ -481,7 +481,7 @@ python scripts/reid_train/fusion_distance_stats.py --out runs/reid_stats/<name>.
 | 腳本 | 用途 | 前提 |
 |---|---|---|
 | `scripts/reid_train/pack_manifest.py --version <v> [--reuse-version <v0>]` | 依 manifest 把裁切打包成本機快取 `~/.cache/safetrajai/reid_packs/<v>/`（只從掛載磁碟各讀一次） | **HF 還原後不要執行**：打包檔已還原，而且個別裁切 JPEG 不在 HF，重新打包會失敗（見 6.4） |
-| `scripts/reid_train/acceptance_grid.py {configs,summarize}` | 追蹤驗收：`configs` 以 `config/botsort_reid_timm.yaml` 為底，產生每個子集的驗收設定；`summarize` 彙總逐類別結果並依 spec 判定（輸出 CSV＋Markdown） | 第 5 節的 tune／holdout 子集、YOLO 權重；執行驗收設定要跑 stage1＋stage2，耗時 |
+| `scripts/reid_train/acceptance_grid.py {configs,summarize}` | 追蹤驗收：`configs` 以 `config/tracking/botsort_reid_timm.yaml` 為底，產生每個子集的驗收設定；`summarize` 彙總逐類別結果並依 spec 判定（輸出 CSV＋Markdown） | 第 5 節的 tune／holdout 子集、YOLO 權重；執行驗收設定要跑 stage1＋stage2，耗時 |
 
 ```bash
 # 產生驗收設定 → 以 track_eval.py 執行 → 彙總
@@ -490,21 +490,21 @@ python track_eval.py --config runs/reid_domain/accept/configs/<run>_tune.yaml > 
 python scripts/reid_train/acceptance_grid.py summarize --baseline baseline --runs <run> --out <prefix>
 ```
 
-holdout 子集只作最終確認，不可拿來調參。目前 `config/botsort_reid_timm.yaml` 的 6 類 ReID 都關閉。
+holdout 子集只作最終確認，不可拿來調參。目前 `config/tracking/botsort_reid_timm.yaml` 的 6 類 ReID 都關閉。
 
 ### 7.6 工具
 
 | 腳本 | 用途 | 前提 |
 |---|---|---|
-| `scripts/run_pipeline.py` | 與 `python track_eval.py` 等價的入口（同一個 `safetrajai.cli.run_pipeline.main()`），參數相同：`--config <path>` | 同 7.1 |
-| `scripts/roi/make_roi_picker.py --camera <camera>` | 產生 ROI 離線點選頁（單檔 HTML，首幀內嵌），輸出到 `runs/roi_picker/`；在本機瀏覽器點出多邊形頂點後，把產生的 YAML 放回 `config/roi/<camera>.yaml`。完整步驟見 [`Markdown/USAGE.md`](Markdown/USAGE.md) 第 5.2 節 | `dataset/raw/videos/<camera>/` 的來源影片；不需要網路 |
-| `scripts/visualize_gt_on_video.py` | 把**人工 GT**（`gt/gt.txt`，可帶 class 欄）疊在序列影片上 | 第 5 節資料 |
-| `scripts/visualize_gt_on_class_video.py` | 把**追蹤結果**（`trackers/mot_challenge/<benchmark>-<split>/YOLO11x__<class>/data/<seq>.txt`，每類一檔）合併疊在序列影片上，用來檢查 ID switch 與跨類別誤配 | 已跑過 stage1／stage2 的輸出 |
+| `scripts/pipeline/run_pipeline.py` | 與 `python track_eval.py` 等價的入口（同一個 `safetrajai.cli.run_pipeline.main()`），參數相同：`--config <path>` | 同 7.1 |
+| `scripts/picker/make_roi_picker.py --camera <camera>` | 產生 ROI 離線點選頁（單檔 HTML，首幀內嵌），輸出到 `runs/roi_picker/`；在本機瀏覽器點出多邊形頂點後，把產生的 YAML 放回 `config/roi/<camera>.yaml`。完整步驟見 [`Markdown/USAGE.md`](Markdown/USAGE.md) 第 5.2 節 | `dataset/raw/videos/<camera>/` 的來源影片；不需要網路 |
+| `scripts/visualization/visualize_gt_on_video.py` | 把**人工 GT**（`gt/gt.txt`，可帶 class 欄）疊在序列影片上 | 第 5 節資料 |
+| `scripts/visualization/visualize_gt_on_class_video.py` | 把**追蹤結果**（`trackers/mot_challenge/<benchmark>-<split>/YOLO11x__<class>/data/<seq>.txt`，每類一檔）合併疊在序列影片上，用來檢查 ID switch 與跨類別誤配 | 已跑過 stage1／stage2 的輸出 |
 
 ```bash
-python scripts/roi/make_roi_picker.py --camera C000054
-python scripts/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
-python scripts/visualize_gt_on_class_video.py --trackeval_root <path> --video_path <path> --output_video <path>
+python scripts/picker/make_roi_picker.py --camera C000054
+python scripts/visualization/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
+python scripts/visualization/visualize_gt_on_class_video.py --trackeval_root <path> --video_path <path> --output_video <path>
 ```
 
 兩支疊圖腳本另有 `--color_by {class,id}`、`--class_names`、`--show_class_filter`、`--no_id`、`--no_legend` 等顯示選項，見各自的 `--help`。

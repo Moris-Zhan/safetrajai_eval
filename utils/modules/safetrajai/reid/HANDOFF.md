@@ -46,7 +46,7 @@ model 路徑含 "class_reid_weights" ? --yes--> Custom_ReID(model_path)
 | `--distractor-fraction` | 0 | 干擾物取樣：每批以一個種子身分開始，最多 `round(P×比例)−1` 個名額給它的干擾物 |
 | `--cooccur-min-frames` | 10 | 干擾物條件：兩個身分的幀範圍（不擴張）至少重疊的幀數 |
 | `--pair-max-frame-gap` | 5 | 干擾物條件：至少一對裁切的幀差上限，且框中心距離 ≤ 半徑（2×`norm_factor`×鏡頭寬度/640） |
-| `--crop-root`／`--roi-dir`／`--track-config` | `dataset/reid/crops`、`config/roi`、`config/reid_crops.yaml` | 干擾物取樣讀 `crops/_index/` 的框座標（只讀 metadata）、ROI 檔的畫面寬度、各類別 `norm_factor` |
+| `--crop-root`／`--roi-dir`／`--track-config` | `dataset/reid/crops`、`config/roi`、`config/reid/reid_crops.yaml` | 干擾物取樣讀 `crops/_index/` 的框座標（只讀 metadata）、ROI 檔的畫面寬度、各類別 `norm_factor` |
 | `--select-by` | `reduced_val` | 以縮小版 val（val 裁切依 crop_path 雜湊固定縮小）或原始 val（`val`）的 mAP 選 epoch |
 
 - **注意**：`--select-by` 預設是縮小版 val。要重現 `dinov2s_v3` 的設定（例如種子對照 `dinov2s_v3_seed1`），要加 `--select-by val`。

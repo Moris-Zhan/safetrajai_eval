@@ -12,4 +12,4 @@ argument-hint: [config 路徑或調參目標]
 3. 建議調整的最小參數集合、每個值的預期效果與風險
 4. 對應的驗證方式：單序列 smoke test、TrackEval，或 grid search
 
-若要修改 YAML，先確認目標是既有情境檔還是新實驗檔，避免覆蓋可重現的基準設定。需要系統性搜尋時，優先提供 `scripts/grid_search_*.py` 的 `--dry-run` 指令與組合數，再取得確認才執行完整搜尋。
+若要修改 YAML，先確認目標是既有情境檔還是新實驗檔，避免覆蓋可重現的基準設定。需要系統性搜尋時，優先提供 `scripts/grid_search/grid_search_*.py` 的 `--dry-run` 指令與組合數，再取得確認才執行完整搜尋。

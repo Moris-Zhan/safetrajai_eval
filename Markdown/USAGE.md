@@ -1,7 +1,7 @@
 # safetrajai 使用說明（USAGE）
 
 > 整理日期：2026-09-24
-> 依據：`Markdown/openspec-restructure-project-layout-總結.md`、`Markdown/openspec-reorganize-dataset-and-eval-gt-總結.md`，以及 repo 現況（各腳本 `--help`、`config/`、`src/safetrajai/`、`openspec/changes/archive/2026-09-24-rebuild-reid-dataset/tasks.md`）。
+> 依據：`Markdown/openspec-restructure-project-layout-總結.md`、`Markdown/openspec-reorganize-dataset-and-eval-gt-總結.md`，以及 repo 現況（各腳本 `--help`、`config/`、`utils/modules/safetrajai/`、`openspec/changes/archive/2026-09-24-rebuild-reid-dataset/tasks.md`）。
 > 術語見 `CONTEXT.md`；關鍵決策見 `docs/adr/0001`～`0006`。
 
 ---
@@ -46,10 +46,10 @@
 
 | 階段 | 狀態 |
 |---|---|
-| 1.1 ROI 點選頁工具（`scripts/roi/make_roi_picker.py`） | ✅ 完成 |
+| 1.1 ROI 點選頁工具（`scripts/picker/make_roi_picker.py`） | ✅ 完成 |
 | 1.2～1.3 來源鏡頭的 ROI 檔 | ✅ 9 支來源鏡頭全部完成（見 5.2） |
 | 2.1～2.12 程式修改（`frame_rate: auto`、`paths.cameras`、裁切索引、manifest、污染偵測、審查頁、排除清單等） | ✅ 完成 |
-| 3.1～3.3 工具模型、追蹤參數比較與 `config/reid_crops.yaml` | ✅ 完成 |
+| 3.1～3.3 工具模型、追蹤參數比較與 `config/reid/reid_crops.yaml` | ✅ 完成 |
 | 4～7（golden 裁切情境、pilot、全量產生與審查、文件收尾） | ⏳ 未完成 |
 
 ---
@@ -114,13 +114,13 @@ dataset/
 ## 3. 主流程：`track_eval.py`
 
 ```bash
-python track_eval.py --config <config>          # 等同 python scripts/run_pipeline.py --config <config>
+python track_eval.py --config <config>          # 等同 python scripts/pipeline/run_pipeline.py --config <config>
 python track_eval.py --config <config> --track-config <tracker_yaml>
 ```
 
 | 參數 | 說明 |
 |---|---|
-| `--config` | 情境設定檔；不帶時預設為 `config/bytetrack.yaml` |
+| `--config` | 情境設定檔；不帶時預設為 `config/tracking/bytetrack.yaml` |
 | `--track-config` | 另外指定 class-aware tracker 參數 YAML；不帶時直接讀 `--config` 檔內的 `class_tracking:` |
 
 執行順序：`load_track_config()` → `load_config()` → `TrackingEvalPipeline`，依 config 的 `stages.run_stage1/2/3` 執行各階段。
@@ -129,22 +129,22 @@ python track_eval.py --config <config> --track-config <tracker_yaml>
 
 | config | stage | 用途 |
 |---|---|---|
-| `config/bytetrack.yaml` | 1 + 2 | ByteTrack 完整流程（預設） |
-| `config/botsort_noreid.yaml` | 1 + 2 | BoTSORT，不開 ReID |
-| `config/botsort_reid.yaml` | 1 + 2 | BoTSORT + 逐類別 ReID（small_truck／scooter 權重是暫代的 `yolo11x.pt`） |
-| `config/botsort_save_reid_crops.yaml` | 1 | 追蹤並蒐集 Re-ID 裁切（`paths.dataset: cctv_all8`，見下方注意事項） |
-| `config/botsort_save_reid_crops_video.yaml` | 1 | 同上，改對 `reid_sources` 蒐集 |
-| `config/collision_detect.yaml` | 1 + 3 | 追蹤後做衝突事件分析（TTC／PET） |
-| `config/grid_search_*.yaml` | — | grid search 腳本使用的基準設定 |
+| `config/tracking/bytetrack.yaml` | 1 + 2 | ByteTrack 完整流程（預設） |
+| `config/tracking/botsort_noreid.yaml` | 1 + 2 | BoTSORT，不開 ReID |
+| `config/tracking/botsort_reid.yaml` | 1 + 2 | BoTSORT + 逐類別 ReID（small_truck／scooter 權重是暫代的 `yolo11x.pt`） |
+| `config/reid/botsort_save_reid_crops.yaml` | 1 | 追蹤並蒐集 Re-ID 裁切（`paths.dataset: cctv_all8`，見下方注意事項） |
+| `config/reid/botsort_save_reid_crops_video.yaml` | 1 | 同上，改對 `reid_sources` 蒐集 |
+| `config/collision/collision_detect.yaml` | 1 + 3 | 追蹤後做衝突事件分析（TTC／PET） |
+| `config/grid_search/grid_search_*.yaml` | — | grid search 腳本使用的基準設定 |
 
 > ⚠️ `rebuild-reid-dataset` 的 2.6 已加上裁切前檢查：開啟 `save_reid_crops` 時，**評估鏡頭一律拒絕**，而且每支鏡頭都必須有 `config/roi/<camera>.yaml`。因此：
 > - `botsort_save_reid_crops.yaml`（`cctv_all8`，C000025）目前會直接報錯。
-> - 正式的裁切設定是 `config/reid_crops.yaml`（`reid_sources`、`frame_rate: auto`，輸出到 `dataset/reid/crops`）。
+> - 正式的裁切設定是 `config/reid/reid_crops.yaml`（`reid_sources`、`frame_rate: auto`，輸出到 `dataset/reid/crops`）。
 > - `botsort_save_reid_crops_video.yaml` 保留作為 `frame_rate: 30` 的對照情境，裁切輸出改到 `runs/reid_crops_video/crops`。
 
 ### 3.2 情境設定檔結構
 
-每個 `config/*.yaml` 都是**完整、自包含**的設定。下列區塊名稱是穩定介面，不能改名。新實驗請另外建檔，不要覆寫既有的基準情境。
+每個情境 `config/<功能>/*.yaml` 都是**完整、自包含**的設定。下列區塊名稱是穩定介面，不能改名。新實驗請另外建檔，不要覆寫既有的基準情境。
 
 ```yaml
 paths:
@@ -219,14 +219,14 @@ OUTPUT_ROOT/                                   （預設 ./runs/track_eval）
 - `safetrajai/detection/`：`Detector` 做單幀 YOLO11 推論，再依逐類別信心門檻（`class_conf_thresh`）過濾。
 - `safetrajai/tracking/`：唯一入口是 `create_tracker()`。偵測結果**先依類別分組，再做三階段匈牙利匹配**，每個類別的參數由 `get_params_for_class()` 查表取得。
 - `load_track_config()` 必須在 `create_tracker()`／`Detector` 建立之前呼叫。順序錯了不會報錯，只會悄悄用到空的或舊的參數。
-- 改動 tracker 前，先讀 `src/safetrajai/tracking/HANDOFF.md` 與 `class_aware_*_flow.md`。`ClassAwareBOTSORT`／`ClassAwareBYTETracker` 的 override 方法（`__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`）**不可更動**（ADR 0004）。
+- 改動 tracker 前，先讀 `utils/modules/safetrajai/tracking/HANDOFF.md` 與 `class_aware_*_flow.md`。`ClassAwareBOTSORT`／`ClassAwareBYTETracker` 的 override 方法（`__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`）**不可更動**（ADR 0004）。
 
 ### 4.2 Stage2：TrackEval 評估
 
 只對既有的 stage1 輸出重跑評估：
 
 ```bash
-python scripts/run_evaluation.py --config <config>
+python scripts/pipeline/run_evaluation.py --config <config>
 ```
 
 處理順序：
@@ -246,7 +246,7 @@ python scripts/run_evaluation.py --config <config>
 ### 4.3 Stage3：衝突事件（TTC／PET）
 
 ```bash
-python track_eval.py --config config/collision_detect.yaml
+python track_eval.py --config config/collision/collision_detect.yaml
 ```
 
 - 程式碼中的 `collision` 指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（ADR 0003）。
@@ -283,8 +283,8 @@ polygon:                      # 像素座標，順序為左上→右上→右下
 #### 步驟 1：產生點選頁
 
 ```bash
-python scripts/roi/make_roi_picker.py --camera C000054
-python scripts/roi/make_roi_picker.py --camera C000054 --out-dir runs/roi_picker
+python scripts/picker/make_roi_picker.py --camera C000054
+python scripts/picker/make_roi_picker.py --camera C000054 --out-dir runs/roi_picker
 ```
 
 - 程式從 `dataset/raw/videos/<camera>/` 第一支影片取首幀，以 base64 內嵌成單一 HTML 檔。
@@ -373,9 +373,9 @@ EOF
 ## 6. 追蹤參數 Grid Search
 
 ```bash
-python scripts/grid_search_bytetrack.py   --target-class scooter
-python scripts/grid_search_botsort.py     --target-class scooter --tracker botsort
-python scripts/grid_search_botsort_reid.py --target-class person
+python scripts/grid_search/grid_search_bytetrack.py   --target-class scooter
+python scripts/grid_search/grid_search_botsort.py     --target-class scooter --tracker botsort
+python scripts/grid_search/grid_search_botsort_reid.py --target-class person
 ```
 
 | 參數 | 說明 |
@@ -462,13 +462,13 @@ python scripts/reid_data/build_reid_split.py --version v1
 python scripts/reid_data/build_reid_split.py --version v2 --exclusions dataset/reid/exclusions.csv
 ```
 
-- 輸入：`<crop-root>/_index/*.csv`、排除清單（可以不存在）、`config/reid_split.yaml`（可用 `--rules` 指定）。
+- 輸入：`<crop-root>/_index/*.csv`、排除清單（可以不存在）、`config/reid/reid_split.yaml`（可用 `--rules` 指定）。
 - 輸出到 `dataset/reid/splits/<version>/`（可用 `--splits-root` 指定），版本已存在時報錯：
   - `manifest.csv`：`crop_path,identity,class,camera,date,split`
   - `summary.json`：各類別／split／鏡頭的身分數與張數
   - `split_rules.yaml`：本次使用的規則複本
 - 不複製任何影像。
-- 切分規則（`config/reid_split.yaml`）：列在 `val` 的「鏡頭＋日期」組合為 val（目前是 C000054 的 20250629），其他來源鏡頭全部是 train；每個身分最少 4 張、最多 30 張（均勻抽樣）；評估鏡頭永遠不會出現在任何版本。
+- 切分規則（`config/reid/reid_split.yaml`）：列在 `val` 的「鏡頭＋日期」組合為 val（目前是 C000054 的 20250629），其他來源鏡頭全部是 train；每個身分最少 4 張、最多 30 張（均勻抽樣）；評估鏡頭永遠不會出現在任何版本。
 
 > CLAUDE.md 的常用指令仍寫著 `build_reid_split.py --mode category|flat`，那是舊版介面；現在的 CLI 是 `--version`。
 
@@ -485,7 +485,7 @@ python scripts/reid_data/build_reid_split.py --version v2 --exclusions dataset/r
 ### 8.1 Homography 驗證
 
 ```bash
-python scripts/validate_homography.py
+python scripts/homography/validate_homography.py
 ```
 
 - 沒有任何參數（也不支援 `--help`，**直接執行就會開始驗證**）。它會掃描全部序列，對有 checkpoint 的序列輸出比對影片與誤差統計，其餘印出 `skipped (no_checkpoints)`。
@@ -495,13 +495,13 @@ python scripts/validate_homography.py
 ### 8.2 在序列影片上疊 GT／追蹤結果
 
 ```bash
-python scripts/visualize_gt_on_video.py \
+python scripts/visualization/visualize_gt_on_video.py \
   --trackeval_root <mot_annotation_<seq> 根目錄> \
   --video_path <來源影片，可自動偵測> \
   --output_video <輸出.mp4>
 ```
 
-常用選項：`--show_class_filter person car`、`--color_by {class,id}`、`--no_id`、`--no_class`、`--show_conf`、`--no_legend`、`--bbox_alpha 0~1`、`--max_frames N`（除錯用）。`scripts/visualize_gt_on_class_video.py` 的介面相同。
+常用選項：`--show_class_filter person car`、`--color_by {class,id}`、`--no_id`、`--no_class`、`--show_conf`、`--no_legend`、`--bbox_alpha 0~1`、`--max_frames N`（除錯用）。`scripts/visualization/visualize_gt_on_class_video.py` 的介面相同。
 
 ---
 
@@ -523,12 +523,12 @@ python scripts/visualize_gt_on_video.py \
 
 | 我想要… | 做法 |
 |---|---|
-| 跑基準評估 | `python track_eval.py --config config/bytetrack.yaml` |
-| 只重算 stage2 | `python scripts/run_evaluation.py --config <config>` |
+| 跑基準評估 | `python track_eval.py --config config/tracking/bytetrack.yaml` |
+| 只重算 stage2 | `python scripts/pipeline/run_evaluation.py --config <config>` |
 | 只跑某支鏡頭 | 另建 config，加上 `paths.cameras: [<camera>]`（必須是資料集登記鏡頭的子集） |
 | 開 detection 評估 | `eval_flags.run_det_eval: true`（使用人工 GT，全畫面、不套 ROI） |
-| 跑衝突事件 | `python track_eval.py --config config/collision_detect.yaml` |
-| 新鏡頭畫 ROI | `python scripts/roi/make_roi_picker.py --camera <id>` → 本機瀏覽器點選 → 存成 `config/roi/<id>.yaml`（完整步驟見 5.2） |
+| 跑衝突事件 | `python track_eval.py --config config/collision/collision_detect.yaml` |
+| 新鏡頭畫 ROI | `python scripts/picker/make_roi_picker.py --camera <id>` → 本機瀏覽器點選 → 存成 `config/roi/<id>.yaml`（完整步驟見 5.2） |
 | 調某類別的追蹤參數 | `grid_search_*.py --target-class <cls> --dry-run` → `--max-videos 1` → 正式跑 |
 | 隔離一份有問題的權重 | 先寫 `temp/DO_NOT_USE.md`，再 `mv` 到同目錄的 `temp/` |
 | 確認沒有改壞 | `pytest`；行為可能有變時再跑 golden 並與 `reid1` 比對 |
