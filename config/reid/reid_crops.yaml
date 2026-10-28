@@ -9,8 +9,7 @@
 #   索引寫到 <reid_crop_dir>/_index/<seq>.csv，索引已存在時報錯（重跑前先移走舊輸出）。
 # - 工具模型 yolo11x_dennis.pt@640；追蹤參數以 config/tracking/botsort_noreid.yaml 的 class_tracking 為基礎，
 #   四輪車的 center_dist_weight 加重（car 0.6、small_truck／truck／bus 0.4），
-#   frame_rate: auto（依影片實際幀率）、gmc_method: sparseOptFlow（ECC 每幀約 0.8～2.5 秒，是 CPU 瓶頸）；
-#   選定依據見 openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md。
+#   frame_rate: auto（依影片實際幀率）、gmc_method: sparseOptFlow（ECC 每幀約 0.8～2.5 秒，是 CPU 瓶頸）。
 # - 想縮小範圍時，在 paths 加 cameras: [<camera>, ...]（只能取 reid_sources 登記鏡頭的子集）。
 # =============================================================================
 

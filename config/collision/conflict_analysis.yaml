@@ -1,5 +1,5 @@
 # =============================================================================
-# config/collision/conflict_analysis.yaml — collision_detect 加上衝突指標分析（change conflict-metrics，ADR 0011）
+# config/collision/conflict_analysis.yaml — collision_detect 加上衝突指標分析（change conflict-metrics）
 #                                （stage1 tracking + stage3 TTC/PET + 衝突指標，stage2 TrackEval 關閉）
 # 用法：python track_eval.py --config config/collision/conflict_analysis.yaml
 #
@@ -38,18 +38,18 @@ eval_flags:
 
 
 # -----------------------------------------------------------------------------
-# 碰撞偵測參數（safetrajai/collision/，見 markdown/COLLISION_DETECTION.md）
+# 碰撞偵測參數（safetrajai/collision/，見 Markdown/config/collision-configs.md）
 # -----------------------------------------------------------------------------
 collision:
   # 鏡頭鍵的 Homography 設定（<camera>.yaml，見 safetrajai/collision/homography/camera_config.py）；
   # 鏡頭沒有設定檔時，該鏡頭的序列退回原始像素座標
   homography_camera_dir: config/homography
 
-  # TTC（Time-To-Collision）參數，見 COLLISION_DETECTION.md 第 2 節
+  # TTC（Time-To-Collision）參數，見 Markdown/config/collision-configs.md 第 3 節
   max_ttc_frames: 30      # 模擬時間上限（frame 數）；SafeTrajAI 主流程原本掃 15/30/45/60，這裡先固定一組
   iou_threshold: 0.8      # 判定為碰撞的邊界框 IoU 門檻（原始程式預設值）
 
-  # PET（Post-Encroachment Time）參數，見 COLLISION_DETECTION.md 第 3 節
+  # PET（Post-Encroachment Time）參數，見 Markdown/config/collision-configs.md 第 3 節
   lookback_sec: 3.0       # 允許比對的最大時間差（秒）；SafeTrajAI 主流程原本掃 2.0~4.5，這裡先固定一組
   # ⚠️ 原始程式 overlap_threshold 預設 0.2 是校準給 Homography 轉換後地圖座標系用的門檻值；
   # 本專案沒有 homography 對應點時會退回原始像素座標，量級完全不同，這裡先給一個像素尺度的

@@ -3,7 +3,7 @@
 #
 # 候選：同一序列、同一類別，A 結束後「保留期限幀數＋margin_frames」幀內 B 出現，
 #       B 起點距 A 末段每幀速度外插位置 ≤ position_factor × 框尺寸（面積平方根，取兩者較大）。
-#       保留期限幀數直接取 track_config 的逐類別 track_buffer，不依追蹤器或幀率換算（ADR 0009）。
+#       保留期限幀數直接取 track_config 的逐類別 track_buffer，不依追蹤器或幀率換算（track_buffer 在兩種追蹤器都是正整數幀數）。
 # 外觀：A 最後 endpoint_crops 張與 B 最前 endpoint_crops 張的 DINOv2 特徵平均的 cosine ≥ threshold。
 
 track_config: config/reid/reid_crops.yaml   # track_buffer（幀）取自此檔（裁切蒐集時的追蹤參數）
