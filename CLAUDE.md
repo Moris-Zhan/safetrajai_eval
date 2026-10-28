@@ -2,16 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-術語見 `CONTEXT.md`（鏡頭、序列、軌跡、身分、衝突事件等），關鍵決策見 `docs/adr/`。
+術語見 `CONTEXT.md`（鏡頭、序列、軌跡、身分、衝突事件等）。
 
 ## 專案概觀
 
 離線 CCTV 交通監控評估流程：YOLO11 偵測 → class-aware BoTSORT／ByteTrack 追蹤 → TrackEval（HOTA／CLEAR／Identity）→ Excel 報表，另有 stage3 的衝突事件分析（TTC／PET＋Homography）。固定 6 類，類別 ID 是跨模組契約：`person=0`、`car=1`、`scooter=2`、`small_truck=3`、`bus=4`、`truck=5`，唯一定義在 `utils/modules/safetrajai/classes.py`（TrackEval／MOT GT 用的 1-based ID 由此推導為 `id + 1`）。
 
 - 可安裝套件 `safetrajai`（原始碼放在 `utils/modules/`，`pyproject.toml`）。`requirement.txt` 是舊的 pip 安裝腳本，包含許多與本專案無關的套件，**不是依賴的權威來源**；依賴以 `pyproject.toml` 為準（核心為 `ultralytics==8.3.141`、`torch`、`opencv-python`、`numpy`、`scipy`、`openpyxl`、`pyyaml`、`scikit-learn` 等）。
-- `utils/modules/_vendor/trackeval/` 是修改過的 vendored TrackEval（6 類別對照），透過同一份 pyproject 安裝，以 `import trackeval` 使用；視為唯讀，不要修改或格式化（見 `docs/adr/0002`）。
+- `utils/modules/_vendor/trackeval/` 是修改過的 vendored TrackEval（6 類別對照），透過同一份 pyproject 安裝，以 `import trackeval` 使用；視為唯讀，不要修改或格式化：本專案改過它的資料集定義（`datasets/mot_challenge_2d_box.py` 的 6 類別對照與 1-based 類別 ID），升級上游前必須先比對並重新套用這些修改，否則評估會靜默用錯類別。
 - `dataset/`、`models/`、`runs/`、`Sub_Module/`、`ignore/` 被 gitignore（權重、影片、實驗輸出）。
-- 規格驅動的變更放在 `openspec/`（`openspec/changes/<name>/` 有 proposal、design、specs、tasks），用 `/opsx:*` 指令操作。
 
 ## 安裝
 
@@ -135,7 +134,7 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 ### 軌跡格式契約（stage1 → stage2／stage3）
 
 - 穩定的下游輸入是 `trackers/mot_challenge/CCTV-val/YOLO11x__<class>/data/<seq>.txt`：每行 7 欄、無 header，`frame,track_id,left,top,w,h,score`，像素座標、以左上角為原點，`frame` 從 1 開始。檔案內沒有 class 欄，類別看資料夾名稱決定。
-- 6 個類別都必須產生檔案，沒有結果時建立 0-byte 空檔。stage1 軌跡**不依 ROI 過濾**，保留全部追蹤結果；限縮範圍由下游自行套用（見 `docs/adr/0005`）：stage3 與 Re-ID 裁切以框中心點硬過濾，stage2 以忽略區域處理（UA-DETRAC 式）——ROI 外的人工 GT 標為 ignore，預測與全部 GT 做 IoU ≥ 0.5 的一對一匹配；匹配到 ROI 內 GT 的預測保留，其餘預測中匹配到 ignore GT 或中心點在 ROI 外者移除，再移除 ignore GT，所以 FP 只來自 ROI 內（代價與風險見 `specs/evaluation-roi-filtering`）。這一步在 TrackEval 之前、只改 stage2 輸出目錄中的副本（原始 tracker 副本備份在 `trackers_raw/`），不修改 vendored TrackEval。
+- 6 個類別都必須產生檔案，沒有結果時建立 0-byte 空檔。stage1 軌跡**不依 ROI 過濾**，保留全部追蹤結果；限縮範圍由下游自行套用：stage3 與 Re-ID 裁切以框中心點硬過濾，stage2 以忽略區域處理（UA-DETRAC 式）——ROI 外的人工 GT 標為 ignore，預測與全部 GT 做 IoU ≥ 0.5 的一對一匹配；匹配到 ROI 內 GT 的預測保留，其餘預測中匹配到 ignore GT 或中心點在 ROI 外者移除，再移除 ignore GT，所以 FP 只來自 ROI 內。這一步在 TrackEval 之前、只改 stage2 輸出目錄中的副本（原始 tracker 副本備份在 `trackers_raw/`），不修改 vendored TrackEval。
 - stage2 的 detection 評估以評估資料集的人工 GT 為基準（在 `OUTPUT_ROOT/det_eval/<seq>/` 組出資料集），不再使用 stage1 的追蹤標籤；目前不套用 ROI，報表會標示「ROI：未套用（全畫面）」。
 - `track_id` 只在單一序列、單一類別內唯一（每段序列都新建 tracker，而且是逐類別配號），跨序列要用「序列名＋track_id」當鍵。
 - GT 有 class 欄，但只給 TrackEval 比對用；stage3 和其他下游分析一律讀 tracker 輸出，不讀 GT。
@@ -143,8 +142,8 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 ### Tracker（改動前先讀 `utils/modules/safetrajai/tracking/HANDOFF.md` 與同目錄的 `class_aware_*_flow.md`）
 
 - 核心設計：偵測結果**依類別分組後才做三階段匈牙利匹配**，每個類別有自己的 `match_thresh`／`second_match_thresh`／`unconfirmed_match_thresh`／`new_track_thresh`／`track_buffer`／`use_reid`，由 `get_params_for_class()` 查表取得。不能讓不同類別共用同一個 matching matrix。
-- **不可更動（使用者明確指示，見 `docs/adr/0004`）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），除 ADR 0009 明列的兩個 `update()` 保留期限敘述外，方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
-- `track_buffer` 在 BoTSORT 與 ByteTrack 都是正整數保留期限幀數，不依幀率換算（ADR 0009，取代 ADR 0008）。載入設定時每個類別都必須有有效值（沒有該類別設定時取預設參數），浮點值與布林值會報錯。碎片候選窗直接用 `track_buffer + margin_frames`；Re-ID 閘門維持每幀計算。BoTSORT 的 `cls_buffer_sec` 是歷史名稱，方法內舊註解仍依凍結規則保留。
+- **不可更動（使用者明確指示）**：`ClassAwareBOTSORT` 與 `ClassAwareBYTETracker` 中 override 自 ultralytics 的方法，包括 `__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`（僅 BoTSORT），除兩個 `update()` 中計算保留期限的那一行算式（已授權改為直接使用幀數）外，方法本體一字不能改，也不能搬到其他類別或抽成共用函式。整個檔案可以搬位置，但只能改檔案層級的 import；smoke 測試會以 AST 對照 `tests/golden/BASE_COMMIT` 檢查。這條優先於任何去重複或修 bug 的目標。本專案自己新增的 `get_dists_class_aware()`、`_center_distance()`，以及 `matching.py`、`config.py`、`__init__.py` 不受這條限制。
+- `track_buffer` 在 BoTSORT 與 ByteTrack 都是正整數保留期限幀數，不依幀率換算（取代舊做法：BoTSORT 當成秒乘幀率、ByteTrack 以 30fps 為基準換算）。載入設定時每個類別都必須有有效值（沒有該類別設定時取預設參數），浮點值與布林值會報錯。碎片候選窗直接用 `track_buffer + margin_frames`；Re-ID 閘門維持每幀計算。BoTSORT 的 `cls_buffer_sec` 是歷史名稱，方法內舊註解仍依凍結規則保留。
 - GMC 只在 BoTSORT 有作用；ReID 只透過 BoTSORT 的逐類別 `use_reid` 啟用，預設關閉。
   - 啟用條件（spec `reid-model`）：在調參序列上與驗收基準比較，不變差，而且 IDSW 減少或 IDP 上升；只有 AssA／TP 上升、沒有 GT 的類別不啟用；沒有類別符合時全部關閉。目前 `botsort_reid_timm.yaml` 的 6 類都關閉。
   - 本地訓練的 Re-ID 模型（change `train-reid-timm`）在原本的融合下幾乎沒有作用：外觀距離只作用在 IoU 已重疊的配對上。
@@ -164,17 +163,17 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
   - 結果：lowres／both 讓 car、scooter 大幅改善（both：car AUC +0.031、TPR +0.145），但 small_truck AUC 下降約 0.03（只有 43 對干擾物，下降集中在最短邊 < 16px 的 13 對），依規則不通過；distractor 與緊框 `dinov2s_v3` 的 car 未達最小改善量（TPR@FPR5% 反而下降）。結果不代表追蹤 IDSW 會改善（沒有做追蹤驗收）。後來發現 small_truck 的 43 對只來自 3 組物體配對（其中一組含 GT id -1），change `separability-gate-object-pairs` 因此改以物體配對計算證據並重新判定：`_lowres`、`_both` 通過，`_both` 進入追蹤驗收；40 組網格（閘門、否決、原本融合 × person／car／scooter／small_truck／truck）**沒有任何類別通過**——原本融合與否決完全沒有作用，閘門讓 car（IDSW 2 → 最多 18）、scooter（4 → 28～40）明顯變差。外觀分離度改善沒有轉換成追蹤改善；`botsort_reid_timm.yaml` 維持 6 類關閉。
   - 訓練新參數預設關閉，但 `--select-by` 預設是縮小版 val；要重現 `dinov2s_v3` 的設定時加 `--select-by val`。干擾物取樣比例受干擾物數限制（中位數 5），P=32 的理論上限約 0.196，實測約 0.18。
   - 舊格式：完整模型 pickle，行為不變（只處理第一個框）。
-- **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名（見 `docs/adr/0001`）**：舊格式的 `best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
+- **`utils/model.py` 是 pickle 相容 shim，不可刪除或改名**：舊格式的 `best_full_model.pt` 是用 `torch.save` 存下的完整模型 pickle，`Custom_ReID` 用 `weights_only=False` 載入時，會依 `utils.model.<Class>` 找類別。實作在 `safetrajai/reid/model.py`，shim 只 re-export；pyproject 把 `utils` 登記為頂層 package，所以任意工作目錄下都能載入。真的要移除 shim，先用舊路徑載入、轉存成 state_dict 並確認可用。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。
 - 舊的 Re-ID 資料與權重（`dataset/reid/temp/`、`models/yolo-reid/temp/`、`models/class_reid_weights/temp/`）已確認無效並隔離；不要引用或拿來訓練。
 - Re-ID 資料已由 change `rebuild-reid-dataset` 從 `dataset/raw/videos/` 重建（流程、目錄與資料量見 `scripts/reid_data/README.md`）：
   - 裁切在 `dataset/reid/crops/{class}/{seq}_track{id}/{frame:06d}.jpg`，每支序列一份 metadata 索引 `crops/_index/<seq>.csv`；只從 `role: source` 的鏡頭蒐集，評估鏡頭一律拒絕，每支鏡頭都必須有 ROI 檔。蒐集設定是 `config/reid/reid_crops.yaml`。
   - **訓練一律讀 `dataset/reid/splits/<version>/manifest.csv`**（`crop_path` 相對於 `crops/`），不要直接掃 `crops/`；排除清單、每身分 4～30 張、依鏡頭與日期切分（`config/reid/reid_split.yaml`）只在 manifest 中套用。訓練與 val 評估只從本機快取 `~/.cache/safetrajai/reid_packs/<version>/` 讀取影像（`pack_manifest.py` 依 manifest 從掛載磁碟各讀一次），不要讓每個 epoch 直接讀 `crops/`。
-  - 標記、排除、抽查都只寫紀錄，不移動裁切（排除與隔離的差異見 `docs/adr/0006`）。品質把關以**自動排除為主、人工只抽查**（`docs/adr/0007`）：`auto_exclusions.csv` 由標記整份重算、`exclusions.csv` 只累加人工結果，manifest 兩份都套用；不要改回全量人工審查，而是加大抽查樣本或新增規則。
+  - 標記、排除、抽查都只寫紀錄，不移動裁切（排除只寫紀錄、不動檔案；隔離才是用 `mv` 移到 `temp/`）。品質把關以**自動排除為主、人工只抽查**：`auto_exclusions.csv` 由標記整份重算、`exclusions.csv` 只累加人工結果，manifest 兩份都套用；不要改回全量人工審查，而是加大抽查樣本或新增規則。
   - `v2`（22,164 個身分、156,141 張）與 `v3` 都可訓練；兩者訓練出的模型在追蹤上表現相同，平手依規則採用 `v3`。`v1` 是審查前的基準，只供比較。
   - 遮擋碎片由 change `merge-occlusion-fragments` 離線合併：只寫 `dataset/reid/fragment_merges.csv`（不動裁切），manifest 以 `--merges` 在排除之後套用。
     - 同一序列、同一類別內，以時間、外插位置加上 DINOv2 外觀門檻（`config/reid/fragment_merge.yaml`，以人工確認校準到 ≥ 95%）一對一配對。
-    - 時間條件以幀數計算（ADR 0009）：幀差 ≤ `track_config` 的逐類別 `track_buffer` ＋ `margin_frames`，不依追蹤器或序列幀率換算，外插用每幀速度。
+    - 時間條件以幀數計算：幀差 ≤ `track_config` 的逐類別 `track_buffer` ＋ `margin_frames`，不依追蹤器或序列幀率換算，外插用每幀速度。
     - 只靠時間與位置不可靠（C000054 車流密集）。
     - `v3`＝`v2`＋合併（22,223 個身分、156,186 張）。
     - `v3` 的 `fragment_merges.csv` 是用舊的秒數規則產生的，決定不重建。改用幀數規則後少 2 筆，都在非 10fps 序列，見該 change 的 `verification.md`；下次重建時才套用新規則。
@@ -185,11 +184,11 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 
 ### 衝突事件／Homography（stage3，程式碼沿用 `collision` 命名）
 
-- 程式碼與設定檔中的 `collision`（`safetrajai/collision/`、`config/collision/collision_detect.yaml`）指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（見 `docs/adr/0003`）。
+- 程式碼與設定檔中的 `collision`（`safetrajai/collision/`、`config/collision/collision_detect.yaml`）指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞。
 - 輸入只讀 stage1 的 7 欄 MOT 軌跡。事件請讀 `ttc_events.{json,csv}`、`pet_events.{json,csv}`，不要依賴舊 log 的 `colision_occur_sec`（PET 的這個欄位可能記的是 frame，而不是秒）。
 - Homography 屬於鏡頭，設定在 `config/homography/<camera>.yaml`（鏡頭編號為鍵，與 ROI 相同；由 `scripts/homography/migrate_homography_config.py` 從 26 個既有矩陣產生）。查找順序：設定的 `matrix_tag` 指向的既有矩陣（`models/homography/matrices/`，檔案不存在時報錯）→ 設定內的人工對應點 `cctv_points`／`map_points` → 都沒有時直接用 CCTV 原始像素座標。舊的 `config/homography_points/<seq>.yaml` 不再讀取，存在時報錯。套用矩陣時，TTC 的 bounds 要用衛星圖尺寸；速度和方向要從轉換後的位置重新差分；輸出的事件點則要用反矩陣投影回 CCTV 像素座標。
-- 單位（ADR 0010）：只有指定既有衛星矩陣、有經緯度、而且 `scale_check: passed` 的鏡頭，`georef.meters_per_pixel()` 才回傳公尺換算（`156543.03392·cos(緯度)/2^zoom/scale`）；其餘一律維持像素，不得退回預設值。check points 驗證以鏡頭為鍵（`config/homography_checkpoints/<camera>.yaml`，少於 4 點為點數不足）。未經實測校正的事件數只能當作技術訊號，不能當成正式的安全結論。
-- 衝突指標分析（change `conflict-metrics`，ADR 0011）：`conflict_analysis.enabled` 為 true 時，`run_stage3()` 在既有 TTC／PET 之後另外呼叫 `safetrajai.collision.conflict.run_conflict_analysis_for_sequence()`，既有輸出逐位元不變；沒有這個區塊時視為關閉。
+- 單位：只有指定既有衛星矩陣、有經緯度、而且 `scale_check: passed` 的鏡頭，`georef.meters_per_pixel()` 才回傳公尺換算（`156543.03392·cos(緯度)/2^zoom/scale`）；其餘一律維持像素，不得退回預設值。check points 驗證以鏡頭為鍵（`config/homography_checkpoints/<camera>.yaml`，少於 4 點為點數不足）。未經實測校正的事件數只能當作技術訊號，不能當成正式的安全結論。
+- 衝突指標分析（change `conflict-metrics`）：`conflict_analysis.enabled` 為 true 時，`run_stage3()` 在既有 TTC／PET 之後另外呼叫 `safetrajai.collision.conflict.run_conflict_analysis_for_sequence()`，既有輸出逐位元不變；沒有這個區塊時視為關閉。
   - 只在 `meters_per_pixel()` 可用的鏡頭計算（目前 C000025、C000043、C000054、C000085），其餘序列只寫 `summary.json` 並記錄 `skipped_reason`（`no_homography`／`no_meters_per_pixel`），不退回像素。位置取框的底邊中點，軌跡鍵為 `(class, track_id)`。
   - 輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`；點座標有 `_m`／`_map_px`／`_cctv_px` 三組欄位。
   - 指標定義以 `Sub_Module/trajectoryanalyst2` 為準（TTC 碰撞距離為中心距離 2 m、三種衝突類型、DRAC 超限取代 PICUD、CI 取大小、PET 只算同時出現過的配對），唯一例外是 DRAC 接近速度的符號錯誤已修正；限制寫在 `summary.json` 的 `limitations`。

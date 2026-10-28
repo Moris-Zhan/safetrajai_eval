@@ -280,7 +280,7 @@ for track in self.lost_stracks:
         track.mark_removed()
 ```
 
-注意：以上原版 Ultralytics 段落保留 upstream 行為說明。本專案逐類別 `track_buffer` 已統一為正整數幀數（ADR 0009），不依 `self.frame_rate` 換算。載入設定時每個類別必須有有效值，使全域 fallback 不可達；BoTSORT 的 `cls_buffer_sec` 為歷史名稱，方法內舊註解維持原文。
+注意：以上原版 Ultralytics 段落保留 upstream 行為說明。本專案逐類別 `track_buffer` 已統一為正整數幀數，不依 `self.frame_rate` 換算。載入設定時每個類別必須有有效值，使全域 fallback 不可達；BoTSORT 的 `cls_buffer_sec` 為歷史名稱，方法內舊註解維持原文。
 
 #### 修改 4：類別級新 track 閾值（解決需求 5）
 

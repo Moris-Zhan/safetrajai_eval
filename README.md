@@ -13,7 +13,6 @@
 固定 6 類，類別 ID 是跨模組契約（`utils/modules/safetrajai/classes.py`）：`person=0`、`car=1`、`scooter=2`、`small_truck=3`、`bus=4`、`truck=5`。
 
 - 術語（鏡頭、序列、軌跡、身分、衝突事件…）：[`CONTEXT.md`](CONTEXT.md)
-- 架構決策：[`docs/adr/`](docs/adr/)
 - 開發規則與完整指令表：[`CLAUDE.md`](CLAUDE.md)
 - 詳細使用說明：[`Markdown/USAGE.md`](Markdown/USAGE.md)
 
@@ -39,7 +38,7 @@ track_eval.py              主入口（相容 wrapper → safetrajai.cli.run_pip
 utils/modules/safetrajai/            主套件
   pipeline/                stage1/2/3 調度、單序列追蹤、Re-ID 裁切蒐集
   detection/               YOLO 推論＋逐類別信心門檻
-  tracking/                class-aware ByteTrack／BoTSORT（override 方法凍結，見 ADR 0004）
+  tracking/                class-aware ByteTrack／BoTSORT（override 方法凍結）
   reid/                    Re-ID 推論、資料品質工具、training/
   evaluation/              stage2：路徑組裝、MOT 轉換、ROI 忽略區域、TrackEval、Excel
   collision/               stage3：TTC／PET、熱區圖、homography/
@@ -48,7 +47,6 @@ scripts/                   CLI，依功能分資料夾：pipeline/、grid_search
 config/                    情境設定檔（tracking/、grid_search/、reid/、collision/）、datasets.yaml、roi/<camera>.yaml、homography_*
 tests/                     smoke 測試、單元測試、golden 比對
 utils/modules/_vendor/trackeval/     修改過的 vendored TrackEval（唯讀）
-openspec/                  規格驅動的變更（proposal／design／specs／tasks）
 ```
 
 `dataset/`、`models/`、`runs/` 不進版控，由第 5、6 節從 Hugging Face 還原。
@@ -408,7 +406,7 @@ python scripts/grid_search/grid_search_botsort_reid.py --target-class person --r
 
 ### 7.3 衝突事件與 Homography（stage3）
 
-程式碼中的 `collision` 指**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（見 [ADR 0003](docs/adr/0003-collision-name-means-conflict-event.md)）。
+程式碼中的 `collision` 指**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞。
 
 | 設定檔 | 階段 | 說明 |
 |---|---|---|
@@ -419,7 +417,7 @@ python scripts/grid_search/grid_search_botsort_reid.py --target-class person --r
 python track_eval.py --config config/collision/conflict_analysis.yaml
 ```
 
-衝突指標只是技術訊號，不能當成正式的安全結論（見 [ADR 0010](docs/adr/0010-meters-for-georeferenced-cameras.md)、[ADR 0011](docs/adr/0011-conflict-metrics-follow-reference-implementation.md)）。
+衝突指標只是技術訊號，不能當成正式的安全結論。
 
 **Homography 鏡頭設定**（`config/homography/<camera>.yaml`）依下列順序操作；腳本都在 repo 根目錄執行：
 
@@ -433,7 +431,7 @@ python track_eval.py --config config/collision/conflict_analysis.yaml
 
 - 金鑰從環境變數或 repo 根目錄的 `.env`（已被 git 忽略）讀取，程式不會印出金鑰值；README 與紀錄中也不要貼金鑰。
 - 這三個連網腳本都是手動執行，不在 pipeline 中。Google Static Maps 的條款可能限制離線保存與衍生使用，底圖不納入 git。
-- 沒有 `scale_check: passed` 的鏡頭，單位維持像素，不會退回預設比例（ADR 0010）。
+- 沒有 `scale_check: passed` 的鏡頭，單位維持像素，不會退回預設比例。
 
 ### 7.4 Re-ID 資料
 
@@ -519,7 +517,7 @@ python scripts/visualization/visualize_gt_on_class_video.py --trackeval_root <pa
 | 單元 | `pytest`（含 smoke 與下列單元測試） | 秒級～分鐘 | 不需要資料／權重 | 提交前 |
 | golden 比對 | `tests/golden/run_all.sh <run>`，再 `python tests/golden/compare.py <基準> <run>` | 約 16 分鐘 | 完整資料（第 5 節）、YOLO 權重 | 改動演算法或 stage 行為後 |
 
-**smoke**（`tests/test_smoke.py`）：全部模組可 import、全部 config 可載入、類別 ID 契約、tracker override 方法的 AST 不變性（ADR 0004）、`sys.path` 掃描、有 argparse 的腳本 `--help` 可執行。其中「被隔離的 Re-ID 權重仍可載入」在權重檔不存在時會被略過（`skipif`），不是失敗。另有少數參數組合不適用（例如不迭代類別的腳本、不是追蹤情境的設定）而被略過，`pytest` 結尾出現 `skipped` 屬正常。
+**smoke**（`tests/test_smoke.py`）：全部模組可 import、全部 config 可載入、類別 ID 契約、tracker override 方法的 AST 不變性、`sys.path` 掃描、有 argparse 的腳本 `--help` 可執行。其中「被隔離的 Re-ID 權重仍可載入」在權重檔不存在時會被略過（`skipif`），不是失敗。另有少數參數組合不適用（例如不迭代類別的腳本、不是追蹤情境的設定）而被略過，`pytest` 結尾出現 `skipped` 屬正常。
 
 **單元測試**依領域分組：
 

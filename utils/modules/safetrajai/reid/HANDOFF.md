@@ -16,7 +16,7 @@ safetrajai/reid/
 
 ## 二、追蹤器如何選 encoder
 
-`ClassAwareBOTSORT.__init__`（凍結，見 `docs/adr/0004`）依 `class_tracking:` 裡各類別的 `use_reid` 與 `model:` 路徑決定：
+`ClassAwareBOTSORT.__init__`（凍結）依 `class_tracking:` 裡各類別的 `use_reid` 與 `model:` 路徑決定：
 
 ```
 model 路徑含 "class_reid_weights" ? --yes--> Custom_ReID(model_path)
@@ -32,7 +32,7 @@ model 路徑含 "class_reid_weights" ? --yes--> Custom_ReID(model_path)
 - `Custom_ReID(model_path, legacy_crop=True)` 恢復修改前的裁切（`gain=1.02, pad=10`），只給 `fusion_distance_stats.py --legacy-crop` 量測參考；凍結的追蹤器只以 `Custom_ReID(model_path)` 建立，情境設定無法開啟它。
 - 緊框改變了新格式權重的特徵值（BREAKING），但目前沒有情境設定啟用新格式權重。
 
-讀取失敗（完整模型 pickle）時退回舊路徑：以 `torch.load(..., weights_only=False)` 載入完整模型 pickle，反序列化時依 `utils.model.<Class>` 找類別，所以 `utils/model.py` 不可刪除或改名（見 `docs/adr/0001`）。舊的 `models/class_reid_weights/{person,scooter}` 權重已隔離到 `models/class_reid_weights/temp/`，情境 config 不得引用；smoke 測試仍會從隔離路徑載入一次，確認 shim 可用。
+讀取失敗（完整模型 pickle）時退回舊路徑：以 `torch.load(..., weights_only=False)` 載入完整模型 pickle，反序列化時依 `utils.model.<Class>` 找類別，所以 `utils/model.py` 不可刪除或改名。舊的 `models/class_reid_weights/{person,scooter}` 權重已隔離到 `models/class_reid_weights/temp/`，情境 config 不得引用；smoke 測試仍會從隔離路徑載入一次，確認 shim 可用。
 
 舊格式的行為維持不變（只處理第一個框、只做 `/255`、不做 resize）；YOLO 的 `ReID` 也不變（golden 只用它）。
 
@@ -66,7 +66,7 @@ python scripts/reid_train/train_reid.py --version v3 --output models/class_reid_
 
 新模型（或新的推論裁切方式）在追蹤驗收前，先在調參序列（C000025 145630、150634 時段；保留序列由程式拒絕）上量測：
 
-- 正樣本：同一條 GT 軌跡、間隔 5 幀～該類別 `track_buffer` 幀（直接取 `--config`，預設 `botsort_reid_timm.yaml`，ADR 0009 不換算）；另回報「≥ 1 秒」的結果，可與 `reid-center-gate-fusion` 比較。
+- 正樣本：同一條 GT 軌跡、間隔 5 幀～該類別 `track_buffer` 幀（直接取 `--config`，預設 `botsort_reid_timm.yaml`，不換算）；另回報「≥ 1 秒」的結果，可與 `reid-center-gate-fusion` 比較。
 - 負樣本（干擾物）：同幀、同類別、中心距離 ≤ 2×`norm_factor` 的不同 GT 軌跡；不足 30 對時退回任意配對（只影響融合門檻候選）。每個類別回報干擾物來自的不同 GT 物體配對數（`negative_object_pairs`）。
 - GT id < 0（沒有身分）的框在量測前排除，輸出 `skipped_unlabeled_boxes`；GT 檔不修改。
 - 指標：AUC、TPR@FPR5%，並依較小框的最短邊分 < 16px、16～32px、≥ 32px 回報（只供參考）。

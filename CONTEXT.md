@@ -210,7 +210,7 @@ _Avoid_: PICUD（文獻中的 PICUD 是另一種以間距與反應時間計算�
 第一個道路使用者離開衝突點、到第二個道路使用者抵達同一點之間的時間差。
 
 **俯視平面（Ground Plane）**：
-經 Homography 消除透視變形後的座標系。既有鏡頭矩陣的俯視平面是衛星圖像素；人工點選時可以是自訂矩形。單位是像素；只有指定既有衛星矩陣、有路口經緯度、而且**比例尺檢查**通過的鏡頭，才能以 Web Mercator 地面解析度（含 cos(緯度)）換算成公尺（ADR 0010），其餘鏡頭與自訂矩形一律維持像素。
+經 Homography 消除透視變形後的座標系。既有鏡頭矩陣的俯視平面是衛星圖像素；人工點選時可以是自訂矩形。單位是像素；只有指定既有衛星矩陣、有路口經緯度、而且**比例尺檢查**通過的鏡頭，才能以 Web Mercator 地面解析度（含 cos(緯度)）換算成公尺，其餘鏡頭與自訂矩形一律維持像素。
 _Avoid_: 衛星座標、map、地圖座標
 
 **比例尺檢查（Scale Check）**：
@@ -246,6 +246,6 @@ _Avoid_: 測試點、GT 點
 ## Flagged ambiguities
 
 - 「collision」在程式碼中指**衝突事件**，不是實際碰撞。
-- 設定值 `track_buffer` 在兩個追蹤器都直接表示**保留期限幀數**（正整數），不依追蹤器或影片幀率換算。依賴保留期限的量直接以幀數計算，碎片候選窗為 `track_buffer + margin_frames`（ADR 0009）。
+- 設定值 `track_buffer` 在兩個追蹤器都直接表示**保留期限幀數**（正整數），不依追蹤器或影片幀率換算。依賴保留期限的量直接以幀數計算，碎片候選窗為 `track_buffer + margin_frames`。
 - 追蹤參數 `appearance_thresh` 是相似度方向的門檻：容許的**外觀距離**上限是 1 − 值，所以值越大越嚴格；新增的外觀門檻一律採用相似度方向（例如 `appearance_veto_sim`），避免與距離方向混用。
 - Homography 設定、對應點與驗證點都以**鏡頭編號**為鍵（`config/homography/<camera>.yaml`、`config/homography_checkpoints/<camera>.yaml`），與 ROI 相同；既有矩陣與衛星底圖的檔名仍是完整鏡頭名稱加參數尾碼（tag），由鏡頭設定的 `matrix_tag` 指向。

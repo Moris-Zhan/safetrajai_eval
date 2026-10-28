@@ -116,10 +116,10 @@ flowchart TD
    - 步驟 2 記下「距離太遠」的 pair 也強制設為 1.0
    - `dists = np.minimum(dists, emb_dists)`：兩個距離取更小值（IoU 夠近 **或** 外觀夠像，其一即可配對）
 6. **選用的閘門與否決**（change `reid-center-gate-fusion`，類別設定了新參數且 `use_reid=True` 才啟用；都沒設定時完全走步驟 5）：改由 `_gated_appearance()` 呼叫 `matching.fuse_appearance()`。
-   - `reid_center_gate_px`（＋`reid_center_gate_px_per_frame` × 遺失幀數；遺失幀數＝`self.frame_id − track.frame_id`，見 ADR 0009）：**只對遺失中的軌跡（Lost）**，中心距離在閘門內的 pair 也可取得外觀成本（與 IoU proximity 取聯集）。中心距離取「預測中心」與「最後一次 Tracked 時的中心」（記在 `track._reid_last_center`，因為 `STrack` 不保存觀測框）的較近者。Tracked 與未確認的 track 仍只看 IoU proximity。
+   - `reid_center_gate_px`（＋`reid_center_gate_px_per_frame` × 遺失幀數；遺失幀數＝`self.frame_id − track.frame_id`）：**只對遺失中的軌跡（Lost）**，中心距離在閘門內的 pair 也可取得外觀成本（與 IoU proximity 取聯集）。中心距離取「預測中心」與「最後一次 Tracked 時的中心」（記在 `track._reid_last_center`，因為 `STrack` 不保存觀測框）的較近者。Tracked 與未確認的 track 仍只看 IoU proximity。
    - `appearance_veto_sim`：外觀距離 > `1 − appearance_veto_sim` 的 pair 成本設為 1（所有 track）。
    - 門檻方向：`appearance_thresh` 與 `appearance_veto_sim` 都是相似度方向，值越大越嚴。
-   - 在 C000025 上驗收的結果：閘門讓 car、scooter 串錯明顯增加，否決沒有效果，所以目前沒有任何情境啟用（見 `openspec/changes/archive/*-reid-center-gate-fusion/verification.md`）。
+   - 在 C000025 上驗收的結果：閘門讓 car、scooter 串錯明顯增加，否決沒有效果，所以目前沒有任何情境啟用。
 
 ## 五、與 `class_aware_bytetrack.py` 的差異
 
@@ -131,8 +131,8 @@ flowchart TD
 | `init_track` 簽章 | `init_track(dets, scores, cls, img=None)`，需要 `img` 來裁切算 ReID 特徵 | 沿用 BYTETracker 原生 `init_track`，不需要 `img` |
 | **`track_buffer` 的單位** | `cls_max_time_lost = int(cls_buffer_sec)`（幀） | `cls_max_time_lost = int(cls_buffer)`（幀） |
 
-## 六、保留期限統一為幀數（ADR 0009）
+## 六、保留期限統一為幀數
 
 兩個追蹤器的逐類別 `track_buffer` 都是正整數幀數；例如 15 在 5fps 與 10fps 下都於遺失第 16 幀移除，第 15 幀仍可重新關聯。載入時檢查每個類別的有效值，使全域 fallback 不會被已宣告的類別用到。
 
-BoTSORT 的 `cls_buffer_sec` 是歷史名稱，現在代表幀數。`update()` 中仍提到秒與乘上幀率的註解已過時，但依使用者授權範圍只修改算式那一行，註解原文保留。`__init__` 與 Kalman 的 `dt_scale` 不變。詳見 [ADR 0009](../../../docs/adr/0009-track-buffer-in-frames.md)。
+BoTSORT 的 `cls_buffer_sec` 是歷史名稱，現在代表幀數。`update()` 中仍提到秒與乘上幀率的註解已過時，但依使用者授權範圍只修改算式那一行，註解原文保留。`__init__` 與 Kalman 的 `dt_scale` 不變。

@@ -104,4 +104,4 @@ flowchart TD
 ## 四、⚠️ 注意事項
 
 1. **與 BoTSORT 共用同一份 `track_config*.yaml` 時，`use_reid`/`model`/`appearance_thresh`/`proximity_thresh` 這幾個欄位對 ByteTrack 完全是死欄位**（讀不到，也不會報錯，靜默忽略）。這是 ByteTrack 本身設計上不支援 ReID 的必然結果，不是 bug，但容易誤以為調整這些參數對 ByteTrack 有效。
-2. **`track_buffer` 與 BoTSORT 統一為正整數幀數**（ADR 0009）：保留期限直接為 `int(cls_buffer)`，不依影片幀率換算。設定載入時檢查每個已宣告類別，沒有類別設定才使用預設參數；缺少或不是正整數時報錯。凍結方法只有這個敘述與 BoTSORT 對應敘述開放修改，其餘包含 `__init__` 與舊註解都維持原文。
+2. **`track_buffer` 與 BoTSORT 統一為正整數幀數**：保留期限直接為 `int(cls_buffer)`，不依影片幀率換算。設定載入時檢查每個已宣告類別，沒有類別設定才使用預設參數；缺少或不是正整數時報錯。凍結方法只有這個敘述與 BoTSORT 對應敘述開放修改，其餘包含 `__init__` 與舊註解都維持原文。

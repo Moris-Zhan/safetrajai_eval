@@ -1,8 +1,8 @@
 # safetrajai 使用說明（USAGE）
 
 > 整理日期：2026-09-24
-> 依據：`Markdown/openspec-restructure-project-layout-總結.md`、`Markdown/openspec-reorganize-dataset-and-eval-gt-總結.md`，以及 repo 現況（各腳本 `--help`、`config/`、`utils/modules/safetrajai/`、`openspec/changes/archive/2026-09-24-rebuild-reid-dataset/tasks.md`）。
-> 術語見 `CONTEXT.md`；關鍵決策見 `docs/adr/0001`～`0006`。
+> 依據：repo 現況（各腳本 `--help`、`config/`、`utils/modules/safetrajai/`）。
+> 術語見 `CONTEXT.md`。
 
 ---
 
@@ -219,7 +219,7 @@ OUTPUT_ROOT/                                   （預設 ./runs/track_eval）
 - `safetrajai/detection/`：`Detector` 做單幀 YOLO11 推論，再依逐類別信心門檻（`class_conf_thresh`）過濾。
 - `safetrajai/tracking/`：唯一入口是 `create_tracker()`。偵測結果**先依類別分組，再做三階段匈牙利匹配**，每個類別的參數由 `get_params_for_class()` 查表取得。
 - `load_track_config()` 必須在 `create_tracker()`／`Detector` 建立之前呼叫。順序錯了不會報錯，只會悄悄用到空的或舊的參數。
-- 改動 tracker 前，先讀 `utils/modules/safetrajai/tracking/HANDOFF.md` 與 `class_aware_*_flow.md`。`ClassAwareBOTSORT`／`ClassAwareBYTETracker` 的 override 方法（`__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`）**不可更動**（ADR 0004）。
+- 改動 tracker 前，先讀 `utils/modules/safetrajai/tracking/HANDOFF.md` 與 `class_aware_*_flow.md`。`ClassAwareBOTSORT`／`ClassAwareBYTETracker` 的 override 方法（`__init__`、`update()`、`remove_duplicate_stracks()`、`init_track()`）**不可更動**（使用者明確指示，詳見 `CLAUDE.md` 的 Tracker 一節）。
 
 ### 4.2 Stage2：TrackEval 評估
 
@@ -249,7 +249,7 @@ python scripts/pipeline/run_evaluation.py --config <config>
 python track_eval.py --config config/collision/collision_detect.yaml
 ```
 
-- 程式碼中的 `collision` 指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞（ADR 0003）。
+- 程式碼中的 `collision` 指的是**衝突事件**（TTC／PET 低於門檻的接近事件），不是實際碰撞。
 - 輸入只讀 stage1 的 7 欄軌跡，不讀 GT；讀入後逐列以 ROI 中心點過濾。
 - 參數在 config 的 `collision:` 區塊：`homography_points_dir`、`max_ttc_frames`、`iou_threshold`、`lookback_sec`、`overlap_threshold`。
 - 事件結果請讀 `ttc_events.{json,csv}`、`pet_events.{json,csv}`，不要依賴舊 log 的 `colision_occur_sec`（PET 的這個欄位可能記的是 frame）。
@@ -453,7 +453,7 @@ python scripts/reid_data/apply_review_exclusions.py --confirm-csv review_exclusi
 ```
 
 - 合併進 `dataset/reid/exclusions.csv`（可用 `--exclusions` 指定），去除重複並依鍵排序。
-- 只寫排除清單，不動任何裁切；排除是在產生資料集版本時由 `build_reid_split.py` 套用（見 ADR 0006）。
+- 只寫排除清單，不動任何裁切；排除是在產生資料集版本時由 `build_reid_split.py` 套用。
 
 ### 7.5 產生資料集版本（manifest）
 
@@ -475,7 +475,7 @@ python scripts/reid_data/build_reid_split.py --version v2 --exclusions dataset/r
 ### 7.6 Re-ID 推論端
 
 - `safetrajai/reid/encoders.py`：`ReID`（YOLO 當 encoder）與 `Custom_ReID`（`models/class_reid_weights/`）兩條推論路徑，透過 BoTSORT 的逐類別 `use_reid` 啟用。
-- `utils/model.py` 是 pickle 相容 shim，**不可刪除或改名**（ADR 0001）。
+- `utils/model.py` 是 pickle 相容 shim，**不可刪除或改名**（舊格式權重靠它反序列化）。
 - 不要再引入已經移除的 SOTA_ReID、FastReID、TransReID。
 
 ---
