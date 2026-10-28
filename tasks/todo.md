@@ -136,8 +136,8 @@
 - 依賴：T3c｜規模：M（5 個新檔案，一個 commit）
 
 ### 檢查點 B（T4b 完成後）
-- [ ] SPEC 成功標準 7、7a–7e 逐項通過
-- [ ] **與使用者一起審閱再繼續**
+- [x] SPEC 成功標準 7、7a–7e 逐項通過
+- [x] **與使用者一起審閱再繼續**
 
 ---
 
@@ -145,16 +145,19 @@
 
 ### T5：A 級零風險清理（每項一個 commit）
 
-- [ ] **A1**：刪除 `scripts/grid_search/grid_search_botsort.py` 中被註解掉的舊 `PARAM_GRIDS`（約 80 行）｜XS｜驗證：`--dry-run` 與基準相同
-- [ ] **A2**：修正三支 grid search 的失效 docstring（檔名 `tracker_grid_search.py`、不存在的 `run_class_aware_tracking`／`--n-jobs`／`--video-dir`）與 help 預設值（botsort `--gmc-method` 實為 `sift`、`--max-videos` 實為 6）；`--model` 的 help 註明「目前無作用」｜S｜驗證：`--help` 只在這些字串不同，且修正後與實際預設一致
-- [ ] **A3**：修正 `score_params()` docstring（第 25 百分位並排除 0 分）｜XS
-- [ ] **A4**：刪除 `_run_tracking_for_video` 未使用的 `trial_dir` 參數；合併 `generate_config_patch` 內相同的 `bool`／`else` 分支；函式內重複 import 移到頂部｜S｜驗證：既有 `test_grid_search_core.py`
-- [ ] **A5**：修正過時敘述（「兩階段主流程」、`_annotate_frame` 引用的 `utils.visualization`）；刪除 `target_mp4s = mp4s[:]` 空操作｜S
-- [ ] **A6**：刪除 `evaluation/pipeline.py` 尾段註解掉的程式碼與貼上的舊結果表（約 40 行）；`excel_export.py` 末段註解掉的 `print_eval_summary`（先回報確切範圍）｜S
-- [ ] **A7**：`evaluation/utils.py:89` 迴圈內的 `from openpyxl.utils import get_column_letter` 移到頂部｜XS
-- [ ] **A8**：失效引用清理（`docs/superpowers`、`openspec`、`markdown/reference_*`、`docs/adr`）：只刪引用片語，其餘句子保留；**排除** `utils/model.py`、`tracking/class_aware_*.py`、`_vendor/`、`tests/`。分三個 commit：`config/`（`datasets.yaml`、`reid_crops.yaml`、`roi/*.yaml`）、`scripts/`、`utils/modules/`｜機械式｜驗證：SPEC 成功標準 7；smoke 的 tracker AST 檢查通過
+- [x] **A1**：刪除 `scripts/grid_search/grid_search_botsort.py` 中被註解掉的舊 `PARAM_GRIDS`（約 80 行）｜XS｜驗證：`--dry-run` 與基準相同
+- [x] **A2**：修正三支 grid search 的失效 docstring（檔名 `tracker_grid_search.py`、不存在的 `run_class_aware_tracking`／`--n-jobs`／`--video-dir`）與 help 預設值（botsort `--gmc-method` 實為 `sift`、`--max-videos` 實為 6）；`--model` 的 help 註明「目前無作用」｜S｜驗證：`--help` 只在這些字串不同，且修正後與實際預設一致
+- [x] **A3**：修正 `score_params()` docstring（第 25 百分位並排除 0 分）｜XS
+- [x] **A4**：刪除 `_run_tracking_for_video` 未使用的 `trial_dir` 參數；合併 `generate_config_patch` 內相同的 `bool`／`else` 分支；函式內重複 import 移到頂部｜S｜驗證：既有 `test_grid_search_core.py`
+- [x] **A5**：修正過時敘述（「兩階段主流程」、`_annotate_frame` 引用的 `utils.visualization`）；刪除 `target_mp4s = mp4s[:]` 空操作｜S
+- [x] **A6**：刪除 `evaluation/pipeline.py` 尾段註解掉的程式碼與貼上的舊結果表（約 40 行）；`excel_export.py` 末段註解掉的 `print_eval_summary`（先回報確切範圍）｜S
+- [x] **A7**：`evaluation/utils.py:89` 迴圈內的 `from openpyxl.utils import get_column_letter` 移到頂部｜XS
+- [x] **A8**：失效引用清理（`docs/superpowers`、`openspec`、`markdown/reference_*`、`docs/adr`）：只刪引用片語，其餘句子保留；**排除** `utils/model.py`、`tracking/class_aware_*.py`、`_vendor/`、`tests/`。分三個 commit：`config/`（`datasets.yaml`、`reid_crops.yaml`、`roi/*.yaml`）、`scripts/`、`utils/modules/`｜機械式｜驗證：SPEC 成功標準 7；smoke 的 tracker AST 檢查通過
 
 通用驗證：每項 `pytest`＋`--help`／`--dry-run` 與基準比對。
+
+- [x] T5 完成後 golden（2026-10-29，`runs/refactor_golden/t5_check_20261029`，基準 `runs/refactor_golden_archive/conflict1`）：9 類別全部 identical，差異與最大絕對差皆為 0。
+  比對指令：`python tests/golden/compare.py runs/refactor_golden_archive/conflict1 t5_check_20261029`（舊 run 已搬到 `refactor_golden_archive/`，文件中的指令字面待 T9 同步）。
 
 ### T6：B 級消除重複邏輯（每項一個 commit；先寫特徵化測試再抽取）
 
