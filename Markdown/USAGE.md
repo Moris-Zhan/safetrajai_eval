@@ -17,6 +17,12 @@
 - [Re-ID 資料工具（`rebuild-reid-dataset` 新流程）](reid/reid-data-tools.md)
 - [驗證與視覺化工具](validation/validation-and-viz.md)
 - [測試與回歸驗證](testing/testing.md)
+- Config 使用教學
+  - [Config 總覽](config/overview.md)
+  - [追蹤情境與 `class_tracking`](config/tracking-scenarios.md)
+  - [Re-ID 設定](config/reid-configs.md)
+  - [Stage3 設定](config/collision-configs.md)
+  - [以鏡頭為鍵的設定](config/per-camera-configs.md)
 
 ---
 
