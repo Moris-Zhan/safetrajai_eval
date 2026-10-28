@@ -59,61 +59,6 @@ from safetrajai.grid_search.core import (
 # ──────────────────────────────────────────────────────────────────────────────
 PARAM_GRIDS: dict[str, dict[str, list]] = {
 
-    # "scooter": {
-    #     "match_thresh":             [0.9],
-    #     "new_track_thresh":         [0.1],
-    #     "second_match_thresh":      [0.40],
-    #     "unconfirmed_match_thresh": [0.80],
-    #     "center_dist_weight":       [0.25],
-    #     "norm_factor":              [200.0],
-    #     "fuse_score":               [True],
-    #     # ReID 相關（僅 use_reid=True 時有效）
-    #     "use_reid":                 [True],
-    #     "proximity_thresh":         [round(x, 2) for x in np.arange(0.1, 0.7, 0.1)],   
-    #     "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],   
-    #     "model": [
-    #         'models/yolo/yolo11x_dennis.pt',
-    #         'models/yolo/yolo11x.pt',
-    #         'models/yolo/yolo11x.pt',        
-    #     ]     
-    # },
-
-    # "person": {
-    #     "match_thresh":             [0.9],
-    #     "new_track_thresh":         [0.25],
-    #     "second_match_thresh":      [0.50],
-    #     "unconfirmed_match_thresh": [0.85],
-    #     "center_dist_weight":       [0.25],
-    #     "norm_factor":              [150],
-    #     "fuse_score":               [False],
-    #     # ReID 相關（僅 use_reid=True 時有效）
-    #     "use_reid":                 [True],
-    #     "proximity_thresh":         [round(x, 2) for x in np.arange(0.1, 0.7, 0.1)],   
-    #     "appearance_thresh":        [round(x, 2) for x in np.arange(0.1, 1.0, 0.2)],     
-    #     "model": [
-    #         'models/yolo/yolo11x_dennis.pt',
-    #         'models/yolo/yolo11x.pt',
-    #         'models/yolo/yolo11x.pt',        
-    #     ]     
-    # },
-    # "scooter": {
-    #     "match_thresh":             [0.5, 0.7, 0.9],           # 5→3，取低中高
-    #     "new_track_thresh":         [0.1, 0.2, 0.3, 0.4, 0.5], # 保留，影響大
-    #     "second_match_thresh":      [0.3, 0.5, 0.7],           # 5→3，取低中高
-    #     "unconfirmed_match_thresh": [0.7, 0.8, 0.9],           # 5→3
-    #     "center_dist_weight":       [0.1, 0.3, 0.5],           # 5→3
-    #     "norm_factor":              [100, 150, 200],            # 4→3，移除 250
-    #     "fuse_score":               [True, False],              # 保留
-    #     # ReID 相關
-    #     "use_reid":                 [True],                     # 固定
-    #     "proximity_thresh":         [0.1, 0.3, 0.6],           # 6→3，取低中高
-    #     "appearance_thresh":        [0.1, 0.5, 0.9],           # 5→3，取低中高
-    #     "model": [
-    #         'models/yolo/yolo11x_dennis.pt',
-    #         # 'models/yolo/yolo11x.pt',
-    #         # yolo11x base 先排除，先前分析顯示與低分相關
-    #     ]
-    # },
     "scooter": {
         "match_thresh":             [0.9, 1.0],                # 固定高門檻，加入 1.0 試探
         "new_track_thresh":         [0.1, 0.2, 0.3],           # 聚焦低值區間，排除 0.4~0.5
@@ -131,25 +76,6 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
             'models/yolo/yolo11x.pt',                    # 固定
         ]
     },
-
-    # "person": {
-    #     "match_thresh":             [0.5, 0.7, 0.9],           # 5→3
-    #     "new_track_thresh":         [0.1, 0.2, 0.3, 0.4, 0.5], # 保留，影響大
-    #     "second_match_thresh":      [0.3, 0.5, 0.7],           # 5→3
-    #     "unconfirmed_match_thresh": [0.7, 0.8, 0.9],           # 5→3
-    #     "center_dist_weight":       [0.1, 0.3, 0.5],           # 5→3
-    #     "norm_factor":              [80, 100, 150],             # 4→3，移除 200
-    #     "fuse_score":               [True, False],              # 保留
-    #     # ReID 相關
-    #     "use_reid":                 [True],                     # 固定
-    #     "proximity_thresh":         [0.1, 0.3, 0.6],           # 6→3
-    #     "appearance_thresh":        [0.1, 0.5, 0.9],           # 5→3
-    #     "model": [
-    #         'models/yolo/yolo11x_dennis.pt',
-    #         # 'models/yolo/yolo11x.pt',
-    #         # yolo11x base 先排除
-    #     ]
-    # },
 
     "person": {
         "match_thresh":             [0.8, 0.85, 0.9, 0.95],           # 聚焦高門檻區間
