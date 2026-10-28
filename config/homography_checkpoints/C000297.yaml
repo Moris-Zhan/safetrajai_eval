@@ -1,5 +1,5 @@
 # config/homography_checkpoints/C000297.yaml — check points for C000297 一心 凱旋(西北角)
-# 由 models/homography/checkpoints/check_pts_{cctv,sat}_C000297 一心 凱旋(西北角)-2-20-1280-1280.npy 轉入（scripts/migrate_homography_config.py），數值逐位元保留。
+# 由 models/homography/checkpoints/check_pts_{cctv,sat}_C000297 一心 凱旋(西北角)-2-20-1280-1280.npy 轉入（scripts/homography/migrate_homography_config.py），數值逐位元保留。
 # ⚠️ 可疑（2026-10-13）：以既有矩陣重投影的 RMSE 約 396.5 px，遠大於其他鏡頭，疑似不是在目前這張
 #    衛星底圖上點選的，或點選有誤；使用者決定保留並標註，解讀 C000297 的驗證結果時請一併考慮。
 cctv_points:

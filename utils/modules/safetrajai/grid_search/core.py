@@ -1,5 +1,5 @@
 """
-scripts/grid_search_*.py 三支腳本（bytetrack/botsort/botsort_reid）共用邏輯。
+scripts/grid_search/grid_search_*.py 三支腳本（bytetrack/botsort/botsort_reid）共用邏輯。
 
 三支腳本各自只保留 PARAM_GRIDS 常數 + main()（各自 argparse 定義與預設值），
 其餘 90% 以上逐字重複的邏輯（ParameterGrid、scoring、GT 處理、GridSearchRunner）

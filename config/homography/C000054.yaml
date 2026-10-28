@@ -1,8 +1,8 @@
 # config/homography/C000054.yaml — 鏡頭 C000054 的 Homography 設定（見 safetrajai/collision/homography/camera_config.py）
-# 由 scripts/migrate_homography_config.py 依既有矩陣 models/homography/matrices/H_<matrix_tag>.npy 產生。
+# 由 scripts/homography/migrate_homography_config.py 依既有矩陣 models/homography/matrices/H_<matrix_tag>.npy 產生。
 # - satellite：衛星底圖的 Google Static Maps 請求參數（輸出尺寸＝size × scale），由 tag 尾碼推得
-# - latlon／latlon_source／latlon_date：路口中心經緯度，由 scripts/geocode_cameras.py 寫入
-# - scale_check：passed／failed／unchecked，由 scripts/check_homography_scale.py 寫入；只有 passed 才換算公尺
+# - latlon／latlon_source／latlon_date：路口中心經緯度，由 scripts/homography/geocode_cameras.py 寫入
+# - scale_check：passed／failed／unchecked，由 scripts/homography/check_homography_scale.py 寫入；只有 passed 才換算公尺
 # - osm_roads：選填，覆寫經緯度查詢用的兩條路名
 # - cctv_points／map_points：選填人工對應點，只在沒有 matrix_tag 時使用
 # 每個欄位都寫在同一行，工具會逐欄更新並保留這段註解。

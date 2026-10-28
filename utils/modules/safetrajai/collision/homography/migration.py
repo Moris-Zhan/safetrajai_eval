@@ -45,10 +45,10 @@ def _camera_config_text(tag: str) -> str:
     lines = [
         f"# config/homography/{camera}.yaml — 鏡頭 {camera} 的 Homography 設定"
         "（見 safetrajai/collision/homography/camera_config.py）",
-        "# 由 scripts/migrate_homography_config.py 依既有矩陣 models/homography/matrices/H_<matrix_tag>.npy 產生。",
+        "# 由 scripts/homography/migrate_homography_config.py 依既有矩陣 models/homography/matrices/H_<matrix_tag>.npy 產生。",
         "# - satellite：衛星底圖的 Google Static Maps 請求參數（輸出尺寸＝size × scale），由 tag 尾碼推得",
-        "# - latlon／latlon_source／latlon_date：路口中心經緯度，由 scripts/geocode_cameras.py 寫入",
-        "# - scale_check：passed／failed／unchecked，由 scripts/check_homography_scale.py 寫入；只有 passed 才換算公尺",
+        "# - latlon／latlon_source／latlon_date：路口中心經緯度，由 scripts/homography/geocode_cameras.py 寫入",
+        "# - scale_check：passed／failed／unchecked，由 scripts/homography/check_homography_scale.py 寫入；只有 passed 才換算公尺",
         "# - osm_roads：選填，覆寫經緯度查詢用的兩條路名",
         "# - cctv_points／map_points：選填人工對應點，只在沒有 matrix_tag 時使用",
         "# 每個欄位都寫在同一行，工具會逐欄更新並保留這段註解。",
@@ -73,7 +73,7 @@ def _npy_checkpoints_text(tag: str, cctv: np.ndarray, sat: np.ndarray) -> str:
     header = [
         f"# config/homography_checkpoints/{camera}.yaml — check points for {_TAG_SUFFIX_RE.sub('', tag)}",
         f"# 由 models/homography/checkpoints/check_pts_{{cctv,sat}}_{tag}.npy 轉入"
-        "（scripts/migrate_homography_config.py），數值逐位元保留。",
+        "（scripts/homography/migrate_homography_config.py），數值逐位元保留。",
     ]
     lines = header + _points_block("cctv_points", cctv) + _points_block("sat_points", sat)
     return "\n".join(lines) + "\n"
