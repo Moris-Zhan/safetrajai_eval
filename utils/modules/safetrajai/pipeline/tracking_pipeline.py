@@ -54,6 +54,7 @@ from safetrajai.collision.conflict import run_conflict_analysis_for_sequence
 from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.pipeline import run_eval_pipeline
 from safetrajai.evaluation import dataset_layout
+from safetrajai.evaluation.utils import probe_video
 from safetrajai.pipeline.sequence_tracker import VideoSequenceTracker
 from safetrajai.roi import ROI_DIR
 
@@ -128,10 +129,7 @@ class TrackingEvalPipeline:
         output_path, images_path, labels_path = seq_tracker.run(video_path, det_output_dir)
 
         # 取影片尺寸（從已複製的來源影片）
-        cap    = cv2.VideoCapture(video_path)
-        width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        cap.release()
+        width, height, _ = probe_video(video_path)
 
         # 儲存 MOT 格式（同時在 output_path/trackers/ 下建立 per-class txt）
         save_mot_format(
@@ -258,11 +256,8 @@ class TrackingEvalPipeline:
                 print(f"  ⚠️  {seq_name}: 找不到 {video_path}，略過（stage1 是否有跑完？）")
                 continue
 
-            cap = cv2.VideoCapture(str(video_path))
-            fps    = cap.get(cv2.CAP_PROP_FPS) or cfg.frame_rate or 30
-            width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
+            width, height, probed_fps = probe_video(video_path)
+            fps = probed_fps or cfg.frame_rate or 30
 
             run_collision_detection_for_sequence(
                 seq_output_dir=seq_dir,

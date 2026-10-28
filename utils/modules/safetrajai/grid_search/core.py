@@ -39,6 +39,7 @@ from safetrajai.tracking import config as tracker_config_module
 from safetrajai.evaluation import dataset_layout
 from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.trackeval_runner import run_trackeval_mot
+from safetrajai.evaluation.utils import probe_video
 
 
 # =============================================================================
@@ -457,10 +458,7 @@ def score_params(
             )
 
             # ── 2b. MOT format + per-class tracker txt ────────────────────────
-            cap    = cv2.VideoCapture(video_path)
-            width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
+            width, height, _ = probe_video(video_path)
 
             save_mot_format(
                 imgs_path   = images_path,
