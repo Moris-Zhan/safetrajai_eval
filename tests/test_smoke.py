@@ -175,7 +175,9 @@ def test_tracker_override_bodies_unchanged(old_path: str, new_path: str, class_n
 def test_no_sys_path_mutation() -> None:
     pattern = re.compile(r"\bsys\.path\b")
     roots = [REPO_ROOT / "scripts", REPO_ROOT / "utils"]
-    sources = [p for root in roots for p in root.rglob("*.py")] + [REPO_ROOT / "track_eval.py"]
+    sources = [
+        p for root in roots for p in root.rglob("*.py") if "_vendor" not in p.parts
+    ] + [REPO_ROOT / "track_eval.py"]
     offenders = [str(p.relative_to(REPO_ROOT)) for p in sources if pattern.search(p.read_text(encoding="utf-8"))]
     assert offenders == []
 

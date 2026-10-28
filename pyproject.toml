@@ -33,11 +33,11 @@ dev = ["pytest"]
 
 [tool.setuptools.package-dir]
 "" = "utils/modules"
-trackeval = "third_party/trackeval"
+trackeval = "utils/modules/_vendor/trackeval"
 utils = "utils"
 
 [tool.setuptools.packages.find]
-where = ["utils/modules", "third_party", "."]
+where = ["utils/modules", "utils/modules/_vendor", "."]
 include = ["safetrajai*", "trackeval*", "utils"]
 
 [tool.pytest.ini_options]
