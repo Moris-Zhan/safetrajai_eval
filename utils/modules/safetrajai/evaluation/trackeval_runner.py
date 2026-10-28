@@ -8,7 +8,6 @@ TrackEval 執行相關工具：
 - TrackEval 評估執行（run_trackeval_mot / run_one_class）
 """
 
-from pickle import FALSE
 import re
 import shutil
 from pathlib import Path
