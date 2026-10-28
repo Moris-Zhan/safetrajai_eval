@@ -59,7 +59,7 @@ from safetrajai.roi import ROI_DIR
 
 
 # =============================================================================
-# TrackingEvalPipeline — 兩階段主流程
+# TrackingEvalPipeline — 三階段主流程（stage1 追蹤、stage2 評估、stage3 衝突事件）
 # =============================================================================
 
 def check_crop_sources(video_paths: list[str], roi_dir: Path = ROI_DIR, registry: dict | None = None) -> None:
@@ -186,10 +186,7 @@ class TrackingEvalPipeline:
         if cfg.save_reid_crops:
             check_crop_sources(mp4s)
 
-        # 取要處理的切片（測試時可調整）
-        target_mp4s = mp4s[:]   # ← 改這裡控制要跑哪幾支
-
-        for video_path in target_mp4s:
+        for video_path in mp4s:
             self._process_single_video(video_path, det_output_dir, track_output_dir)
 
         return det_output_dir

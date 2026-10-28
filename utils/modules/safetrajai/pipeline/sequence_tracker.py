@@ -73,7 +73,7 @@ class VideoSequenceTracker:
         self._reid_collector: ReidCropCollector | None = None
 
     def _annotate_frame(self, frame, tracks, unmatched, removed, frame_id) -> np.ndarray:
-        """呼叫 utils.visualization.draw_track_box() 分別處理 matched/unmatched/removed，
+        """呼叫 safetrajai.visualization.drawing.draw_track_box() 分別處理 matched/unmatched/removed，
         取代原本內嵌的三段重複迴圈。左上角幀號文字邏輯不變。"""
         annotator = Annotator(frame, line_width=2)
 

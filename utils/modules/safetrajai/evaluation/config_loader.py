@@ -53,7 +53,7 @@ _DEFAULTS: dict = {
     # flags
     "run_det_eval":          False,
     "run_track_eval":        True,
-    # 兩階段主流程開關（run_stage3 預設關閉，需在 config 明確開啟，見 collision_detect.yaml）
+    # 三階段主流程開關（run_stage3 預設關閉，需在 config 明確開啟，見 collision_detect.yaml）
     "run_stage1":            True,
     "run_stage2":            True,
     "run_stage3":            False,
@@ -168,7 +168,7 @@ class AppConfig:
         d["run_det_eval"]   = bool(flags.get("run_det_eval",   d["run_det_eval"]))
         d["run_track_eval"] = bool(flags.get("run_track_eval", d["run_track_eval"]))
 
-        # stages 區塊（兩階段主流程開關；沒有這個區塊時預設 stage1/stage2 都跑、stage3 不跑，向後相容）
+        # stages 區塊（三階段主流程開關；沒有這個區塊時預設 stage1/stage2 都跑、stage3 不跑，向後相容）
         stages = raw.get("stages", {}) or {}
         d["run_stage1"] = bool(stages.get("run_stage1", d["run_stage1"]))
         d["run_stage2"] = bool(stages.get("run_stage2", d["run_stage2"]))
