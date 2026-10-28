@@ -5,6 +5,24 @@ from safetrajai.classes import CLASS_NAMES
 NAMES = CLASS_NAMES
 
 
+def write_frame_labels(label_file: Path, tracks, width: int, height: int) -> None:
+    with open(label_file, "w") as f:
+        for track in tracks:
+            if len(track) >= 7:
+                x1, y1, x2, y2 = track[:4]
+                track_id = int(track[4])
+                score    = track[5]
+                cls_id   = int(track[6])
+                cx = (x1 + x2) / 2 / width
+                cy = (y1 + y2) / 2 / height
+                w  = (x2 - x1) / width
+                h  = (y2 - y1) / height
+                f.write(
+                    f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
+                    f" {track_id} {score:.4f}\n"
+                )
+
+
 def save_mot_format(imgs_path, labels_path, output_file, img_width: int, img_height: int):
     # stage1 軌跡保留全部追蹤結果，不依 ROI 過濾；ROI 由下游套用
     img_files = sorted(Path(imgs_path).glob("*.jpg"))

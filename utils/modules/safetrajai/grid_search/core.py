@@ -37,7 +37,7 @@ from safetrajai.detection.detector import Detector
 from safetrajai.tracking import create_tracker
 from safetrajai.tracking import config as tracker_config_module
 from safetrajai.evaluation import dataset_layout
-from safetrajai.evaluation.mot_format import save_mot_format
+from safetrajai.evaluation.mot_format import save_mot_format, write_frame_labels
 from safetrajai.evaluation.trackeval_runner import run_trackeval_mot
 from safetrajai.evaluation.utils import probe_video
 
@@ -351,18 +351,7 @@ def _run_tracking_for_video(
         img_file   = images_path / f"{stem_name}_f{frame_id:06d}.jpg"
         cv2.imwrite(str(img_file), clean_frame)
 
-        with open(label_file, "w") as f:
-            for track in tracks:
-                if len(track) >= 7:
-                    x1, y1, x2, y2 = track[:4]
-                    track_id = int(track[4])
-                    score    = track[5]
-                    cls_id   = int(track[6])
-                    cx = (x1 + x2) / 2 / width
-                    cy = (y1 + y2) / 2 / height
-                    w  = (x2 - x1) / width
-                    h  = (y2 - y1) / height
-                    f.write(f"{cls_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f} {track_id} {score:.4f}\n")
+        write_frame_labels(label_file, tracks, width, height)
 
         if verbose and frame_id % 30 == 0:
             print(f"      tracking {frame_id}/{total}", end="\r")
