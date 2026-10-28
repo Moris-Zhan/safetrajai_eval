@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -106,3 +107,67 @@ def test_scripts_use_the_shared_module(script: str) -> None:
     assert module.draw_gt_on_frame is gt_overlay.draw_gt_on_frame
     assert module.parse_seqinfo is gt_overlay.parse_seqinfo
     assert module.CLASS_COLORS is gt_overlay.CLASS_COLORS
+
+
+CONTRACT_CLASS_COUNT = 6
+
+
+def write_video_script_inputs(root: Path) -> Path:
+    """Black 320x240 video plus MOT GT with one 30x30 box per contract class (GT class ids are 1-based)."""
+    (root / "gt").mkdir(parents=True)
+    (root / "seqinfo.ini").write_text("[Sequence]\nname=s\nimWidth=320\nimHeight=240\nframeRate=5\nseqLength=3\n")
+    rows = [f"1,{gt_class_id},{10 + 50 * (gt_class_id - 1)},100,30,30,1,{gt_class_id},1" for gt_class_id in range(1, 7)]
+    (root / "gt" / "gt.txt").write_text("\n".join(rows) + "\n")
+    video = root / "black.avi"
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 5.0, (320, 240))
+    for _ in range(3):
+        writer.write(np.zeros((240, 320, 3), dtype=np.uint8))
+    writer.release()
+    return video
+
+
+def test_video_script_colours_boxes_by_contract_class(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from safetrajai.visualization import gt_overlay
+
+    module = load_script("visualize_gt_on_video")
+    drawn = []
+
+    def recording_draw(frame, annots, **kwargs):
+        result = gt_overlay.draw_gt_on_frame(frame, annots, **kwargs)
+        drawn.append(result.copy())
+        return result
+
+    monkeypatch.setattr(module, "draw_gt_on_frame", recording_draw)
+    video = write_video_script_inputs(tmp_path / "root")
+    module.visualize_gt_on_video(
+        trackeval_root=str(tmp_path / "root"), output_video=str(tmp_path / "out.mp4"), video_path=str(video),
+        show_id=False, show_class=False, show_legend=False, max_frames=1,
+    )
+
+    first_frame = drawn[0]
+    for gt_class_id in range(1, CONTRACT_CLASS_COUNT + 1):
+        corner = first_frame[100, 10 + 50 * (gt_class_id - 1)]
+        assert tuple(int(v) for v in corner) == gt_overlay.CLASS_COLORS[gt_class_id - 1], f"GT class {gt_class_id}"
+
+
+def test_video_script_legend_uses_the_same_colour_as_the_boxes() -> None:
+    from safetrajai.visualization import gt_overlay
+
+    module = load_script("visualize_gt_on_video")
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+
+    module._draw_legend(frame, {2: "car"}, {"car"})
+
+    swatch = frame[21, 186]  # first legend row, inside the colour swatch
+    assert tuple(int(v) for v in swatch) == gt_overlay.CLASS_COLORS[1]
+
+
+def test_draw_accepts_a_custom_class_colour_table() -> None:
+    from safetrajai.visualization.gt_overlay import draw_gt_on_frame
+
+    frame = np.zeros((60, 80, 3), dtype=np.uint8)
+    annots = [{"id": 1, "x": 10, "y": 10, "w": 20, "h": 20, "conf": 1.0, "class_id": 5, "class_name": "x"}]
+
+    draw_gt_on_frame(frame, annots, show_id=False, show_class=False, class_colors={5: (1, 2, 3), -1: (9, 9, 9)})
+
+    assert tuple(int(v) for v in frame[10, 10]) == (1, 2, 3)

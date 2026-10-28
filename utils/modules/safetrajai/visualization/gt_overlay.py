@@ -2,7 +2,7 @@
 
 import configparser
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -12,9 +12,9 @@ CLASS_COLORS: Dict[int, Tuple[int, int, int]] = {
     0:  (255, 200,  50),   # person     → 黃
     1:  ( 50, 200, 255),   # car        → 天藍
     2:  ( 50, 255, 130),   # scooter    → 綠
-    3:  (255,  80, 200),   # bus        → 紫
-    4:  ( 80, 130, 255),   # truck      → 藍紫
-    5:  (255, 150,  30),   # small_truck→ 橘
+    3:  (255,  80, 200),   # small_truck→ 紫
+    4:  ( 80, 130, 255),   # bus        → 藍紫
+    5:  (255, 150,  30),   # truck      → 橘
     6:  (255,  50,  50),   # bicycle    → 紅
     7:  (150, 255,  50),   # motorcycle → 黃綠
     -1: (200, 200, 200),   # unknown
@@ -57,6 +57,7 @@ def draw_gt_on_frame(
     show_conf: bool = False,
     color_by: str = "class",        # "class" | "id"
     alpha: float = 0.0,             # 填色透明度（0=不填色）
+    class_colors: Optional[Dict[int, Tuple[int, int, int]]] = None,   # None → CLASS_COLORS；必須含 -1（unknown）
 ) -> np.ndarray:
     """
     在 frame 上繪製 GT bbox。
@@ -70,7 +71,9 @@ def draw_gt_on_frame(
     show_conf : 是否顯示 conf 分數
     color_by  : 顏色依據 "class" 或 "id"
     alpha     : bbox 填色透明度（0 = 只畫框線）
+    class_colors : class_id → BGR 顏色表（None → CLASS_COLORS，key 為 0 起算的契約類別編號）
     """
+    class_colors = class_colors or CLASS_COLORS
     overlay = frame.copy() if alpha > 0 else None
 
     for ann in gt_annots:
@@ -84,7 +87,7 @@ def draw_gt_on_frame(
         if color_by == "id":
             color = color_for_id(ann["id"])
         else:
-            color = CLASS_COLORS.get(ann["class_id"], CLASS_COLORS[-1])
+            color = class_colors.get(ann["class_id"], class_colors[-1])
 
         # 填色
         if alpha > 0 and overlay is not None:

@@ -37,7 +37,7 @@ import os
 import argparse
 from pathlib import Path
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -50,6 +50,12 @@ import glob
 from safetrajai.visualization.gt_overlay import CLASS_COLORS, draw_gt_on_frame, parse_seqinfo
 
 # ── 預設類別名稱（與 CLASS_NAMES 保持一致）─────────────────────────────────
+# MOT GT 的 class_id 從 1 起算（= 契約類別編號 + 1），CLASS_COLORS 的 key 從 0 起算，所以要平移一格
+GT_CLASS_COLORS: Dict[int, Tuple[int, int, int]] = {
+    **{class_id + 1: color for class_id, color in CLASS_COLORS.items() if class_id >= 0},
+    -1: CLASS_COLORS[-1],
+}
+
 DEFAULT_CLASS_NAMES: Dict[int, str] = {
     1: "person",
     2: "car",
@@ -172,7 +178,7 @@ def _draw_legend(
     box_h   = row_h * len(items) + pad * 2
     cv2.rectangle(frame, (x0 - pad, y0), (frame.shape[1] - pad, y0 + box_h), (0, 0, 0), -1)
     for i, (cid, cname) in enumerate(items):
-        color = CLASS_COLORS.get(cid, CLASS_COLORS[-1])
+        color = GT_CLASS_COLORS.get(cid, GT_CLASS_COLORS[-1])
         y = y0 + pad + i * row_h + row_h // 2
         cv2.rectangle(frame, (x0, y - 5), (x0 + 12, y + 5), color, -1)
         cv2.putText(frame, cname, (x0 + 16, y + 4),
@@ -307,6 +313,7 @@ def visualize_gt_on_video(
                 show_conf=show_conf,
                 color_by=color_by,
                 alpha=bbox_alpha,
+                class_colors=GT_CLASS_COLORS,
             )
             drawn_cnt += len(annots)
 
