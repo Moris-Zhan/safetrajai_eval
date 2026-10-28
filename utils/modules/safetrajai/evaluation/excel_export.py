@@ -266,6 +266,20 @@ def export_trackeval_results_multi_to_excel(
 # =========================================================
 # DET metrics -> Excel
 # =========================================================
+def _downsample_idx(n, maxn):
+    if n <= maxn:
+        return list(range(n))
+    step = max(1, n // maxn)
+    return list(range(0, n, step))
+
+
+def _append_class_curve_rows(ws, names, y, pick, prefix):
+    _ws_append_row(ws, ["class_id", "class_name"] + [f"{prefix}_{j}" for j in range(len(pick))])
+    for cid in range(len(y)):
+        row = y[cid]
+        _ws_append_row(ws, [cid, names.get(cid, str(cid))] + [row[i] for i in pick])
+
+
 def export_det_metrics_to_excel_openpyxl(
     metrics,
     names: dict,
@@ -345,37 +359,23 @@ def export_det_metrics_to_excel_openpyxl(
                 _ws_append_row(ws, ["y_label", y_label])
                 _ws_append_row(ws, [])
 
-                def downsample_idx(n, maxn):
-                    if n <= maxn:
-                        return list(range(n))
-                    step = max(1, n // maxn)
-                    return list(range(0, n, step))
-
                 if len(data) == 1:
                     y = _to_list(data[0])
                     if y and isinstance(y[0], list):
-                        N = len(y[0])
-                        pick = downsample_idx(N, curve_max_points)
-                        _ws_append_row(ws, ["class_id", "class_name"] + [f"p_{j}" for j in range(len(pick))])
-                        for cid in range(len(y)):
-                            row = y[cid]
-                            _ws_append_row(ws, [cid, names.get(cid, str(cid))] + [row[i] for i in pick])
+                        pick = _downsample_idx(len(y[0]), curve_max_points)
+                        _append_class_curve_rows(ws, names, y, pick, "p")
 
                 elif len(data) >= 2:
                     x = _to_list(data[0])
                     y = _to_list(data[1])
-                    pick = downsample_idx(len(x), curve_max_points) if x is not None else None
+                    pick = _downsample_idx(len(x), curve_max_points) if x is not None else None
                     if x is not None:
                         _ws_append_row(ws, ["x_points"] + [x[i] for i in pick])
 
                     if y and isinstance(y[0], list):
-                        N = len(y[0])
                         if pick is None:
-                            pick = downsample_idx(N, curve_max_points)
-                        _ws_append_row(ws, ["class_id", "class_name"] + [f"y_{j}" for j in range(len(pick))])
-                        for cid in range(len(y)):
-                            row = y[cid]
-                            _ws_append_row(ws, [cid, names.get(cid, str(cid))] + [row[i] for i in pick])
+                            pick = _downsample_idx(len(y[0]), curve_max_points)
+                        _append_class_curve_rows(ws, names, y, pick, "y")
 
     for ws in wb.worksheets:
         _autosize_columns(ws)

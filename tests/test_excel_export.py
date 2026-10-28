@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from openpyxl import load_workbook
@@ -69,3 +70,54 @@ def test_trackeval_snapshot_covers_the_key_sheets(tmp_path: Path) -> None:
     count_column = header.index("Count.GT_Dets_mean")
     assert any(row[3] == "bus" and row[count_column] is None for row in sheets["key_means"][1:])
     assert any(row[4] and row[4].startswith("MISSING") for row in sheets["key_mid"][1:])
+
+
+def synthetic_det_metrics() -> SimpleNamespace:
+    """Ultralytics-like val metrics whose curves hit every branch of the DET curve writer."""
+    ramp = lambda n, scale: [round(scale * i / n, 4) for i in range(n)]  # noqa: E731
+    per_class = lambda rows, n: [ramp(n, 1.0 + k) for k in range(rows)]  # noqa: E731
+    curves = [
+        [ramp(25, 1.0), per_class(2, 25), "Recall", "Precision"],  # x + per-class y, 25 points
+        [per_class(3, 8), "Confidence", "F1"],  # y only, 3 rows (class 2 has no name), 8 points
+        [ramp(10, 1.0), ramp(10, 2.0)],  # x + flat y: only x_points is written
+        [ramp(15, 1.0), per_class(2, 15), "Confidence", "Precision"],  # 15 points
+        np.array(ramp(6, 3.0)),  # single flat array: labels only
+        [None, per_class(2, 5)],  # no x: y rows are down-sampled on their own
+    ]
+    box = SimpleNamespace(
+        map=0.5, map50=0.75, map75=0.55,
+        maps=np.array([0.5, 0.4]),
+        all_ap=np.array([ramp(10, 1.0), ramp(10, 0.5)]),
+        ap_class_index=np.array([0, 1]),
+        curves_results=curves,
+    )
+    return SimpleNamespace(box=box)
+
+
+DET_NAMES = {0: "person", 1: "car", 5: "truck"}
+DET_VARIANTS = {
+    "curves_max_10": {"include_curves": True, "curve_max_points": 10},
+    "curves_default": {"include_curves": True},
+    "no_curves": {"include_curves": False},
+}
+
+
+def export_det_snapshot(tmp_dir: Path) -> dict:
+    snapshot = {}
+    for name, options in DET_VARIANTS.items():
+        out = tmp_dir / f"{name}.xlsx"
+        excel_export.export_det_metrics_to_excel_openpyxl(synthetic_det_metrics(), DET_NAMES, str(out), **options)
+        snapshot[name] = dump_workbook(out)
+    return snapshot
+
+
+def test_det_workbook_matches_snapshot(tmp_path: Path) -> None:
+    expected = json.loads((SNAPSHOT_DIR / "det_metrics.json").read_text(encoding="utf-8"))
+    actual = json.loads(json.dumps(export_det_snapshot(tmp_path)))
+    assert actual == expected
+
+
+def test_det_snapshot_keeps_the_oversampling_of_long_curves(tmp_path: Path) -> None:
+    sheet = export_det_snapshot(tmp_path)["curves_max_10"]["curve_0"]
+    x_points = next(row for row in sheet if row[0] == "x_points")
+    assert len([value for value in x_points[1:] if value is not None]) == 13  # 25 points, step 25 // 10 = 2
