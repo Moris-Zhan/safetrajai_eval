@@ -3,7 +3,7 @@ Stage1 MOT tracks for the conflict analysis (spec「位置取點與軌跡識別�
 
 Each box is reduced to its bottom-centre (ground contact) point, projected to the top-down
 plane with the camera homography and scaled to metres. ROI membership is still decided by
-the box centre, as in the existing stage3 (ADR 0005). Tracks are keyed by (class, track_id)
+the box centre, as in the existing stage3 (stage1 tracks are not ROI-filtered; ROI is applied downstream). Tracks are keyed by (class, track_id)
 because track ids are only unique within a class.
 """
 

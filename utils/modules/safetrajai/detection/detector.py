@@ -2,7 +2,7 @@
 Detector — YOLO 偵測封裝。
 
 負責單一 frame 的推論與逐類別信心過濾，供 safetrajai/pipeline/sequence_tracker.py 的追蹤迴圈呼叫。
-訓練腳本目前不在此專案範圍內（YOLO 權重為外部訓練產物），詳見 markdown/ARCHITECTURE.md。
+訓練腳本目前不在此專案範圍內（YOLO 權重為外部訓練產物）。
 """
 
 import numpy as np

@@ -1,6 +1,6 @@
 """
 Parameters of the stage3 conflict-metrics analysis, read from the scenario block
-`conflict_analysis:` (spec `conflict-analysis`, design §1, ADR 0011).
+`conflict_analysis:`.
 
 Defaults follow the reference implementation (Sub_Module/trajectoryanalyst2): a fixed
 2 m TTC distance, three conflict types, PET only for co-present track pairs.

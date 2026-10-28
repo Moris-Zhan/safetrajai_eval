@@ -200,7 +200,7 @@ class AppConfig:
         if "det_corner" in raw:
             raise ValueError(
                 "情境 config 不再支援頂層 det_corner；ROI 改為以鏡頭為鍵，"
-                "請移到 config/roi/<camera>.yaml（見 CONTEXT.md「關注區域」、docs/adr/0005）"
+                "請移到 config/roi/<camera>.yaml（見 CONTEXT.md「關注區域」）"
             )
 
 

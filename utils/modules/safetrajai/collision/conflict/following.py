@@ -1,6 +1,5 @@
 """
-Front/rear relations and rear-end metrics (spec「最近前車與後車」「追撞後車指標」「DRAC 超限」
-「Crash Index」, ADR 0011).
+Front/rear relations and rear-end metrics (最近前車與後車、追撞後車指標、DRAC 超限、Crash Index).
 
 Front/rear of a rear-end pair follows the reference implementation: project the vector from
 track i to track j onto track i's heading; positive means j is in front. ΔS and DRAC use the

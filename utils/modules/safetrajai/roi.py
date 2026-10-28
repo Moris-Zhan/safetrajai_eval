@@ -1,4 +1,4 @@
-"""以鏡頭為鍵的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）。
+"""以鏡頭為鍵的 ROI（關注區域，見 CONTEXT.md）。
 
 ROI 定義在 config/roi/<camera_id>.yaml：
     camera: C000025

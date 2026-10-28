@@ -1,5 +1,5 @@
 """
-safetrajai.collision.conflict — stage3 衝突指標分析（change `conflict-metrics`，ADR 0011）。
+safetrajai.collision.conflict — stage3 衝突指標分析（change `conflict-metrics`）。
 
 在有地理對位（m_per_pixel 可用）的鏡頭上，以公尺為單位，從 stage1 軌跡計算逐幀配對的
 TTC／MTTC、衝突角度與類型、前導與跟隨、最近前後車、DRAC 與 DRAC 超限、Crash Index、

@@ -43,7 +43,7 @@ class Custom_ReID:
         tight (no gain, no pad, same as training crops), letterboxed, normalized and embedded in one batch;
         returns one L2-normalized feature per box. legacy_crop=True restores save_one_box's gain=1.02, pad=10
         and is only meant for measuring the pre-change reference.
-      - legacy full-model pickle (ADR 0001): unchanged behavior, only the first box is embedded.
+      - legacy full-model pickle: unchanged behavior, only the first box is embedded.
     """
 
     def __init__(self, model_path, legacy_crop=False):

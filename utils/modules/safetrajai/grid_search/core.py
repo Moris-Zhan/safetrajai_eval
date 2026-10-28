@@ -3,12 +3,11 @@ scripts/grid_search/grid_search_*.py 三支腳本（bytetrack/botsort/botsort_re
 
 三支腳本各自只保留 PARAM_GRIDS 常數 + main()（各自 argparse 定義與預設值），
 其餘 90% 以上逐字重複的邏輯（ParameterGrid、scoring、GT 處理、GridSearchRunner）
-全部收斂到這裡。詳見 docs/superpowers/specs/2026-09-03-grid-search-dedup-design.md。
+全部收斂到這裡。
 
 【safetrajai/detection/ 整合】score_params()/_run_tracking_for_video() 的偵測邏輯
 改呼叫 safetrajai/detection/detector.py::Detector，取代原本三支腳本各自手刻的
 model.predict() + 逐偵測套用類別門檻過濾（與 Detector.detect() 內容逐字重複）。
-詳見 docs/superpowers/specs/2026-09-03-detection-module-design.md。
 
 【路徑組裝】discover_grid_search_videos()/_resolve_gt_source_root()/score_params()
 的 trial_dir 組裝一律呼叫 evaluation/dataset_layout.py（dataset-path-refactor 已合併），

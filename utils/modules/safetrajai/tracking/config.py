@@ -84,7 +84,7 @@ _FUSION_PARAM_RULES = {
     "appearance_veto_sim": (lambda v: 0 <= v <= 1, "介於 0 與 1 之間"),
 }
 
-# Renamed fusion parameters (ADR 0008): old name -> new name
+# Renamed fusion parameters: old name -> new name
 _RENAMED_FUSION_PARAMS = {"reid_center_gate_px_per_s": "reid_center_gate_px_per_frame"}
 
 
@@ -92,7 +92,7 @@ def _validate_fusion_params(class_name: str, params: dict[str, Any]) -> None:
     for old, new in _RENAMED_FUSION_PARAMS.items():
         if old in params:
             raise ValueError(f"class_tracking_params['{class_name}'].{old} 已不再支援，"
-                             f"請改用 {new}（衍生量以保留期限幀數計算，見 ADR 0008）")
+                             f"請改用 {new}（衍生量以保留期限幀數計算）")
     for key, (is_valid, rule) in _FUSION_PARAM_RULES.items():
         if key not in params:
             continue

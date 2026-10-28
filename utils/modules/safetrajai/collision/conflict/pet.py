@@ -1,5 +1,5 @@
 """
-Post-Encroachment Time per track pair (spec「PET」, design §8, ADR 0011).
+Post-Encroachment Time per track pair.
 
 As in the reference implementation, only track pairs that appear together in at least one
 frame are considered by default; `pet_max_gap_s > 0` additionally admits pairs whose time

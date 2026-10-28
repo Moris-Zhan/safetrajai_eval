@@ -3,7 +3,7 @@
 Dataset 路徑組裝：集中 SOURCE 掃描與 OUTPUT 序列目錄命名，供
 track_eval.py、scripts/grid_search/grid_search_*.py、safetrajai/collision/ 共用。
 
-命名慣例（見 docs/superpowers/specs/2026-09-03-dataset-path-refactor-design.md）：
+命名慣例：
     SOURCE（唯讀，既有資料，命名不變）：
         SOURCE_VIDEO_DIR/<run_det_eval_dir>/annotation_<seq>/<seq>.mp4
         SOURCE_VIDEO_DIR/mot_annotations_all8/mot_annotation_<seq>/gt/

@@ -1,4 +1,4 @@
-"""評估前的忽略區域（ignore region）前處理，見 CONTEXT.md「忽略區域」、docs/adr/0005。
+"""評估前的忽略區域（ignore region）前處理，見 CONTEXT.md「忽略區域」。
 
 採 UA-DETRAC 式語意，逐幀、逐類別：
 1. GT 框中心點在 ROI 外者標為 ignore。

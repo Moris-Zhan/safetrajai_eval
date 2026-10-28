@@ -3,10 +3,9 @@ Homography 誤差熱力圖：把 check points 的 reprojection 誤差（像素�
 空間內插，視覺化「這個路口的哪個區域誤差比較大」，是 homography_validation.py
 數值統計以外的空間診斷輔助。
 
-比照 markdown/reference_results/C000025 中華三路 民生熱力圖/ 的既有產出風格（IDW／
+比照舊版參考結果（已不在 repo 內）的既有產出風格（IDW／
 Linear／RBF 三種內插法各一張，疊在衛星底圖上、標示 check point 位置與誤差值、
-convex hull 外遮罩不上色）。⚠️ 那份的原始產生程式碼已經找不到（見
-markdown/ARCHITECTURE.md「Homography 資料」），這裡是依圖面觀察重新設計、獨立實作的版本，
+convex hull 外遮罩不上色）。⚠️ 那份的原始產生程式碼已經找不到，這裡是依圖面觀察重新設計、獨立實作的版本，
 數學細節（配色、遮罩方式、字型排版）不保證跟原始程式完全一致，只有「三種內插法 + 疊圖 +
 convexhull 遮罩」這個核心概念相同。
 
@@ -131,7 +130,7 @@ def render_error_heatmap(
         title: 圖標題（左上角文字）
         style: "pretty"（預設，全亮度底圖 + 右側色階圖例 + 深色標題底）或
             "plain"（底圖整體調暗、無色階圖例、標題直接印在暗底上，比照
-            markdown/reference_results/.../heatmap_{idw,linear,rbf}.png 那組風格）
+            舊版參考結果的 heatmap_{idw,linear,rbf}.png 那組風格）
     """
     height, width = background_bgr.shape[:2]
     grid_y, grid_x = np.mgrid[0:height, 0:width]

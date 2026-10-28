@@ -1,4 +1,4 @@
-"""Re-ID 裁切索引（見 CONTEXT.md「裁切」、openspec specs/reid-dataset）。
+"""Re-ID 裁切索引（見 CONTEXT.md「裁切」）。
 
 每段序列的索引寫在 <crop_root>/_index/<seq>.csv，一列對應一張裁切。
 """

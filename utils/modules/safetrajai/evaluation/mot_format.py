@@ -6,7 +6,7 @@ NAMES = CLASS_NAMES
 
 
 def save_mot_format(imgs_path, labels_path, output_file, img_width: int, img_height: int):
-    # stage1 軌跡保留全部追蹤結果，不依 ROI 過濾；ROI 由下游套用（docs/adr/0005）
+    # stage1 軌跡保留全部追蹤結果，不依 ROI 過濾；ROI 由下游套用
     img_files = sorted(Path(imgs_path).glob("*.jpg"))
 
     img_paths_txt = Path(output_file).parent / Path(output_file).name.replace("annotation_", "")

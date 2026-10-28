@@ -3,7 +3,7 @@ TTC, MTTC, collision point and leading/following per pair row (spec「TTC 與 MT
 
 Both are found by sampling 0..ttc_horizon_s in ttc_step_s steps (reference implementation):
 TTC extrapolates at constant velocity, MTTC adds the current acceleration and is only
-computed when TTC is finite (ADR 0011). Only approaching pairs are evaluated; a pair already
+computed when TTC is finite. Only approaching pairs are evaluated; a pair already
 closer than the collision distance at t = 0 is flagged `overlap_at_start` instead.
 """
 

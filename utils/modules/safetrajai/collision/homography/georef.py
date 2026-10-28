@@ -1,5 +1,5 @@
 """
-Metres per pixel of a camera's top-down (satellite) plane (spec `camera-homography`, ADR 0010).
+Metres per pixel of a camera's top-down (satellite) plane.
 
 Web Mercator ground resolution of a Google Static Maps image:
     m_per_pixel = 156543.03392 * cos(latitude) / 2**zoom / scale

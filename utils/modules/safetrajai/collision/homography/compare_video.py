@@ -4,10 +4,10 @@ Homography 逐幀 warp 比對影片：把整支來源影片逐幀 warp 到衛星
 的單張靜態疊圖更能看出「對齊狀況隨時間變化」（例如遠處車道因為透視角度大，warp 後
 對齊精準度是否比近處差、有沒有隨影片晃動等）。
 
-比照 markdown/reference_results/C000025 中華三路 民生熱力圖/
+比照舊版參考結果（已不在 repo 內）
 C000025 中華三路 民生二路(東北角)-2-20-1280-1280_compare.mp4 的既有產出（左：原始 CCTV
 + check point 標記；右：逐幀 warp 疊底圖 + GT/預測點 + 統計文字），是重新設計、獨立實作的
-版本，原始產生程式碼已經找不到（見 markdown/ARCHITECTURE.md「Homography 資料」）。
+版本，原始產生程式碼已經找不到。
 
 ⚠️ 這是相對耗時的操作（要重新讀整支影片逐幀 warp），只在明確需要「整支影片時間軸上的
 對齊檢查」時才呼叫；純粹要知道矩陣準不準，`homography_validation.compute_reprojection_stats()`

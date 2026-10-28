@@ -177,7 +177,7 @@ def export_stats_excel(
     output_path: Path,
 ) -> None:
     """把 compute_reprojection_stats() 的結果輸出成 Excel（summary + per_point 兩個 sheet），
-    比照 markdown/reference_results/.../_stats.xlsx 的結構。
+    比照舊版參考結果的 _stats.xlsx 結構。
 
     ⚠️ 沒有公尺欄位——原始檔案的公尺換算需要每個路口的緯度（Web Mercator 公式），
     來源的 GPS mapping Excel 沒有包在這份快照裡，目前拿不到，見本檔案開頭模組說明。

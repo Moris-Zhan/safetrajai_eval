@@ -1,8 +1,8 @@
-"""遮擋碎片合併（見 CONTEXT.md「碎片」「碎片合併」、spec: reid-dataset）。
+"""遮擋碎片合併（見 CONTEXT.md「碎片」「碎片合併」）。
 
 同一序列、同一類別內：
-1. 候選：A 結束後「保留期限幀數＋margin_frames」幀內 B 出現（保留期限依追蹤器與序列幀率換算，
-   見 ADR 0008），且 B 起點在 A 末段每幀速度外插位置的 position_factor 倍框尺寸（面積平方根）以內。
+1. 候選：A 結束後「保留期限幀數＋margin_frames」幀內 B 出現（保留期限直接取 track_buffer 幀數，
+   不依追蹤器或幀率換算），且 B 起點在 A 末段每幀速度外插位置的 position_factor 倍框尺寸（面積平方根）以內。
 2. 外觀：A 最後 n 張與 B 最前 n 張的特徵平均取 cosine。
 3. 一對一：相似度 ≥ 門檻者由高到低貪婪接受，每段最多一個前段、一個後段；以 union-find 串成鏈，
    合併後的身分沿用鏈中首張時間最早的軌跡。
@@ -65,7 +65,7 @@ def load_merge_config(path: Path) -> dict:
     with Path(path).open(encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
     if "time_margin_s" in raw:
-        raise ValueError(f"{path}: time_margin_s 已不再支援，請改用 margin_frames（以保留期限幀數計算，見 ADR 0008）")
+        raise ValueError(f"{path}: time_margin_s 已不再支援，請改用 margin_frames（以保留期限幀數計算）")
     threshold = raw.get("threshold")
     sample = raw["sample"]
     return {

@@ -229,8 +229,8 @@ class TrackingEvalPipeline:
         CLAUDE.md「軌跡格式契約」），對每支序列跑一次
         safetrajai.collision.run_collision_detection_for_sequence()，輸出寫到
         cfg.collision_output_dir/<seq_name>/ 底下。config 的 conflict_analysis.enabled 為 true 時，
-        接著跑 safetrajai.collision.conflict.run_conflict_analysis_for_sequence()（衝突指標，
-        ADR 0011），輸出寫到 cfg.collision_output_dir/<seq_name>/conflict/，不影響既有輸出。
+        接著跑 safetrajai.collision.conflict.run_conflict_analysis_for_sequence()（衝突指標），
+        輸出寫到 cfg.collision_output_dir/<seq_name>/conflict/，不影響既有輸出。
 
         需要 stage1 先跑過（run_det_eval_dir 下要有 annotation_<seq>/trackers/... 與
         first_frame_with_box.jpg），若同一次執行 stages.run_stage1 也是 true，

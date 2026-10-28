@@ -144,7 +144,7 @@ def build_track(track_id: int, class_id: int, rows: List[tuple], fps: float) -> 
 def load_sequence_tracks(seq_output_dir: Path, cfg, fps: float, roi: np.ndarray) -> List[Dict[str, Any]]:
     """讀取一個序列 stage1 輸出的六個逐類別軌跡檔，合併成跨類別的 track dict 清單。
 
-    stage1 軌跡不做 ROI 過濾（docs/adr/0005），這裡以框中心點硬過濾：ROI 外的列
+    stage1 軌跡不做 ROI 過濾，這裡以框中心點硬過濾：ROI 外的列
     直接捨棄，過濾後沒有任何列的軌跡也一併捨棄。
 
     Args:

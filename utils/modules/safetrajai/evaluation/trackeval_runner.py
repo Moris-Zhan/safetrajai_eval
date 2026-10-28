@@ -197,7 +197,7 @@ def prepare_mot_gt_shadow(
     # 修正 GT 重複 ID
     fix_mot_gt_unique_ids(tgt_gt_txt, tgt_gt_txt, keep_policy="largest_area", verbose=verbose)
     
-    # ROI 範圍限縮不在這裡做，由 run_trackeval_mot() 以忽略區域處理（docs/adr/0005）
+    # ROI 範圍限縮不在這裡做，由 run_trackeval_mot() 以忽略區域處理
 
     # 驗證修正結果
     ok = check_gt_duplicate_ids_per_frame(tgt_gt_txt, verbose_topk=30 if verbose else 0)

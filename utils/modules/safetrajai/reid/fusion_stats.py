@@ -3,7 +3,7 @@ reid-model「候選模型先通過外觀分離度關卡」；change align-reid-t
 
 外觀距離＝兩個 L2 正規化特徵的 cosine 距離 / 2（0～1，越小越像），與追蹤器相同。所有間隔以幀數表示。
 - 正樣本（positive）：同一條 GT 軌跡、間隔在 MIN_GAP_FRAMES ～ 該類別保留期限幀數（設定檔的 track_buffer，
-  ADR 0009，不換算）之間的兩個框；候選門檻與關卡用這組。positive_1s：間隔 ≥ 1 秒（依幀率換算成幀數），
+  不換算）之間的兩個框；候選門檻與關卡用這組。positive_1s：間隔 ≥ 1 秒（依幀率換算成幀數），
   只供與先前的量測比較。
 - 干擾物（negative）：同一幀、同類別、中心距離 ≤ 2×該類別 norm_factor 的不同 GT 軌跡；少於 30 對時改用
   同類別任意不同 GT 軌跡的配對（隨機抽樣），並標示 negative_kind = "any_fallback"。
@@ -90,7 +90,7 @@ def positive_pairs(boxes: list[dict], fps_by_seq: dict[str, float], min_gap_s: f
 
 
 def retention_frames(config: dict) -> dict[str, int]:
-    """Per-class retention in frames = the scenario's track_buffer as is (ADR 0009; no tracker/fps conversion)."""
+    """Per-class retention in frames = the scenario's track_buffer as is (no tracker/fps conversion)."""
     params = config["class_tracking"]["class_tracking_params"]
     out = {}
     for cls, p in params.items():
