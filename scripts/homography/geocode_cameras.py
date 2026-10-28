@@ -2,10 +2,10 @@
 取得鏡頭路口中心的經緯度（change `camera-homography-georef`，design §6）。
 
 用法：
-    python scripts/geocode_cameras.py                      # 查詢全部鏡頭，寫候選 CSV（會連網）
-    python scripts/geocode_cameras.py --cameras C000025 C000085
-    python scripts/geocode_cameras.py --apply              # 只把 status=ok 的候選寫進鏡頭設定
-    python scripts/geocode_cameras.py --apply --accept C000033   # 另外套用使用者確認過的候選
+    python scripts/homography/geocode_cameras.py                      # 查詢全部鏡頭，寫候選 CSV（會連網）
+    python scripts/homography/geocode_cameras.py --cameras C000025 C000085
+    python scripts/homography/geocode_cameras.py --apply              # 只把 status=ok 的候選寫進鏡頭設定
+    python scripts/homography/geocode_cameras.py --apply --accept C000033   # 另外套用使用者確認過的候選
 
 查詢先用 OpenStreetMap Overpass（不需要金鑰）；查不到時，若 .env 或環境變數有
 GOOGLE_MAPS_DEMO_API_KEY／GOOGLE_MAPS_API_KEY，以 Google Geocoding 備援（結果一律 needs_review）。

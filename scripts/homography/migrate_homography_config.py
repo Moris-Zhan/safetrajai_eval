@@ -2,8 +2,8 @@
 把 tag 鍵的 Homography 資料遷移成鏡頭鍵的設定檔（change `camera-homography-georef`，design §2）。
 
 用法：
-    python scripts/migrate_homography_config.py --dry-run   # 只列出會產生的檔案
-    python scripts/migrate_homography_config.py             # 正式寫入
+    python scripts/homography/migrate_homography_config.py --dry-run   # 只列出會產生的檔案
+    python scripts/homography/migrate_homography_config.py             # 正式寫入
 
 來源（不會被修改）：
     models/homography/matrices/H_<tag>.npy

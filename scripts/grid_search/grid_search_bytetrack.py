@@ -11,10 +11,10 @@ Class-Aware Tracker 參數調優工具（ByteTrack）
 本檔只保留 PARAM_GRIDS（此腳本專屬的搜尋空間）與 main()（此腳本專屬的 argparse 定義）。
 
 使用方式：
-  python scripts/grid_search_bytetrack.py --target-class scooter --config config/grid_search_bytetrack.yaml
+  python scripts/grid_search/grid_search_bytetrack.py --target-class scooter --config config/grid_search_bytetrack.yaml
 
 進階：
-  python scripts/grid_search_bytetrack.py \\
+  python scripts/grid_search/grid_search_bytetrack.py \\
       --target-class scooter \\
       --max-videos 6 \\
       --resume            # 跳過已有結果的組合

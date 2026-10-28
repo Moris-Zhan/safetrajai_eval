@@ -127,7 +127,7 @@ def download_satellite(
     sanity_check(img, cfg.satellite.output_size)
 
     if purpose == "basemap" and out.exists():
-        _quarantine(out, today, "以 scripts/download_satellite.py --purpose basemap --replace 換成新底圖；"
+        _quarantine(out, today, "以 scripts/homography/download_satellite.py --purpose basemap --replace 換成新底圖；"
                                 "舊矩陣的對應點對新底圖無效，需要重新標定")
         update_camera_config_fields(cfg.path, {
             "matrix_tag": None, "needs_recalibration": cfg.matrix_tag, "scale_check": "unchecked",

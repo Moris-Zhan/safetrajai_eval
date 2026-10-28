@@ -1,4 +1,4 @@
-"""CLI for the stage1/stage2/stage3 pipeline (shared by track_eval.py and scripts/run_pipeline.py)."""
+"""CLI for the stage1/stage2/stage3 pipeline (shared by track_eval.py and scripts/pipeline/run_pipeline.py)."""
 
 import argparse
 

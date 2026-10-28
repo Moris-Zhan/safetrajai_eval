@@ -1,6 +1,6 @@
 """
 safetrajai.pipeline.tracking_pipeline — YOLO class-aware tracking + TrackEval evaluation pipeline
-（入口：python track_eval.py 或 python scripts/run_pipeline.py，CLI 見 safetrajai/cli/run_pipeline.py）
+（入口：python track_eval.py 或 python scripts/pipeline/run_pipeline.py，CLI 見 safetrajai/cli/run_pipeline.py）
 
 目錄結構設計
 ============

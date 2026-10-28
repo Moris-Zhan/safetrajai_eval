@@ -7,8 +7,8 @@
 可複製或下載。輸出放在 gitignore 的 runs/roi_picker/，CCTV 畫面不進 git、不上傳。
 
 用法：
-    python scripts/roi/make_roi_picker.py --camera C000054
-    python scripts/roi/make_roi_picker.py --camera C000054 --out-dir runs/roi_picker
+    python scripts/picker/make_roi_picker.py --camera C000054
+    python scripts/picker/make_roi_picker.py --camera C000054 --out-dir runs/roi_picker
 """
 from __future__ import annotations
 

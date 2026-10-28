@@ -1,7 +1,7 @@
 """Compatibility entry point: `python track_eval.py --config <path>`.
 
 The pipeline lives in safetrajai.pipeline; the CLI is safetrajai.cli.run_pipeline
-(also exposed as scripts/run_pipeline.py). Output layout is documented in
+(also exposed as scripts/pipeline/run_pipeline.py). Output layout is documented in
 utils/modules/safetrajai/pipeline/tracking_pipeline.py.
 """
 

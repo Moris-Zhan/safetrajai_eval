@@ -2,9 +2,9 @@
 依鏡頭設定的經緯度下載 Google Static Maps 衛星圖（change `camera-homography-georef`，design §5）。
 
 用法：
-    python scripts/download_satellite.py --camera C000025 --purpose verify
-    python scripts/download_satellite.py --camera C000999 --purpose basemap
-    python scripts/download_satellite.py --camera C000025 --purpose basemap --replace
+    python scripts/homography/download_satellite.py --camera C000025 --purpose verify
+    python scripts/homography/download_satellite.py --camera C000999 --purpose basemap
+    python scripts/homography/download_satellite.py --camera C000025 --purpose basemap --replace
 
 - verify：存到 models/homography/verification/<camera>/，只供比例尺檢查使用；
   優先使用 GOOGLE_MAPS_DEMO_API_KEY，沒有時用 GOOGLE_MAPS_API_KEY。

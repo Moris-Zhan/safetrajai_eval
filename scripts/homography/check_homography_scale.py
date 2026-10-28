@@ -3,7 +3,7 @@
 （change `camera-homography-georef`，spec「比例尺檢查」、design §8）。
 
 用法：
-    python scripts/check_homography_scale.py --camera C000025 \
+    python scripts/homography/check_homography_scale.py --camera C000025 \
         --points 612,540 655,541 --reference-m 3.5 --feature "車道寬"
     # 不下載、只做已知長度檢查：加 --skip-image-match
     # 只印結果、不寫入設定：加 --dry-run

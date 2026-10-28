@@ -12,10 +12,10 @@ Class-Aware Tracker 參數調優工具（BoTSORT）
 CLI 驅動 `--conf`/`--iou`/`--imgsz`/`--frame_rate`/`--gmc_method`）。
 
 使用方式：
-  python scripts/grid_search_botsort.py --target-class scooter --config config/grid_search_botsort.yaml
+  python scripts/grid_search/grid_search_botsort.py --target-class scooter --config config/grid_search_botsort.yaml
 
 進階：
-  python scripts/grid_search_botsort.py \\
+  python scripts/grid_search/grid_search_botsort.py \\
       --target-class scooter \\
       --video-dir ./data/source \\
       --output-root ./runs/track_eval \\
