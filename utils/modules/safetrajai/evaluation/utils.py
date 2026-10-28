@@ -11,6 +11,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from openpyxl.utils import get_column_letter
 
 
 # =========================================================
@@ -86,7 +87,6 @@ def _autosize_columns(ws, max_width=60, scan_rows=300):
                 continue
             best = max(best, len(str(v)))
         best = min(max_width, best + 2)
-        from openpyxl.utils import get_column_letter
         ws.column_dimensions[get_column_letter(col)].width = max(10, best)
 
 
