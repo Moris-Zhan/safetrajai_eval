@@ -32,12 +32,12 @@ train = ["wandb"]
 dev = ["pytest"]
 
 [tool.setuptools.package-dir]
-"" = "src"
+"" = "utils/modules"
 trackeval = "third_party/trackeval"
 utils = "utils"
 
 [tool.setuptools.packages.find]
-where = ["src", "third_party", "."]
+where = ["utils/modules", "third_party", "."]
 include = ["safetrajai*", "trackeval*", "utils"]
 
 [tool.pytest.ini_options]

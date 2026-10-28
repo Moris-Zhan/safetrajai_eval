@@ -29,10 +29,10 @@ LEGACY_MOT_CLASS_ID = {"person": 1, "car": 2, "scooter": 3, "small_truck": 4, "b
 LEGACY_REID_CLASSES = ["bus", "car", "person", "scooter", "small_truck", "truck"]
 
 FROZEN_TRACKER_METHODS = {
-    ("module/tracker/class_aware_botsort.py", "src/safetrajai/tracking/class_aware_botsort.py", "ClassAwareBOTSORT"): (
+    ("module/tracker/class_aware_botsort.py", "utils/modules/safetrajai/tracking/class_aware_botsort.py", "ClassAwareBOTSORT"): (
         "__init__", "update", "remove_duplicate_stracks", "init_track",
     ),
-    ("module/tracker/class_aware_bytetrack.py", "src/safetrajai/tracking/class_aware_bytetrack.py", "ClassAwareBYTETracker"): (
+    ("module/tracker/class_aware_bytetrack.py", "utils/modules/safetrajai/tracking/class_aware_bytetrack.py", "ClassAwareBYTETracker"): (
         "__init__", "update", "remove_duplicate_stracks",
     ),
 }
@@ -174,7 +174,7 @@ def test_tracker_override_bodies_unchanged(old_path: str, new_path: str, class_n
 
 def test_no_sys_path_mutation() -> None:
     pattern = re.compile(r"\bsys\.path\b")
-    roots = [REPO_ROOT / "src", REPO_ROOT / "scripts", REPO_ROOT / "utils"]
+    roots = [REPO_ROOT / "scripts", REPO_ROOT / "utils"]
     sources = [p for root in roots for p in root.rglob("*.py")] + [REPO_ROOT / "track_eval.py"]
     offenders = [str(p.relative_to(REPO_ROOT)) for p in sources if pattern.search(p.read_text(encoding="utf-8"))]
     assert offenders == []
