@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 from openpyxl import Workbook
 
+from safetrajai.classes import CLASS_NAMES
 from safetrajai.evaluation.utils import (
     _safe_float, _to_list, _excel_safe,
     _ws_append_row, _autosize_columns,
@@ -141,7 +142,7 @@ def sort_rows_grouped(rows, class_order=None):
     依 dataset / tracker / class 分組排序，同組內依序排列。
     """
     if class_order is None:
-        class_order = ["person", "car", "scooter", "small_truck", "bus", "truck"]
+        class_order = list(CLASS_NAMES.values())
     class_rank = {c: i for i, c in enumerate(class_order)}
 
     def key(r):
@@ -171,7 +172,7 @@ def export_trackeval_results_multi_to_excel(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if classes_expected is None:
-        classes_expected = ["person", "car", "scooter", "small_truck", "bus", "truck"]
+        classes_expected = list(CLASS_NAMES.values())
 
     wb = Workbook()
 

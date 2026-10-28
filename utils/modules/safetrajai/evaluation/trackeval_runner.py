@@ -29,7 +29,7 @@ from safetrajai.evaluation.mot_converter import (
     fix_mot_gt_unique_ids,
 )
 
-from safetrajai.classes import MOT_CLASS_ID
+from safetrajai.classes import CLASS_NAMES, MOT_CLASS_ID
 from safetrajai.evaluation.ignore_region import apply_ignore_region
 from safetrajai.roi import resolve_roi
 
@@ -318,7 +318,7 @@ def run_trackeval_mot(
         dict: TrackEval 結果，若無有效 tracker 則回傳 None。
     """
     if classes_to_eval is None:
-        classes_to_eval = ["person", "car", "scooter", "small_truck", "bus", "truck"]
+        classes_to_eval = list(CLASS_NAMES.values())
     classes_to_eval = list(classes_to_eval)
 
     root = Path(trackeval_root)
