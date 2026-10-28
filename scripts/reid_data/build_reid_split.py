@@ -6,7 +6,7 @@
   - <crop-root>/_index/*.csv       裁切蒐集時寫出的索引（每張裁切一列）
   - <exclusions>                   人工排除清單（class,identity,image,action），可不存在
   - <auto-exclusions>              自動排除清單（class,identity,image,action,rule），可不存在；兩份清單都套用
-  - --exclude-cameras              抽查不合格而整支排除的鏡頭（見 docs/adr/0007），其所有裁切不進入版本
+  - --exclude-cameras              抽查不合格而整支排除的鏡頭（見 CONTEXT.md「抽查」），其所有裁切不進入版本
   - --merges                       碎片合併清單（class,identity,merged_identity,...，build_fragment_merges.py 產生）；
                                    預設不套用。套用時在排除之後、最少張數之前把原始身分改名為合併後的身分
   - config/reid/reid_split.yaml         切分規則（val 的鏡頭與日期、每身分張數上下限）

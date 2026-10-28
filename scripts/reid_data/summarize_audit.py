@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-計算抽查的不合格率（見 CONTEXT.md「抽查」「不合格率」、docs/adr/0007）。
+計算抽查的不合格率（見 CONTEXT.md「抽查」「不合格率」）。
 
 讀取 generate_identity_review.py --audit-only 輸出的 audit_sample.csv 與使用者匯出的確認清單，
 只看鏡頭抽查（camera_audit）的身分：需要整段排除（確認清單中 image 為空）的比例即不合格率，

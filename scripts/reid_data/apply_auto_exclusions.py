@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-由污染標記產生自動排除清單（見 CONTEXT.md「自動排除」、docs/adr/0007）。
+由污染標記產生自動排除清單（見 CONTEXT.md「自動排除」）。
 
 讀取裁切索引與 detect_contamination.py 的 motion_flags.csv、contamination_crops.csv，
 依固定規則產生 dataset/reid/auto_exclusions.csv（欄位：class,identity,image,action,rule）：

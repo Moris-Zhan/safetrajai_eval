@@ -10,7 +10,7 @@
                   --legacy-crop 改用修改前的裁切（框放大 1.02 倍、加 10px 邊），只用來量測參考
   - --version     資料集版本；val 的分布只作對照
   - --config      追蹤情境設定（預設 botsort_reid_timm.yaml）：各類別的 norm_factor（干擾物半徑＝2×norm_factor）
-                  與 track_buffer（保留期限幀數，ADR 0009，不換算）；reid_crops.yaml 是依 10fps 來源設定的，
+                  與 track_buffer（保留期限幀數，不換算）；reid_crops.yaml 是依 10fps 來源設定的，
                   不能用於 C000025
   - --reference        參考的結果 JSON（dinov2s_v3 以 --legacy-crop 量測）
   - --noise-reference  兩個結果 JSON（只換種子的兩個模型，皆以緊框量測），差距即雜訊底線

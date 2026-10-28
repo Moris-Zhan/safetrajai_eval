@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-把人工審查匯出的確認清單合併進排除清單（見 CONTEXT.md「排除」、docs/adr/0006）。
+把人工審查匯出的確認清單合併進排除清單（見 CONTEXT.md「排除」）。
 
 讀取審查頁匯出的 CSV（欄位：class,identity,image,action；image 為空代表整個身分），
 與既有的 dataset/reid/exclusions.csv 合併、去除重複並依鍵排序。只寫排除清單，

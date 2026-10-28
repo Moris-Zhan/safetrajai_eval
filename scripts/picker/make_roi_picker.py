@@ -58,7 +58,7 @@ const pts = [];
 
 function toYaml() {
   const lines = [
-    "# config/roi/" + CAMERA + ".yaml — 鏡頭 " + CAMERA + " 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）",
+    "# config/roi/" + CAMERA + ".yaml — 鏡頭 " + CAMERA + " 的 ROI（關注區域，見 CONTEXT.md）",
     "camera: " + CAMERA,
     "image_size: [" + W + ", " + H + "]",
     "polygon:",
