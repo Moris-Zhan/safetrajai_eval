@@ -541,7 +541,7 @@ python scripts/visualize_gt_on_class_video.py --trackeval_root <path> --video_pa
 - **評估鏡頭 C000025 不可進任何訓練資料**；與它同一路口的 C000026 也刻意排除。smoke 測試會檢查 `datasets.yaml` 中 eval 與 source 的鏡頭不重疊。
 - **禁止大量 I/O**：`dataset/`、`models/`、`runs/` 可能位於掛載磁碟。不要做全量 `sha256sum`／`du`、`find … -exec cat` 或 `rsync --checksum`；核對只比對路徑清單、檔案數或大小。
 - **隔離不刪除**：有疑慮的資料或權重用 `mv` 移到同目錄的 `temp/`，並記錄在 `temp/DO_NOT_USE.md`；config 不得引用 `temp/`。
-- 上傳流程、HF 限制與 repo 規劃見 [`Markdown/HF_UPLOAD_WORKFLOW.md`](Markdown/HF_UPLOAD_WORKFLOW.md)。
+- 上傳流程、HF 限制與 repo 規劃見 [`Markdown/workflow/HF_UPLOAD_WORKFLOW.md`](Markdown/workflow/HF_UPLOAD_WORKFLOW.md)。
 
 ## License
 

@@ -1,7 +1,7 @@
 # Hugging Face 資料上傳流程（HF Private Repo Upload Workflow）
 
 > 整理日期：2026-10-08
-> 依據：2026-10-08 把評估 GT 上傳到 HF private repo 的過程與決策。GitHub 的程式碼推送見 `Markdown/GITHUB_PUSH_WORKFLOW.md`。
+> 依據：2026-10-08 把評估 GT 上傳到 HF private repo 的過程與決策。GitHub 的程式碼推送見 `Markdown/workflow/GITHUB_PUSH_WORKFLOW.md`。
 
 ---
 
