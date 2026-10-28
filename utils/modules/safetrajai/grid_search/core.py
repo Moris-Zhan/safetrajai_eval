@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import glob
 import itertools
 import json
 import math
@@ -258,10 +259,8 @@ def discover_grid_search_videos(
     不含「找不到影片」的錯誤處理（呼叫端的 main() 自行檢查回傳的 list 是否為空並印
     錯誤/sys.exit，維持現行行為）。
     """
-    import glob as _glob
-
     if video_glob_override:
-        video_paths = sorted(_glob.glob(video_glob_override, recursive=True))
+        video_paths = sorted(glob.glob(video_glob_override, recursive=True))
     else:
         det_output_dir = Path(cfg.OUTPUT_ROOT) / cfg.run_det_eval_dir
         video_paths = sorted(
@@ -282,7 +281,6 @@ def _run_tracking_for_video(
     video_path: str,
     labels_path: Path,
     images_path: Path,
-    trial_dir: Path,
     tracker_type: str,
     conf: float,
     iou: float,
@@ -309,8 +307,6 @@ def _run_tracking_for_video(
     safetrajai/detection/detector.py 的 Detector.detect(frame, iou=iou, imgsz=imgsz)
     （與 track_eval.py 共用同一份偵測+信心過濾邏輯，不再各自重寫）。
     """
-    from copy import deepcopy
-
     stem_name = Path(video_path).stem.replace(" 中華三路 民生二路(東北角)_", "_")
 
     tracker_kwargs = {
@@ -340,7 +336,7 @@ def _run_tracking_for_video(
         if not ret:
             break
 
-        clean_frame = deepcopy(frame)
+        clean_frame = copy.deepcopy(frame)
         frame_id += 1
 
         boxes = detector.detect(frame, iou=iou, imgsz=imgsz)
@@ -452,7 +448,6 @@ def score_params(
                 video_path  = video_path,
                 labels_path = labels_path,
                 images_path = images_path,
-                trial_dir   = trial_dir,
                 tracker_type= tracker_type,
                 conf        = conf,
                 iou         = iou,
@@ -789,8 +784,6 @@ def generate_config_patch(
     for k, v in sorted(merged.items()):
         if isinstance(v, str):
             lines.append(f"        '{k}': '{v}',")
-        elif isinstance(v, bool):
-            lines.append(f"        '{k}': {v},")
         else:
             lines.append(f"        '{k}': {v},")
     lines.append("    },")
