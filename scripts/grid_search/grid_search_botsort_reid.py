@@ -1,4 +1,4 @@
-# tracker_grid_search.py
+# grid_search_botsort_reid.py
 # -*- coding: utf-8 -*-
 """
 Class-Aware Tracker 參數調優工具
@@ -10,20 +10,19 @@ Class-Aware Tracker 參數調優工具
 設計原則：
   - 不依賴 sklearn 的 Estimator 介面（tracker 非 sklearn model），
     而是自行實作 ParameterGrid + 平行 / 循序評估的 GridSearchRunner。
-  - Scoring function 直接呼叫現有的 run_class_aware_tracking → save_mot_format
-    → run_trackeval_mot 流程，從 TrackEval 結果中萃取 HOTA.AssA_mean。
+  - Scoring function（safetrajai/grid_search/core.py）依序執行 tracking → save_mot_format
+    → run_trackeval_mot，從 TrackEval 結果中萃取 HOTA.AssA_mean。
   - 每次試驗：動態 patch CLASS_TRACKING_PARAMS → 執行 tracking → 評估 → 還原。
   - 結果存入 CSV（可中斷續跑），並於結束後印出最佳參數組合。
 
 使用方式：
-  python tracker_grid_search.py --target-class scooter --config config.yaml
+  python scripts/grid_search/grid_search_botsort_reid.py --target-class scooter --config config/tracking/botsort_reid.yaml
 
 進階：
-  python tracker_grid_search.py \\
+  python scripts/grid_search/grid_search_botsort_reid.py \\
       --target-class scooter \\
-      --video-dir ./data/source \\
-      --output-root ./runs/track_eval \\
-      --n-jobs 1 \\
+      --max-videos 6 \\
+      --output-root ./runs/grid_search \\
       --resume            # 跳過已有結果的組合
 """
 
@@ -213,7 +212,7 @@ def main():
     )
     parser.add_argument(
         "--model", default=None,
-        help="YOLO 模型路徑（預設從 config.yaml 的 det_model_path 讀取）"
+        help="目前沒有作用：模型路徑一律讀取 --config 的 models.det_model_path"
     )
     parser.add_argument(
         "--video-glob", default=None,
@@ -224,7 +223,7 @@ def main():
     )
     parser.add_argument(
         "--max-videos", type=int, default=6,
-        help="最多用幾支影片評估（加快搜尋速度，預設 2）"
+        help="最多用幾支影片評估（加快搜尋速度，預設 6）"
     )
     parser.add_argument(
         "--output-root", default="./runs/grid_search",

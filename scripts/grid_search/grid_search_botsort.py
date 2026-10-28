@@ -1,4 +1,4 @@
-# tracker_grid_search.py
+# grid_search_botsort.py
 # -*- coding: utf-8 -*-
 """
 Class-Aware Tracker 參數調優工具（BoTSORT）
@@ -17,9 +17,8 @@ CLI 驅動 `--conf`/`--iou`/`--imgsz`/`--frame_rate`/`--gmc_method`）。
 進階：
   python scripts/grid_search/grid_search_botsort.py \\
       --target-class scooter \\
-      --video-dir ./data/source \\
-      --output-root ./runs/track_eval \\
-      --n-jobs 1 \\
+      --max-videos 6 \\
+      --output-root ./runs/grid_search \\
       --resume            # 跳過已有結果的組合
 """
 
@@ -222,7 +221,7 @@ def main():
     )
     parser.add_argument(
         "--model", default=None,
-        help="YOLO 模型路徑（預設從 config.yaml 的 det_model_path 讀取）"
+        help="目前沒有作用：模型路徑一律讀取 --config 的 models.det_model_path"
     )
     parser.add_argument("--conf",   type=float, default=0.15, help="信心門檻")
     parser.add_argument("--iou",    type=float, default=0.50, help="IoU 門檻")
@@ -236,7 +235,7 @@ def main():
         help=(
             "BoTSORT/BYTETrack用的GMC (Generalized Motion Compensation) 方法。"
             "可選：'none', 'sparseOptFlow', 'orb', 'sift', 'ecc'。"
-            "預設為'ecc'。"
+            "預設為'sift'。"
             "僅在BotSort有效"
         ),
     )
@@ -249,7 +248,7 @@ def main():
     )
     parser.add_argument(
         "--max-videos", type=int, default=6,
-        help="最多用幾支影片評估（加快搜尋速度，預設 2）"
+        help="最多用幾支影片評估（加快搜尋速度，預設 6）"
     )
     parser.add_argument(
         "--output-root", default="./runs/grid_search",

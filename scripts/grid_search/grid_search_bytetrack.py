@@ -1,4 +1,4 @@
-# tracker_grid_search.py
+# grid_search_bytetrack.py
 # -*- coding: utf-8 -*-
 """
 Class-Aware Tracker 參數調優工具（ByteTrack）
@@ -156,7 +156,7 @@ def main():
     )
     parser.add_argument(
         "--model", default=None,
-        help="YOLO 模型路徑（預設從 config.yaml 的 det_model_path 讀取）"
+        help="目前沒有作用：模型路徑一律讀取 --config 的 models.det_model_path"
     )
     parser.add_argument(
         "--video-glob", default=None,
@@ -167,7 +167,7 @@ def main():
     )
     parser.add_argument(
         "--max-videos", type=int, default=6,
-        help="最多用幾支影片評估（加快搜尋速度，預設 2）"
+        help="最多用幾支影片評估（加快搜尋速度，預設 6）"
     )
     parser.add_argument(
         "--output-root", default="./runs/grid_search",
