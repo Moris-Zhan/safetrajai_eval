@@ -401,7 +401,7 @@ def score_params(
       2. 對所有 video_paths 執行 tracking → save_mot_format
       3. 呼叫 run_trackeval_mot → 取得 HOTA.AssA_mean
       4. 還原 CLASS_TRACKING_PARAMS
-      5. 回傳平均分數
+      5. 回傳各序列 AssA_mean（排除 0 分）的第 25 百分位數
 
     Parameters
     ----------
@@ -419,7 +419,8 @@ def score_params(
     Returns
     -------
     float
-        所有序列的 HOTA.AssA_mean 平均值；若無有效結果回傳 -inf。
+        各序列 HOTA.AssA_mean（排除 0 分）的第 25 百分位數；沒有任何序列得分，
+        或得分全為 0 時回傳 -inf。
     """
     # ── 1. Patch CLASS_TRACKING_PARAMS ───────────────────────────────────────
     had_entry = target_class in tracker_config_module.CLASS_TRACKING_PARAMS
