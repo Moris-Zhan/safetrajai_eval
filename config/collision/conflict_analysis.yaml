@@ -1,9 +1,9 @@
 # =============================================================================
-# config/conflict_analysis.yaml — collision_detect 加上衝突指標分析（change conflict-metrics，ADR 0011）
+# config/collision/conflict_analysis.yaml — collision_detect 加上衝突指標分析（change conflict-metrics，ADR 0011）
 #                                （stage1 tracking + stage3 TTC/PET + 衝突指標，stage2 TrackEval 關閉）
-# 用法：python track_eval.py --config config/conflict_analysis.yaml
+# 用法：python track_eval.py --config config/collision/conflict_analysis.yaml
 #
-# 除了最後的 conflict_analysis: 區塊外，與 config/collision_detect.yaml 完全相同；
+# 除了最後的 conflict_analysis: 區塊外，與 config/collision/collision_detect.yaml 完全相同；
 # 既有 stage3 的 TTC/PET 輸出不受影響，衝突指標另外寫到 collision_output/<seq>/conflict/。
 # 只有鏡頭設定（config/homography/<camera>.yaml）有矩陣、經緯度且 scale_check: passed 的
 # 序列才會計算；其餘序列只輸出 conflict/summary.json 並記錄略過原因。
@@ -89,7 +89,7 @@ save params:
 
 
 # -----------------------------------------------------------------------------
-# Class-aware tracker 逐類別參數表（沿用 config/botsort_noreid.yaml，BoTSORT、ReID 全部關閉）
+# Class-aware tracker 逐類別參數表（沿用 config/tracking/botsort_noreid.yaml，BoTSORT、ReID 全部關閉）
 # -----------------------------------------------------------------------------
 class_tracking:
   class_names:

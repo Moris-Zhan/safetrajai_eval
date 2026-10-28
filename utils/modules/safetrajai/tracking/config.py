@@ -37,7 +37,7 @@ _DEFAULT_CONF_THRESH: list[float] = [0.15]  # 單元素 list 避免「整數重�
 
 _TRACK_CONFIG_RESOLVED: Path | None = None
 
-DEFAULT_TRACK_CONFIG_PATH = CONFIG_DIR / "bytetrack.yaml"
+DEFAULT_TRACK_CONFIG_PATH = CONFIG_DIR / "tracking" / "bytetrack.yaml"
 
 
 def __getattr__(name: str) -> Any:

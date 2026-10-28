@@ -13,7 +13,7 @@ def main() -> None:
     )
 
     # 影片儲存控制
-    parser.add_argument("--config", default="config/bytetrack.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
+    parser.add_argument("--config", default="config/tracking/bytetrack.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
     parser.add_argument(
         "--track-config",
         default=None,

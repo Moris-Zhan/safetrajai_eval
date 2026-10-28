@@ -203,7 +203,7 @@ def _write_config(tmp_path: Path, cameras: list[str]) -> Path:
     import yaml
     from safetrajai.paths import CONFIG_DIR
 
-    raw = yaml.safe_load((CONFIG_DIR / "botsort_save_reid_crops_video.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((CONFIG_DIR / "reid" / "botsort_save_reid_crops_video.yaml").read_text(encoding="utf-8"))
     raw["paths"]["cameras"] = cameras
     path = tmp_path / "cfg.yaml"
     path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")

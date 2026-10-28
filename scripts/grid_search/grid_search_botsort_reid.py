@@ -198,7 +198,7 @@ def main():
         choices=list(CLASS_NAMES.values()),
         help="要調優的類別名稱"
     )
-    parser.add_argument("--config", default="config/botsort_reid.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
+    parser.add_argument("--config", default="config/tracking/botsort_reid.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
     parser.add_argument(
         "--track-config",
         default=None,

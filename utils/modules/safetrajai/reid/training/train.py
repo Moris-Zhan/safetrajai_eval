@@ -67,7 +67,7 @@ class TrainConfig:
     pair_max_frame_gap: int = 5
     crop_root: str = str(PROJECT_ROOT / "dataset" / "reid" / "crops")
     roi_dir: str = str(CONFIG_DIR / "roi")
-    track_config: str = str(CONFIG_DIR / "reid_crops.yaml")
+    track_config: str = str(CONFIG_DIR / "reid" / "reid_crops.yaml")
     select_by: str = "reduced_val"
 
 

@@ -7,7 +7,7 @@
 輸入：
   - <crop-root>/_index/*.csv           裁切索引
   - <auto-exclusions>、<exclusions>    兩份排除清單都套用：整段排除的身分不參與、單張排除的裁切不當端點
-  - config/fragment_merge.yaml         候選條件（餘裕幀數、位置倍數、端點張數；track_buffer 幀數取自 track_config）
+  - config/reid/fragment_merge.yaml         候選條件（餘裕幀數、位置倍數、端點張數；track_buffer 幀數取自 track_config）
 輸出：
   - <out>（預設 dataset/reports/reid/fragment_features.npz）：crop_path（依字典序）、features（float32）
 
@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument("--crop-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "crops"))
     parser.add_argument("--exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "exclusions.csv"))
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
-    parser.add_argument("--config", default=str(CONFIG_DIR / "fragment_merge.yaml"))
+    parser.add_argument("--config", default=str(CONFIG_DIR / "reid" / "fragment_merge.yaml"))
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid" / "fragment_features.npz"))
     parser.add_argument("--batch-size", type=int, default=256)
     args = parser.parse_args()

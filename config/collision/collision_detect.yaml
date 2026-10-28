@@ -1,14 +1,22 @@
 # =============================================================================
-# config/botsort_noreid.yaml — 情境 2：BoTSORT（ReID 關閉）完整流程
-#                                （stage1 tracking + stage2 TrackEval 評估）
-# 用法：python track_eval.py --config config/botsort_noreid.yaml
-# 內容原為舊版 tracker 目錄下的 track_config_BotSort_noreid_0413.yaml，已合併進本檔。
+# config/collision/collision_detect.yaml — 骨架：BoTSORT 追蹤 + 軌跡碰撞偵測（TTC/PET）
+#                                （stage1 tracking + stage3 collision detection，stage2 TrackEval 關閉）
+# 用法：python track_eval.py --config config/collision/collision_detect.yaml
+#
+# 追蹤參數沿用 config/tracking/botsort_noreid.yaml（BoTSORT、ReID 關閉）——碰撞偵測只需要
+# 追蹤產生的軌跡檔（見 markdown/TRAJECTORY_FORMAT.md），不需要 TrackEval 評估，
+# 所以關閉 stage2、開啟 stage3。
+#
+# stage3（TrackingEvalPipeline.run_stage3()，見 track_eval.py / safetrajai/collision/）
+# 讀取 stage1 產生的逐類別軌跡檔，計算 TTC（Time-To-Collision）/ PET
+# （Post-Encroachment Time）碰撞事件，輸出到 collision: 區塊指定的目錄。
 # =============================================================================
 
 
 paths:
   dataset: cctv_all8
   TRACKEVAL_OUT_DIR: trackeval_output
+  COLLISION_OUT_DIR: collision_output
   OUTPUT_ROOT: ./runs/track_eval
 
 
@@ -23,11 +31,32 @@ trackeval:
 
 stages:
   run_stage1: true
-  run_stage2: true
+  run_stage2: false
+  run_stage3: true
 
 eval_flags:
   run_det_eval:   false
   run_track_eval: true
+
+
+# -----------------------------------------------------------------------------
+# 碰撞偵測參數（safetrajai/collision/，見 markdown/COLLISION_DETECTION.md）
+# -----------------------------------------------------------------------------
+collision:
+  # 鏡頭鍵的 Homography 設定（<camera>.yaml，見 safetrajai/collision/homography/camera_config.py）；
+  # 鏡頭沒有設定檔時，該鏡頭的序列退回原始像素座標
+  homography_camera_dir: config/homography
+
+  # TTC（Time-To-Collision）參數，見 COLLISION_DETECTION.md 第 2 節
+  max_ttc_frames: 30      # 模擬時間上限（frame 數）；SafeTrajAI 主流程原本掃 15/30/45/60，這裡先固定一組
+  iou_threshold: 0.8      # 判定為碰撞的邊界框 IoU 門檻（原始程式預設值）
+
+  # PET（Post-Encroachment Time）參數，見 COLLISION_DETECTION.md 第 3 節
+  lookback_sec: 3.0       # 允許比對的最大時間差（秒）；SafeTrajAI 主流程原本掃 2.0~4.5，這裡先固定一組
+  # ⚠️ 原始程式 overlap_threshold 預設 0.2 是校準給 Homography 轉換後地圖座標系用的門檻值；
+  # 本專案沒有 homography 對應點時會退回原始像素座標，量級完全不同，這裡先給一個像素尺度的
+  # 起始值，還沒用實際資料驗證過，之後要依實測結果調整
+  overlap_threshold: 30.0
 
 
 classes_to_run:
@@ -53,7 +82,7 @@ tracking_params:
 
 save params:
   show: false
-  save: true
+  save: false
   save_txt: true
   show_unmatched: false
   show_removed: false
@@ -62,7 +91,7 @@ save params:
 
 
 # -----------------------------------------------------------------------------
-# Class-aware tracker 逐類別參數表（BoTSORT，ReID 全部關閉）
+# Class-aware tracker 逐類別參數表（沿用 config/tracking/botsort_noreid.yaml，BoTSORT、ReID 全部關閉）
 # -----------------------------------------------------------------------------
 class_tracking:
   class_names:

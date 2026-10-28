@@ -144,15 +144,15 @@ def test_merge_records_are_order_independent() -> None:
 def test_load_retention_reads_integer_buffers() -> None:
     from safetrajai.paths import CONFIG_DIR
 
-    buffers = load_retention(CONFIG_DIR / "reid_crops.yaml")
+    buffers = load_retention(CONFIG_DIR / "reid" / "reid_crops.yaml")
     assert buffers["car"] == 30 and {"person", "scooter", "truck"} <= set(buffers)
 
 
 def test_merge_config_uses_margin_frames_and_rejects_seconds(tmp_path) -> None:
     from safetrajai.paths import CONFIG_DIR
 
-    text = (CONFIG_DIR / "fragment_merge.yaml").read_text(encoding="utf-8")
-    assert load_merge_config(CONFIG_DIR / "fragment_merge.yaml")["margin_frames"] == 10
+    text = (CONFIG_DIR / "reid" / "fragment_merge.yaml").read_text(encoding="utf-8")
+    assert load_merge_config(CONFIG_DIR / "reid" / "fragment_merge.yaml")["margin_frames"] == 10
     legacy = tmp_path / "legacy.yaml"
     legacy.write_text(text + "time_margin_s: 1.0\n", encoding="utf-8")
     with pytest.raises(ValueError, match="time_margin_s.*margin_frames"):
@@ -201,7 +201,7 @@ def _write_fragment_crops(root, tracks_spec):
 def _fragment_config(tmp_path, threshold):
     from safetrajai.paths import CONFIG_DIR
 
-    text = (CONFIG_DIR / "fragment_merge.yaml").read_text(encoding="utf-8")
+    text = (CONFIG_DIR / "reid" / "fragment_merge.yaml").read_text(encoding="utf-8")
     text = re.sub(r"(?m)^threshold:.*$", f"threshold: {threshold}", text)
     path = tmp_path / "fragment_merge.yaml"
     path.write_text(text, encoding="utf-8")

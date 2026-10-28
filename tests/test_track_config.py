@@ -179,7 +179,7 @@ def test_relative_path_is_resolved_from_working_directory(tmp_path: Path, monkey
 
 @pytest.mark.parametrize("missing", [None, ""])
 def test_missing_path_loads_default_scenario(missing: str | None) -> None:
-    assert config.load_track_config(missing) == (CONFIG_DIR / "bytetrack.yaml").resolve()
+    assert config.load_track_config(missing) == (CONFIG_DIR / "tracking" / "bytetrack.yaml").resolve()
 
 
 def test_missing_file_raises_and_leaves_globals_unchanged(tmp_path: Path) -> None:
@@ -233,7 +233,7 @@ def test_reload_from_cli_reads_only_track_config(tmp_path: Path) -> None:
 
 
 def test_reload_from_cli_without_option_uses_default() -> None:
-    assert config.reload_track_config_from_cli(["--config", "x.yaml"]) == (CONFIG_DIR / "bytetrack.yaml").resolve()
+    assert config.reload_track_config_from_cli(["--config", "x.yaml"]) == (CONFIG_DIR / "tracking" / "bytetrack.yaml").resolve()
 
 
 def three_class_section() -> dict[str, Any]:

@@ -19,7 +19,8 @@ EXEMPT: Mapping[str, str] = {}
 
 def entry_point_names() -> list[str]:
     scripts = sorted(path.name for path in (REPO_ROOT / "scripts").rglob("*.py") if path.name != "__init__.py")
-    configs = sorted(path.name for path in (REPO_ROOT / "config").glob("*.yaml"))
+    config_dirs = ("", "tracking", "grid_search", "reid", "collision")
+    configs = sorted(path.name for d in config_dirs for path in (REPO_ROOT / "config" / d).glob("*.yaml"))
     return scripts + configs
 
 

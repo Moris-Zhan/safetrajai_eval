@@ -6,8 +6,8 @@
 用法：
     from safetrajai.evaluation.config_loader import load_config, AppConfig
 
-    cfg = load_config()                          # 預設讀 config/bytetrack.yaml
-    cfg = load_config("config/botsort_reid.yaml") # 指定路徑
+    cfg = load_config()                          # 預設讀 config/tracking/bytetrack.yaml
+    cfg = load_config("config/tracking/botsort_reid.yaml") # 指定路徑
 
     # 以屬性存取（推薦）
     print(cfg.base_dir)
@@ -263,7 +263,7 @@ class AppConfig:
 # =========================================================
 # 公開 API
 # =========================================================
-def load_config(config_path: str | Path = "config/bytetrack.yaml") -> AppConfig:
+def load_config(config_path: str | Path = "config/tracking/bytetrack.yaml") -> AppConfig:
     """
     載入 YAML 設定檔並回傳 AppConfig 實例。
 

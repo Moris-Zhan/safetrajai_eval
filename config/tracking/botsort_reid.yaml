@@ -1,10 +1,10 @@
 # =============================================================================
-# config/grid_search_botsort.yaml — 情境 6：scripts/grid_search/grid_search_botsort.py 用設定
-# 用法：python scripts/grid_search/grid_search_botsort.py --target-class scooter --config config/grid_search_botsort.yaml
-#
-# class_tracking 這裡只是「起始值」——grid search 每次試驗都會用 PARAM_GRIDS 動態
-# 覆寫 tracker.config.CLASS_TRACKING_PARAMS 裡對應的欄位，內容跟 config/botsort_noreid.yaml
-# 相同（BoTSORT、ReID 關閉），差異只在檔名/用途註記。
+# config/tracking/botsort_reid.yaml — 情境 4：BoTSORT + ReID 開啟，完整流程
+#                             （stage1 tracking + stage2 TrackEval 評估）
+# 用法：python track_eval.py --config config/tracking/botsort_reid.yaml
+# 內容原為舊版 tracker 目錄下的 track_config_BotSort_0413.yaml，已合併進本檔。
+# 這是 scripts/grid_search/grid_search_botsort_reid.py 的 PARAM_GRIDS 固定值
+# 對照的原始版本（該腳本註解明確標示與此版本一致）。
 # =============================================================================
 
 
@@ -55,7 +55,7 @@ tracking_params:
 
 save params:
   show: false
-  save: false
+  save: true
   save_txt: true
   show_unmatched: false
   show_removed: false
@@ -63,6 +63,10 @@ save params:
   reid_crop_dir: ./dataset/reid/crops
 
 
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（BoTSORT，ReID 全部開啟）
+# track_buffer 已明列為幀數，等價於原本在 30fps 的 fallback 120。
+# -----------------------------------------------------------------------------
 class_tracking:
   class_names:
     0: person
@@ -74,6 +78,7 @@ class_tracking:
 
   class_tracking_params:
     car:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.4
       fuse_score: true
       match_thresh: 0.7
@@ -81,12 +86,12 @@ class_tracking:
       norm_factor: 80.0
       second_match_thresh: 0.6
       unconfirmed_match_thresh: 0.9
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     bus:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: false
       match_thresh: 0.7
@@ -94,12 +99,12 @@ class_tracking:
       new_track_thresh: 0.15
       second_match_thresh: 0.55
       unconfirmed_match_thresh: 0.95
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.1
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     small_truck:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2
       fuse_score: true
       match_thresh: 0.6
@@ -107,12 +112,12 @@ class_tracking:
       new_track_thresh: 0.15
       second_match_thresh: 0.45
       unconfirmed_match_thresh: 0.9
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.3
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     truck:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2
       fuse_score: false
       match_thresh: 0.6
@@ -120,12 +125,12 @@ class_tracking:
       new_track_thresh: 0.15
       second_match_thresh: 0.45
       unconfirmed_match_thresh: 0.9
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.6
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
     person:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: false
       match_thresh: 0.9
@@ -133,12 +138,12 @@ class_tracking:
       norm_factor: 150.0
       second_match_thresh: 0.5
       unconfirmed_match_thresh: 0.85
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.3
       appearance_thresh: 0.3
       model: models/yolo/yolo11x.pt
-      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
     scooter:
+      track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.25
       fuse_score: true
       match_thresh: 0.9
@@ -146,11 +151,10 @@ class_tracking:
       norm_factor: 200.0
       second_match_thresh: 0.4
       unconfirmed_match_thresh: 0.8
-      use_reid: false
+      use_reid: true
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
 
   default_tracking_params:
     match_thresh: 0.80
@@ -158,7 +162,7 @@ class_tracking:
     new_track_thresh: 0.15
     second_match_thresh: 0.5
     unconfirmed_match_thresh: 0.7
-    use_reid: false
+    use_reid: true
     model: ./yolo11x-cls-reid.pt
 
   class_conf_thresh:

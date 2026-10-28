@@ -4,7 +4,7 @@
 另外只讀索引的框與時間，標記靜止身分與運動跳動（spec: reid-dataset，design D6）。
 只寫標記檔，不搬移、改名或刪除任何裁切。
 
-只有裁切數 ≥ min_crops_per_identity（--rules，預設 config/reid_split.yaml）的身分會被標記；
+只有裁切數 ≥ min_crops_per_identity（--rules，預設 config/reid/reid_split.yaml）的身分會被標記；
 不足的身分不會進 manifest，不需要審查。類別一致性只在人／二輪／四輪粗分組之間不一致時標記。
 
 輸出（--out-dir，預設 dataset/reports/reid/）：
@@ -52,7 +52,7 @@ def main() -> None:
     parser.add_argument("--static-displacement", type=float, default=0.5)
     parser.add_argument("--static-duration", type=float, default=5.0)
     parser.add_argument("--jump-threshold", type=float, default=1.5)
-    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid" / "reid_split.yaml"))
     args = parser.parse_args()
     min_crops = load_split_rules(Path(args.rules))["min_crops_per_identity"]
 

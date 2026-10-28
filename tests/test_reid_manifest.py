@@ -5,7 +5,7 @@ import pytest
 from safetrajai.paths import CONFIG_DIR
 from safetrajai.reid.manifest import build_manifest, load_split_rules
 
-RULES = load_split_rules(CONFIG_DIR / "reid_split.yaml")
+RULES = load_split_rules(CONFIG_DIR / "reid" / "reid_split.yaml")
 
 
 def crops(identity: str, n: int, camera: str = "C000054", date: str = "20250623", cls: str = "car") -> list[dict]:

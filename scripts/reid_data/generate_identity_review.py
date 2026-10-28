@@ -341,7 +341,7 @@ def main() -> None:
     parser.add_argument("--page-size", type=int, default=100)
     parser.add_argument("--audit-per-camera", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid" / "reid_split.yaml"))
     parser.add_argument("--audit-only", action="store_true", help="只產生自動排除後的抽查頁（見 docs/adr/0007）")
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "exclusions.csv"))

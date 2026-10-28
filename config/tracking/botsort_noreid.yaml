@@ -1,23 +1,13 @@
 # =============================================================================
-# config/botsort_save_reid_crops_video.yaml — 情境 3 的變體：BoTSORT 追蹤 + save_reid_crops，
-#                                              來源是 reid_sources 來源資料集（非評估資料集）
-#                                              （只跑 stage1，蒐集 Re-ID 訓練用裁切影像，不跑 stage2 評估）
-# 用法：python track_eval.py --config config/botsort_save_reid_crops_video.yaml
-#
-# 注意：正式的 Re-ID 訓練資料請改用 config/reid_crops.yaml（frame_rate: auto，輸出到 dataset/reid/crops）。
-#       本檔保留作為 frame_rate: 30 的對照情境，裁切輸出放在 runs/，不寫進 dataset/reid/。
-#
-# 跟 config/botsort_save_reid_crops.yaml 的差異：
-#   - paths.dataset 使用 reid_sources（見 config/datasets.yaml）：來源資料集，影片依鏡頭放在
-#     dataset/raw/videos/<camera>/，只探索 datasets.yaml 列出的鏡頭；評估鏡頭 C000025 不在其中。
-#   - ROI 依序列所屬鏡頭讀取 config/roi/<camera>.yaml；蒐集裁切時鏡頭缺 ROI 檔會在追蹤前報錯。
-#   - 其餘追蹤參數（class_tracking、tracker、conf/iou/imgsz 等）跟 config/botsort_save_reid_crops.yaml 一致，
-#     沿用 config/botsort_noreid.yaml 的 class_tracking（ReID 關閉，蒐集資料不需要追蹤本身啟用 ReID）。
+# config/tracking/botsort_noreid.yaml — 情境 2：BoTSORT（ReID 關閉）完整流程
+#                                （stage1 tracking + stage2 TrackEval 評估）
+# 用法：python track_eval.py --config config/tracking/botsort_noreid.yaml
+# 內容原為舊版 tracker 目錄下的 track_config_BotSort_noreid_0413.yaml，已合併進本檔。
 # =============================================================================
 
 
 paths:
-  dataset: reid_sources
+  dataset: cctv_all8
   TRACKEVAL_OUT_DIR: trackeval_output
   OUTPUT_ROOT: ./runs/track_eval
 
@@ -31,10 +21,9 @@ trackeval:
   tracker_name:   YOLO11x
 
 
-# 只跑 stage1（tracking + 裁切蒐集），不需要 stage2 評估（這批來源影片沒有 GT 標註）
 stages:
   run_stage1: true
-  run_stage2: false
+  run_stage2: true
 
 eval_flags:
   run_det_eval:   false
@@ -64,16 +53,16 @@ tracking_params:
 
 save params:
   show: false
-  save: false        # 不需要標註影片
-  save_txt: false     # 不需要 YOLO label txt
+  save: true
+  save_txt: true
   show_unmatched: false
   show_removed: false
-  save_reid_crops: true
-  reid_crop_dir: ./runs/reid_crops_video/crops
+  save_reid_crops: false
+  reid_crop_dir: ./dataset/reid/crops
 
 
 # -----------------------------------------------------------------------------
-# Class-aware tracker 逐類別參數表（BoTSORT，ReID 關閉——跟 config/botsort_save_reid_crops.yaml 相同）
+# Class-aware tracker 逐類別參數表（BoTSORT，ReID 全部關閉）
 # -----------------------------------------------------------------------------
 class_tracking:
   class_names:

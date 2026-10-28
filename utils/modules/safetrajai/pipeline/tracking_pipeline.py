@@ -30,7 +30,7 @@ safetrajai.pipeline.tracking_pipeline — YOLO class-aware tracking + TrackEval 
         det_metrics_<seq>_new.xlsx
         trackeval_metrics_<seq>_MULTI_new.xlsx
 
-第三階段輸出（碰撞偵測結果，需 stages.run_stage3: true，預設關閉，見 config/collision_detect.yaml）:
+第三階段輸出（碰撞偵測結果，需 stages.run_stage3: true，預設關閉，見 config/collision/collision_detect.yaml）:
   OUTPUT_ROOT/
     collision_output/              ← collision_output_dir
       <seq>/
@@ -213,7 +213,7 @@ class TrackingEvalPipeline:
 
     def _ensure_stage1_output_exists(self, det_output_dir: Path) -> bool:
         """檢查 det_output_dir 下是否有任何序列輸出。沒有則印警告並回傳 False——
-        這是合法的 soft-skip 情境（見 config/collision_detect.yaml 的「只重跑 stage3、
+        這是合法的 soft-skip 情境（見 config/collision/collision_detect.yaml 的「只重跑 stage3、
         沿用之前 stage1 舊輸出」用法：run_stage1: false + run_stage3: true）。
         行為與現行完全一致，只是抽成獨立、可單獨測試的函式。
         """

@@ -63,7 +63,7 @@ def main() -> None:
     parser.add_argument("--audit-sample", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid" / "review" / "audit_sample.csv"))
     parser.add_argument("--confirm-csv", nargs="+", required=True, help="審查頁匯出的確認清單（可多份）")
     parser.add_argument("--crop-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "crops"))
-    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid" / "reid_split.yaml"))
     parser.add_argument("--major-share", type=float, default=0.05)
     parser.add_argument("--threshold", type=float, default=0.1)
     args = parser.parse_args()

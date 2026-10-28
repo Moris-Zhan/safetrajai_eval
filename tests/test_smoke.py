@@ -18,7 +18,8 @@ import yaml
 import safetrajai
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATHS = sorted((REPO_ROOT / "config").glob("*.yaml"))
+CONFIG_DIRS = ("", "tracking", "grid_search", "reid", "collision")
+CONFIG_PATHS = sorted(p for d in CONFIG_DIRS for p in (REPO_ROOT / "config" / d).glob("*.yaml"))
 SCRIPTS = sorted((REPO_ROOT / "scripts").rglob("*.py"))
 BASE_COMMIT = (REPO_ROOT / "tests" / "golden" / "BASE_COMMIT").read_text().strip()
 

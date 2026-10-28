@@ -37,7 +37,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--crop-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "crops"))
     parser.add_argument("--reports-dir", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid"))
-    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid" / "reid_split.yaml"))
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--apply", action="store_true", help="實際寫入自動排除清單；不帶此旗標只列印數量（dry-run）")
     args = parser.parse_args()

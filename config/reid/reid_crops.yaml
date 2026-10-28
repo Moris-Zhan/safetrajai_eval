@@ -1,14 +1,22 @@
 # =============================================================================
-# config/botsort_save_reid_crops.yaml — 情境 3：BoTSORT 追蹤 + 開啟 save_reid_crops
-#                                        （只跑 stage1，蒐集 Re-ID 訓練用裁切影像，不跑 stage2 評估）
-# 用法：python track_eval.py --config config/botsort_save_reid_crops.yaml
-# 追蹤參數沿用 config/botsort_noreid.yaml（ReID 關閉）——這裡的目的是蒐集資料，
-# 不需要追蹤本身就啟用 ReID；save/save_txt 關閉以減少蒐集資料時的不必要磁碟用量。
+# config/reid/reid_crops.yaml — Re-ID 訓練資料的裁切蒐集（change rebuild-reid-dataset）
+#                          只跑 stage1：在來源資料集 reid_sources 上追蹤並蒐集裁切與 metadata 索引
+# 用法：python track_eval.py --config config/reid/reid_crops.yaml
+#
+# - 只從 reid_sources（role: source）蒐集；評估鏡頭 C000025 一律拒絕。
+# - 每支要處理的鏡頭都必須有 config/roi/<camera>.yaml，缺少時在追蹤前報錯（不退回整張影像）。
+# - 裁切規則固定在程式中：框中心點需在 ROI 內、最短邊 >= 32px、每條軌跡每 0.5 秒最多 1 張；
+#   索引寫到 <reid_crop_dir>/_index/<seq>.csv，索引已存在時報錯（重跑前先移走舊輸出）。
+# - 工具模型 yolo11x_dennis.pt@640；追蹤參數以 config/tracking/botsort_noreid.yaml 的 class_tracking 為基礎，
+#   四輪車的 center_dist_weight 加重（car 0.6、small_truck／truck／bus 0.4），
+#   frame_rate: auto（依影片實際幀率）、gmc_method: sparseOptFlow（ECC 每幀約 0.8～2.5 秒，是 CPU 瓶頸）；
+#   選定依據見 openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md。
+# - 想縮小範圍時，在 paths 加 cameras: [<camera>, ...]（只能取 reid_sources 登記鏡頭的子集）。
 # =============================================================================
 
 
 paths:
-  dataset: cctv_all8
+  dataset: reid_sources
   TRACKEVAL_OUT_DIR: trackeval_output
   OUTPUT_ROOT: ./runs/track_eval
 
@@ -22,7 +30,7 @@ trackeval:
   tracker_name:   YOLO11x
 
 
-# 只跑 stage1（tracking + 裁切蒐集），不需要 stage2 評估
+# 只跑 stage1（tracking + 裁切蒐集），不需要 stage2 評估（這批來源影片沒有 GT 標註）
 stages:
   run_stage1: true
   run_stage2: false
@@ -50,8 +58,8 @@ tracking_params:
   conf:        0.15
   iou:         0.50
   imgsz:       640
-  frame_rate:  30
-  gmc_method:  ecc
+  frame_rate:  auto
+  gmc_method:  sparseOptFlow
 
 save params:
   show: false
@@ -64,7 +72,7 @@ save params:
 
 
 # -----------------------------------------------------------------------------
-# Class-aware tracker 逐類別參數表（BoTSORT，ReID 關閉——跟 config/botsort_noreid.yaml 相同）
+# Class-aware tracker 逐類別參數表（BoTSORT，ReID 關閉——跟 config/tracking/botsort_noreid.yaml 相同）
 # -----------------------------------------------------------------------------
 class_tracking:
   class_names:
@@ -77,7 +85,7 @@ class_tracking:
 
   class_tracking_params:
     car:
-      center_dist_weight: 0.4
+      center_dist_weight: 0.6
       fuse_score: true
       match_thresh: 0.7
       new_track_thresh: 0.25
@@ -88,9 +96,9 @@ class_tracking:
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+      track_buffer: 30  # 幀；原 BoTSORT 3.0 × 10fps
     bus:
-      center_dist_weight: 0.25
+      center_dist_weight: 0.4
       fuse_score: false
       match_thresh: 0.7
       norm_factor: 200.0
@@ -101,9 +109,9 @@ class_tracking:
       proximity_thresh: 0.1
       appearance_thresh: 0.1
       model: models/yolo/yolo11x_dennis.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+      track_buffer: 30  # 幀；原 BoTSORT 3.0 × 10fps
     small_truck:
-      center_dist_weight: 0.2
+      center_dist_weight: 0.4
       fuse_score: true
       match_thresh: 0.6
       norm_factor: 100.0
@@ -114,9 +122,9 @@ class_tracking:
       proximity_thresh: 0.3
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+      track_buffer: 30  # 幀；原 BoTSORT 3.0 × 10fps
     truck:
-      center_dist_weight: 0.2
+      center_dist_weight: 0.4
       fuse_score: false
       match_thresh: 0.6
       norm_factor: 100.0
@@ -127,7 +135,7 @@ class_tracking:
       proximity_thresh: 0.6
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+      track_buffer: 30  # 幀；原 BoTSORT 3.0 × 10fps
     person:
       center_dist_weight: 0.25
       fuse_score: false
@@ -140,7 +148,7 @@ class_tracking:
       proximity_thresh: 0.3
       appearance_thresh: 0.3
       model: models/yolo/yolo11x.pt
-      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+      track_buffer: 20  # 幀；原 BoTSORT 2.0 × 10fps
     scooter:
       center_dist_weight: 0.25
       fuse_score: true
@@ -153,7 +161,7 @@ class_tracking:
       proximity_thresh: 0.5
       appearance_thresh: 0.1
       model: models/yolo/yolo11x.pt
-      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+      track_buffer: 20  # 幀；原 BoTSORT 2.0 × 10fps
 
   default_tracking_params:
     match_thresh: 0.80
