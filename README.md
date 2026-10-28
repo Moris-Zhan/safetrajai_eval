@@ -495,7 +495,7 @@ holdout 子集只作最終確認，不可拿來調參。目前 `config/tracking/
 | 腳本 | 用途 | 前提 |
 |---|---|---|
 | `scripts/pipeline/run_pipeline.py` | 與 `python track_eval.py` 等價的入口（同一個 `safetrajai.cli.run_pipeline.main()`），參數相同：`--config <path>` | 同 7.1 |
-| `scripts/picker/make_roi_picker.py --camera <camera>` | 產生 ROI 離線點選頁（單檔 HTML，首幀內嵌），輸出到 `runs/roi_picker/`；在本機瀏覽器點出多邊形頂點後，把產生的 YAML 放回 `config/roi/<camera>.yaml`。完整步驟見 [`Markdown/USAGE.md`](Markdown/USAGE.md) 第 5.2 節 | `dataset/raw/videos/<camera>/` 的來源影片；不需要網路 |
+| `scripts/picker/make_roi_picker.py --camera <camera>` | 產生 ROI 離線點選頁（單檔 HTML，首幀內嵌），輸出到 `runs/roi_picker/`；在本機瀏覽器點出多邊形頂點後，把產生的 YAML 放回 `config/roi/<camera>.yaml`。完整步驟見 [`Markdown/roi/roi-guide.md`](Markdown/roi/roi-guide.md) 第 2 節 | `dataset/raw/videos/<camera>/` 的來源影片；不需要網路 |
 | `scripts/visualization/visualize_gt_on_video.py` | 把**人工 GT**（`gt/gt.txt`，可帶 class 欄）疊在序列影片上 | 第 5 節資料 |
 | `scripts/visualization/visualize_gt_on_class_video.py` | 把**追蹤結果**（`trackers/mot_challenge/<benchmark>-<split>/YOLO11x__<class>/data/<seq>.txt`，每類一檔）合併疊在序列影片上，用來檢查 ID switch 與跨類別誤配 | 已跑過 stage1／stage2 的輸出 |
 
