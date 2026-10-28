@@ -155,6 +155,19 @@ def sort_rows_grouped(rows, class_order=None):
     return sorted(rows, key=key)
 
 
+def _write_key_metric_sheet(wb, sheet_name, rows, key_metrics, suffix):
+    ws = wb.create_sheet(sheet_name)
+    header = ["dataset", "tracker", "seq", "class", "note"] + [f"{m}_{suffix}" for m in key_metrics]
+    _ws_append_row(ws, header)
+    data = []
+    for r in rows:
+        line = [r.get("dataset"), r.get("tracker"), r.get("seq"), r.get("class"), r.get("note")]
+        line.extend(r.get(f"{m}_{suffix}") for m in key_metrics)
+        _ws_append_row(ws, line)
+        data.append(dict(zip(header, line)))
+    return data
+
+
 def export_trackeval_results_multi_to_excel(
     all_results: dict,
     out_xlsx: str,
@@ -238,29 +251,9 @@ def export_trackeval_results_multi_to_excel(
         "CLEAR.CLR_TP",
     ]
 
-    # Sheet 3: key means
-    ws_key = wb.create_sheet("key_means")
-    key_header = ["dataset", "tracker", "seq", "class", "note"] + [f"{m}_mean" for m in key_metrics]
-    _ws_append_row(ws_key, key_header)
-    means_data = []
-    for r in rows:
-        line = [r.get("dataset"), r.get("tracker"), r.get("seq"), r.get("class"), r.get("note")]
-        for m in key_metrics:
-            line.append(r.get(f"{m}_mean"))
-        _ws_append_row(ws_key, line)
-        means_data.append(dict(zip(key_header, line)))
-
-    # Sheet 4: key mid
-    ws_mid = wb.create_sheet("key_mid")
-    key_header_mid = ["dataset", "tracker", "seq", "class", "note"] + [f"{m}_mid" for m in key_metrics]
-    _ws_append_row(ws_mid, key_header_mid)
-    mid_data = []
-    for r in rows:
-        line = [r.get("dataset"), r.get("tracker"), r.get("seq"), r.get("class"), r.get("note")]
-        for m in key_metrics:
-            line.append(r.get(f"{m}_mid"))
-        _ws_append_row(ws_mid, line)
-        mid_data.append(dict(zip(key_header_mid, line)))
+    # Sheet 3: key means, Sheet 4: key mid
+    means_data = _write_key_metric_sheet(wb, "key_means", rows, key_metrics, "mean")
+    mid_data = _write_key_metric_sheet(wb, "key_mid", rows, key_metrics, "mid")
 
     for sheet in wb.worksheets:
         _autosize_columns(sheet)
