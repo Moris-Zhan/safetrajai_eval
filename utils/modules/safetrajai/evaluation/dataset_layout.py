@@ -40,6 +40,11 @@ def seq_name_from_video_path(video_path: str | Path) -> str:
     return Path(video_path).stem
 
 
+def short_label_stem(seq_name: str) -> str:
+    """Stem used for per-frame label/image file names: drops the evaluation camera's place name."""
+    return seq_name.replace(" 中華三路 民生二路(東北角)_", "_")
+
+
 def camera_id_from_seq_name(seq_name: str) -> str:
     """鏡頭編號（見 CONTEXT.md）：序列名稱第一個空白之前的字串，不限定格式。"""
     parts = seq_name.strip().split(maxsplit=1)

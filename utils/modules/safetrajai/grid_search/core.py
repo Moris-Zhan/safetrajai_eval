@@ -306,7 +306,7 @@ def _run_tracking_for_video(
     safetrajai/detection/detector.py 的 Detector.detect(frame, iou=iou, imgsz=imgsz)
     （與 track_eval.py 共用同一份偵測+信心過濾邏輯，不再各自重寫）。
     """
-    stem_name = Path(video_path).stem.replace(" 中華三路 民生二路(東北角)_", "_")
+    stem_name = dataset_layout.short_label_stem(Path(video_path).stem)
 
     tracker_kwargs = {
         "track_high_thresh": conf,

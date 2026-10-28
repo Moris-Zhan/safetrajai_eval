@@ -169,7 +169,7 @@ class VideoSequenceTracker:
             shutil.copy(video_path, video_dst)
 
         # 縮短 stem 用於檔案命名（去掉中文地名）
-        self._stem_name = seq_stem.replace(" 中華三路 民生二路(東北角)_", "_")
+        self._stem_name = dataset_layout.short_label_stem(seq_stem)
 
         return output_path, images_path, labels_path
 
