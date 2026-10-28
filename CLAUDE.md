@@ -105,7 +105,7 @@ utils/modules/safetrajai/
   reid/                      推論端：ReID（YOLO 當 encoder）與 Custom_ReID（models/class_reid_weights/）兩條路徑；
                              training/（manifest 資料集與本機快取、PK 取樣、骨幹＋BNNeck、CE＋三元組、val 評估）
   roi.py                     以鏡頭為鍵的 ROI 解析（config/roi/<camera>.yaml），stage1 繪製／裁切、stage2、stage3 共用
-  grid_search/core.py        grid search 共用邏輯，scripts/grid_search/grid_search_*.py 只保留 PARAM_GRIDS + argparse
+  grid_search/               core.py 是 grid search 共用邏輯，cli.py 是三支腳本共用的參數與執行流程；scripts/grid_search/grid_search_*.py 只保留 PARAM_GRIDS、預設值與各自專屬的參數
   collision/                 stage3：MOT 軌跡 → TTC/PET 衝突事件、熱區圖；homography/ 子套件負責轉換／點選／驗證、
                              以鏡頭為鍵的設定（camera_config）、公尺換算（georef）、經緯度查詢（geocode）、
                              底圖下載（satellite）、比例尺比對（scale_match）；conflict/ 子套件是公尺單位的衝突指標分析

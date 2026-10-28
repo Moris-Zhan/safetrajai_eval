@@ -1,0 +1,14 @@
+{
+ "help": {
+  "returncode": 0,
+  "stdout": "usage: grid_search_bytetrack.py [-h]\n                                [--target-class {person,car,scooter,small_truck,bus,truck}]\n                                [--config CONFIG]\n                                [--track-config TRACK_CONFIG]\n                                [--tracker {botsort,bytetrack}]\n                                [--model MODEL] [--video-glob VIDEO_GLOB]\n                                [--max-videos MAX_VIDEOS]\n                                [--output-root OUTPUT_ROOT]\n                                [--result-csv RESULT_CSV] [--resume]\n                                [--verbose] [--dry-run]\n                                [--params-subset PARAMS_SUBSET]\n\nTracker parameter grid search using HOTA.AssA_mean as scoring function\n\noptions:\n  -h, --help            show this help message and exit\n  --target-class {person,car,scooter,small_truck,bus,truck}\n                        要調優的類別名稱\n  --config CONFIG       流程用 config yaml（路徑、eval、class_tracking 等）\n  --track-config TRACK_CONFIG\n                        class-aware tracker 設定 YAML（與 track_eval 相同）。不指定時使用\n                        --config 內建的 class_tracking 章節。\n  --tracker {botsort,bytetrack}\n                        Tracker 類型\n  --model MODEL         目前沒有作用：模型路徑一律讀取 --config 的 models.det_model_path\n  --video-glob VIDEO_GLOB\n                        影片路徑 glob pattern（覆蓋 config 的預設掃描邏輯）。 例如:\n                        './data/source/annotations_all8/annotation_*/**.mp4'\n  --max-videos MAX_VIDEOS\n                        最多用幾支影片評估（加快搜尋速度，預設 6）\n  --output-root OUTPUT_ROOT\n                        Grid search 暫存與結果根目錄\n  --result-csv RESULT_CSV\n                        結果 CSV 路徑（預設自動命名）\n  --resume              從已有的 CSV 繼續（跳過已完成的組合）\n  --verbose             印出逐幀 tracking 進度\n  --dry-run             只印出參數組合數量，不實際執行\n  --params-subset PARAMS_SUBSET\n                        只搜尋指定參數（逗號分隔），其餘使用當前 track_config.yaml 值。 例如:\n                        'match_thresh,new_track_thresh'"
+ },
+ "dry_run_subset": {
+  "returncode": 0,
+  "stdout": "Loaded track config: <root>/config/grid_search/grid_search_bytetrack.yaml\n✅ Config loaded: <root>/config/grid_search/grid_search_bytetrack.yaml\nParameter grid: 2 combinations\n  Parameters searched: ['fuse_score']\n\n[dry-run] Combinations:\n  [   1] {'fuse_score': True}\n  [   2] {'fuse_score': False}"
+ },
+ "unknown_subset": {
+  "returncode": 1,
+  "stdout": "Loaded track config: <root>/config/grid_search/grid_search_bytetrack.yaml\n✅ Config loaded: <root>/config/grid_search/grid_search_bytetrack.yaml\n❌ --params-subset 中的參數 (['no_such_param']) 均不在 PARAM_GRIDS 中"
+ }
+}

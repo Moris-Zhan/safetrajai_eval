@@ -29,27 +29,11 @@ Class-Aware Tracker 參數調優工具
 from __future__ import annotations
 
 import argparse
-import copy
-import sys
-from datetime import datetime
-from pathlib import Path
 
 import numpy as np
 
-from safetrajai.tracking import CLASS_NAMES
-from safetrajai.tracking import config as tracker_config_module   # 直接操作模組層級 dict
-from safetrajai.tracking.config import (
-    get_min_conf_thresh,
-    get_track_config_path,
-    load_track_config,
-)
-from safetrajai.evaluation.config_loader import load_config
-from safetrajai.grid_search.core import (
-    ParameterGrid,
-    GridSearchRunner,
-    generate_config_patch,
-    discover_grid_search_videos,
-)
+from safetrajai.grid_search.cli import build_parser, run_grid_search
+from safetrajai.tracking.config import get_min_conf_thresh
 
 
 # =============================================================================
@@ -188,163 +172,22 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
 # 2. CLI 入口
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Tracker parameter grid search using HOTA.AssA_mean as scoring function"
-    )
-    parser.add_argument(
-        "--target-class", default="scooter",
-        choices=list(CLASS_NAMES.values()),
-        help="要調優的類別名稱"
-    )
-    parser.add_argument("--config", default="config/tracking/botsort_reid.yaml", help="流程用 config yaml（路徑、eval、class_tracking 等）")
-    parser.add_argument(
-        "--track-config",
-        default=None,
-        help=(
-            "class-aware tracker 設定 YAML（與 track_eval 相同）。"
-            "不指定時使用 --config 內建的 class_tracking 章節。"
-        ),
-    )
-    parser.add_argument(
-        "--tracker", default="botsort",
-        choices=["botsort", "bytetrack"], help="Tracker 類型"
-    )
-    parser.add_argument(
-        "--model", default=None,
-        help="目前沒有作用：模型路徑一律讀取 --config 的 models.det_model_path"
-    )
-    parser.add_argument(
-        "--video-glob", default=None,
-        help=(
-            "影片路徑 glob pattern（覆蓋 config 的預設掃描邏輯）。\n"
-            "例如: './data/source/annotations_all8/annotation_*/**.mp4'"
-        )
-    )
-    parser.add_argument(
-        "--max-videos", type=int, default=6,
-        help="最多用幾支影片評估（加快搜尋速度，預設 6）"
-    )
-    parser.add_argument(
-        "--output-root", default="./runs/grid_search",
-        help="Grid search 暫存與結果根目錄"
-    )
-    parser.add_argument(
-        "--result-csv", default=None,
-        help="結果 CSV 路徑（預設自動命名）"
-    )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="從已有的 CSV 繼續（跳過已完成的組合）"
-    )
-    parser.add_argument(
-        "--verbose", action="store_true",
-        help="印出逐幀 tracking 進度"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="只印出參數組合數量，不實際執行"
-    )
-    parser.add_argument(
-        "--params-subset", default=None,
-        help=(
-            "只搜尋指定參數（逗號分隔），其餘使用當前 track_config.yaml 值。\n"
-            "例如: 'match_thresh,new_track_thresh'"
-        )
-    )
 
-    args = parser.parse_args()
-
-    load_track_config(args.track_config or args.config)
-    print(f"Loaded track config: {get_track_config_path()}")
-
-    # ── 載入 config ───────────────────────────────────────────────────────────
-    cfg        = load_config(args.config)
-    model_path = cfg.det_model_path
-
-    # ── 確定搜尋網格 ──────────────────────────────────────────────────────────
-    grid_def = PARAM_GRIDS.get(args.target_class, PARAM_GRIDS["_default"])
-
-    if args.params_subset:
-        subset_keys = [k.strip() for k in args.params_subset.split(",")]
-        grid_def = {k: v for k, v in grid_def.items() if k in subset_keys}
-        if not grid_def:
-            print(f"❌ --params-subset 中的參數 ({subset_keys}) 均不在 PARAM_GRIDS 中")
-            sys.exit(1)
-
-    pg = ParameterGrid(grid_def)
-    print(f"Parameter grid: {len(pg)} combinations")
-    print(f"  Parameters searched: {sorted(grid_def.keys())}")
-
-    if args.dry_run:
-        print("\n[dry-run] Combinations:")
-        for i, p in enumerate(pg, 1):
-            print(f"  [{i:4d}] {p}")
-        sys.exit(0)
-
-    # ── 收集影片路徑 ──────────────────────────────────────────────────────────
-    video_paths = discover_grid_search_videos(cfg, args.video_glob, args.max_videos)
-
-    if not video_paths:
-        print(f"❌ No videos found. Check --video-glob or config.yaml paths.")
-        sys.exit(1)
-
-    print(f"\nVideos for evaluation ({len(video_paths)}):")
-    for vp in video_paths:
-        print(f"  {vp}")
-
-    # ── 執行 Grid Search ──────────────────────────────────────────────────────
+def _runner_options(args: argparse.Namespace) -> dict:
     # 現行寫死值（這支腳本現況沒有 --conf/--iou/--imgsz/--frame_rate/--gmc_method CLI flag，
     # 統一簽章後也不新增；gmc_method="sparseOptFlow" 是因為現行 _run_tracking_for_video()
     # 完全沒有把 gmc_method 傳給 create_tracker()，實際落到
     # safetrajai/tracking/__init__.py::DEFAULT_TRACKER_CONFIG['gmc_method'] 的值，
     # 不是 "ecc"、也不是 grid_search_botsort.py 的 "sift"）：
-    result_csv = Path(args.result_csv) if args.result_csv else None
-    runner = GridSearchRunner(
-        param_grid   = grid_def,
-        target_class = args.target_class,
-        video_paths  = video_paths,
-        model_path   = model_path,
-        cfg          = cfg,
-        tracker_type = args.tracker,
-        conf         = get_min_conf_thresh(),
-        iou          = 0.5,
-        imgsz        = 1280,
-        frame_rate   = 30,
-        gmc_method   = "sparseOptFlow",
-        output_root  = Path(args.output_root),
-        result_csv   = result_csv,
-        resume       = args.resume,
-        verbose      = args.verbose,
-    )
+    return dict(conf=get_min_conf_thresh(), iou=0.5, imgsz=1280, frame_rate=30, gmc_method="sparseOptFlow")
 
-    outcome = runner.run()
-    runner.print_summary()
 
-    # ── 產生 track_config / Python dict 片段建議 ───────────────────────────────
-    original_params = copy.deepcopy(
-        tracker_config_module.CLASS_TRACKING_PARAMS.get(args.target_class, {})
+def main() -> None:
+    parser = build_parser(
+        default_config="config/tracking/botsort_reid.yaml",
+        default_tracker="botsort",
     )
-    patch_str = generate_config_patch(
-        target_class    = args.target_class,
-        best_params     = outcome["best_params"],
-        original_params = original_params,
-    )
-    print(f"\n📋 Suggested CLASS_TRACKING_PARAMS patch for '{args.target_class}' (貼到 track_config.yaml):")
-    print("-" * 60)
-    print(patch_str)
-    print("-" * 60)
-
-    # 同時寫入文字檔
-    patch_file = Path(args.output_root) / f"best_params_{args.target_class}.txt"
-    patch_file.write_text(
-        f"# Best params for '{args.target_class}'\n"
-        f"# Score (HOTA.AssA_mean) = {outcome['best_score']:.4f}\n"
-        f"# Generated: {datetime.now():%Y-%m-%d %H:%M:%S}\n\n"
-        f"CLASS_TRACKING_PARAMS update:\n{patch_str}\n",
-        encoding="utf-8",
-    )
-    print(f"\n✅ Patch saved to: {patch_file}")
+    run_grid_search(parser.parse_args(), PARAM_GRIDS, _runner_options)
 
 
 if __name__ == "__main__":
