@@ -393,59 +393,6 @@ def export_det_metrics_to_excel_openpyxl(
 # =========================================================
 # 終端評估摘要（彩色輸出）
 # =========================================================
-# def print_eval_summary(means_data, mid_data, seq_name=None):
-#     """在終端印出關鍵指標的 mean / mid 摘要表格。"""
-#     GREEN = "\033[32m"
-#     RESET = "\033[0m"
-#     key_metrics = [
-#         "HOTA.HOTA",
-#         "HOTA.DetA",
-#         "HOTA.AssA",
-#         # "CLEAR.sMOTA",
-#         # "Identity.IDF1",
-#         # "Count.GT_Dets",
-#         # "Count.Dets",
-#         # "CLEAR.CLR_FP",
-#         # "CLEAR.CLR_TP",
-#     ]
-
-#     # mid_data 轉成 {class: row} 方便對照
-#     mid_lookup = {r.get("class"): r for r in mid_data}
-
-#     title = f"序列：{seq_name}" if seq_name else "評估結果摘要"
-#     print(GREEN + "\n" + "=" * 90 + RESET)
-#     print(GREEN + f"  {title}" + RESET)
-#     print(GREEN + "=" * 90 + RESET)
-
-#     # 表頭
-#     col_w = 14
-#     metric_labels = [m.split(".")[-1] for m in key_metrics]   # 只取最後一段，較簡短
-#     header_parts = f"{'類別':<14}" + "".join(f"{'[mean]'+lb:>{col_w}}{'[mid]'+lb:>{col_w}}" for lb in metric_labels)
-#     print(GREEN + header_parts + RESET)
-#     print(GREEN + "-" * len(header_parts) + RESET)
-
-#     for row in means_data:
-#         cls = row.get("class", "?")
-#         note = row.get("note", "")
-#         mid_row = mid_lookup.get(cls, {})
-
-#         if note:
-#             print(GREEN + f"{cls:<14}  ⚠️  {note}" + RESET)
-#             continue
-
-#         values = ""
-#         for m in key_metrics:
-#             mean_v = row.get(f"{m}_mean")
-#             mid_v  = mid_row.get(f"{m}_mid")
-#             mean_s = f"{mean_v:>{col_w}.4f}" if mean_v is not None else f"{'N/A':>{col_w}}"
-#             mid_s  = f"{mid_v:>{col_w}.4f}" if mid_v  is not None else f"{'N/A':>{col_w}}"
-#             values += mean_s + mid_s
-
-#         print(GREEN + f"{cls:<14}{values}" + RESET)
-
-#     print(GREEN + "=" * 90 + RESET)
-
-
 def print_eval_summary(means_data, mid_data, seq_name=None):
     """在終端印出 '一列式' mean/mid 摘要表格，mean 和 mid 各指標依據需求排序。"""
     GREEN = "\033[32m"
