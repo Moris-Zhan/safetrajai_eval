@@ -417,6 +417,8 @@ python scripts/grid_search/grid_search_botsort_reid.py --target-class person --r
 python track_eval.py --config config/collision/conflict_analysis.yaml
 ```
 
+計數線流量統計是選用的 `counting:` 區塊（預設關閉）：先用 `scripts/picker/make_picker.py --mode counting-lines` 畫線並存成 `config/counting_lines/<camera>.yaml`，再在情境 config 設 `counting: {enabled: true}`；輸出在 `collision_output/<seq>/counting/`。步驟與規則見 [`Markdown/counting/counting-guide.md`](Markdown/counting/counting-guide.md)。
+
 衝突指標只是技術訊號，不能當成正式的安全結論。
 
 **Homography 鏡頭設定**（`config/homography/<camera>.yaml`）依下列順序操作；腳本都在 repo 根目錄執行：

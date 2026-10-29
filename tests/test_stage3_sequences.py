@@ -11,11 +11,12 @@ import safetrajai.pipeline.tracking_pipeline as tracking_pipeline
 from safetrajai.evaluation import dataset_layout
 
 
-def make_cfg(tmp_path: Path, conflict_enabled: bool = False) -> SimpleNamespace:
+def make_cfg(tmp_path: Path, conflict_enabled: bool = False, counting_enabled: bool = False) -> SimpleNamespace:
     return SimpleNamespace(
         OUTPUT_ROOT=tmp_path, run_det_eval_dir="det", collision_output_dir=tmp_path / "collision",
         homography_camera_dir=tmp_path / "homography", frame_rate=10,
         conflict_analysis=SimpleNamespace(enabled=conflict_enabled),
+        counting=SimpleNamespace(enabled=counting_enabled),
     )
 
 
@@ -34,11 +35,13 @@ def make_sequence(det_dir: Path, name: str, with_video: bool) -> Path:
 
 @pytest.fixture
 def calls(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
-    recorded = {"collision": [], "conflict": []}
+    recorded = {"collision": [], "conflict": [], "counting": []}
     monkeypatch.setattr(tracking_pipeline, "run_collision_detection_for_sequence",
                         lambda **kwargs: recorded["collision"].append(kwargs))
     monkeypatch.setattr(tracking_pipeline, "run_conflict_analysis_for_sequence",
                         lambda **kwargs: recorded["conflict"].append(kwargs))
+    monkeypatch.setattr(tracking_pipeline, "run_counting_for_sequence",
+                        lambda **kwargs: recorded["counting"].append(kwargs))
     return recorded
 
 
@@ -50,7 +53,7 @@ def test_missing_stage1_output_is_a_soft_skip(tmp_path: Path, calls: dict, capsy
     assert tracking_pipeline.TrackingEvalPipeline(make_cfg(tmp_path)).run_stage3() is None
 
     assert f"No stage1 output found under: {tmp_path / 'det'}" in capsys.readouterr().out
-    assert calls == {"collision": [], "conflict": []}
+    assert calls == {"collision": [], "conflict": [], "counting": []}
 
 
 def test_only_sequences_with_a_video_are_processed(tmp_path: Path, calls: dict, capsys) -> None:
@@ -88,3 +91,14 @@ def test_stage1_output_is_listed_once(tmp_path: Path, calls: dict, monkeypatch: 
     tracking_pipeline.TrackingEvalPipeline(make_cfg(tmp_path)).run_stage3()
 
     assert len(listings) == 1
+
+
+def test_counting_runs_only_when_enabled(tmp_path: Path, calls: dict) -> None:
+    make_sequence(tmp_path / "det", "seqA", with_video=True)
+
+    tracking_pipeline.TrackingEvalPipeline(make_cfg(tmp_path)).run_stage3()
+    assert calls["counting"] == []
+
+    tracking_pipeline.TrackingEvalPipeline(make_cfg(tmp_path, counting_enabled=True)).run_stage3()
+    assert [c["seq_output_dir"] for c in calls["counting"]] == [c["seq_output_dir"] for c in calls["collision"][1:]]
+    assert calls["counting"][0]["bounds"] == (48, 64)

@@ -193,6 +193,10 @@ class AppConfig:
         from safetrajai.collision.conflict.config import load_conflict_config
         d["conflict_analysis"] = load_conflict_config(raw.get("conflict_analysis"))
 
+        # counting 區塊（safetrajai/collision/counting/，沒有這個區塊時視為關閉）
+        from safetrajai.collision.counting.config import load_counting_config
+        d["counting"] = load_counting_config(raw.get("counting"))
+
         # classes_to_run（直接取頂層 key）
         if "classes_to_run" in raw and raw["classes_to_run"]:
             d["classes_to_run"] = {str(k): int(v) for k, v in raw["classes_to_run"].items()}

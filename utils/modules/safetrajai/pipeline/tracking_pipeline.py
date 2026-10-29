@@ -51,6 +51,7 @@ import cv2
 
 from safetrajai.collision import run_collision_detection_for_sequence
 from safetrajai.collision.conflict import run_conflict_analysis_for_sequence
+from safetrajai.collision.counting.runner import run_counting_for_sequence
 from safetrajai.evaluation.mot_format import save_mot_format
 from safetrajai.evaluation.pipeline import run_eval_pipeline
 from safetrajai.evaluation import dataset_layout
@@ -264,6 +265,13 @@ class TrackingEvalPipeline:
             )
             if cfg.conflict_analysis.enabled:
                 run_conflict_analysis_for_sequence(
+                    seq_output_dir=seq_dir,
+                    cfg=cfg,
+                    fps=fps,
+                    bounds=(height, width),
+                )
+            if cfg.counting.enabled:
+                run_counting_for_sequence(
                     seq_output_dir=seq_dir,
                     cfg=cfg,
                     fps=fps,
