@@ -129,7 +129,7 @@ const TARGETS = {
 const HINTS = {
   "homography": "先點左側 CCTV 的一個地面特徵，再點右側衛星圖的同一個地點，成對進行（至少 4 組，建議 8 組以上）。",
   "checkpoints": "與「對應點」相同的成對點法，但必須是和訓練點不同的額外地點（建議 8 組以上）。",
-  "counting-lines": "在 CCTV 首幀每兩點畫一條線（p1 → p2）。方向標籤：沿 p1→p2 看（影像座標，y 向下），從左側穿越到右側為 forward。",
+  "counting-lines": "在 CCTV 首幀每兩點畫一條線（p1 → p2）。黃色箭頭是 forward 的穿越方向（面向 p2，從左側穿越到右側）；方向標籤由程式依線的方向自動判斷，不必填寫。",
   "camera-position": "在衛星圖上點出相機所在位置（只需一個點，再點一次會取代）。",
 };
 const state = { stack: [], point: null, meta: [] };
@@ -218,6 +218,26 @@ function drawPairs() {
   }
 }
 
+// Arrow at the middle of the line along the forward travel direction (-dy, dx): left of p1 -> p2 to its right.
+function drawForwardArrow(ctx, line, size) {
+  const dx = line.points[1][0] - line.points[0][0], dy = line.points[1][1] - line.points[0][1];
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return;
+  const ux = -dy / length, uy = dx / length;
+  const mx = (line.points[0][0] + line.points[1][0]) / 2, my = (line.points[0][1] + line.points[1][1]) / 2;
+  const span = Math.max(20, CONFIG.images.cctv.width / 20), head = span / 3;
+  const tx = mx + ux * span, ty = my + uy * span;
+  ctx.lineWidth = Math.max(2, size / 1.5); ctx.strokeStyle = "#ffee00"; ctx.fillStyle = "#ffee00";
+  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx - ux * head + uy * head / 2, ty - uy * head - ux * head / 2);
+  ctx.lineTo(tx - ux * head - uy * head / 2, ty - uy * head + ux * head / 2);
+  ctx.closePath(); ctx.fill();
+  ctx.font = Math.max(12, CONFIG.images.cctv.width / 80) + "px sans-serif";
+  ctx.fillText("forward", tx + ux * 4 + 4, ty + uy * 4 + 4);
+}
+
 function drawLines() {
   const ctx = canvases.cctv.getContext("2d"), size = Math.max(3, CONFIG.images.cctv.width / 300);
   buildLines(state.stack, state.meta).forEach(function (line) {
@@ -225,6 +245,7 @@ function drawLines() {
     ctx.beginPath(); ctx.moveTo(line.points[0][0], line.points[0][1]); ctx.lineTo(line.points[1][0], line.points[1][1]); ctx.stroke();
     marker(ctx, line.points[0], line.name + " p1", "#ff2020", size);
     marker(ctx, line.points[1], "p2", "#ff2020", size);
+    drawForwardArrow(ctx, line, size);
   });
   if (state.stack.length % 2 === 1) marker(ctx, state.stack[state.stack.length - 1], "p1（待 p2）", "#ff9900", size);
 }
@@ -263,8 +284,7 @@ function renderLineForm() {
   form.textContent = "";
   buildLines(state.stack, state.meta).forEach(function (line, index) {
     const row = el("div", undefined, "line-row");
-    [["name", "名稱", line.name], ["forward", "forward 標籤", line.forward_label || ""],
-     ["backward", "backward 標籤", line.backward_label || ""]].forEach(function (field) {
+    [["name", "名稱", line.name]].forEach(function (field) {
       const label = el("label", field[1] + " ");
       const input = document.createElement("input");
       input.value = field[2];

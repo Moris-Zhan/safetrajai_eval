@@ -26,14 +26,14 @@ def write(tmp_path: Path, text: str, camera: str = "C000025") -> Path:
     return path
 
 
-def test_lines_are_read_with_default_labels(tmp_path: Path) -> None:
+def test_lines_are_read_with_labels_only_when_typed(tmp_path: Path) -> None:
     lines = load_counting_lines(write(tmp_path, VALID))
 
     assert lines.camera == "C000025"
     assert lines.image_size == (640, 480)
     assert lines.lines == (
         CountingLine("north_gate", (120.0, 300.0), (480.0, 310.0), "southbound", "northbound"),
-        CountingLine("side_road", (10.0, 20.0), (30.0, 40.0), "forward", "backward"),
+        CountingLine("side_road", (10.0, 20.0), (30.0, 40.0), None, None),
     )
 
 
@@ -48,7 +48,7 @@ def test_picker_output_is_read_back_unchanged(tmp_path: Path) -> None:
     assert [(l.name, l.p1, l.p2) for l in loaded.lines] == [
         ("north gate: 北門", (120.0, 300.0), (480.0, 310.0)), ("side_road", (10.5, 20.0), (30.0, 40.0))]
     assert (loaded.lines[0].forward_label, loaded.lines[0].backward_label) == ("往南", "往北")
-    assert (loaded.lines[1].forward_label, loaded.lines[1].backward_label) == ("forward", "backward")
+    assert (loaded.lines[1].forward_label, loaded.lines[1].backward_label) == (None, None)
 
 
 @pytest.mark.parametrize("text, message", [

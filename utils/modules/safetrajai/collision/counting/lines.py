@@ -5,8 +5,8 @@
     lines:
       - name: north_gate
         points: [[120, 300], [480, 310]]   # p1 -> p2
-        forward_label: southbound          # optional, default "forward"
-        backward_label: northbound         # optional, default "backward"
+        forward_label: southbound          # optional override; by default derived from the geometry (labels.py)
+        backward_label: northbound         # optional override
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ class CountingLine:
     name: str
     p1: Point
     p2: Point
-    forward_label: str = "forward"
-    backward_label: str = "backward"
+    forward_label: Optional[str] = None     # None: derived by labels.resolve_labels
+    backward_label: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -70,9 +70,9 @@ def _line(raw: Any, path: Path, index: int) -> CountingLine:
     if p1 == p2:
         raise ValueError(f"{where}.points 兩個點相同，線段長度為 0")
     labels = {}
-    for key, default in (("forward_label", "forward"), ("backward_label", "backward")):
-        value = raw.get(key, default)
-        if not isinstance(value, str):
+    for key in ("forward_label", "backward_label"):
+        value = raw.get(key)
+        if value is not None and not isinstance(value, str):
             raise ValueError(f"{where}.{key} 必須是文字，目前是 {value!r}")
         labels[key] = value
     return CountingLine(name, p1, p2, labels["forward_label"], labels["backward_label"])

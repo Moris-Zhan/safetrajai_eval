@@ -37,8 +37,12 @@ def setup(tmp_path: Path):
     lines_dir = tmp_path / "counting_lines"
     lines_dir.mkdir()
     (lines_dir / "C000025.yaml").write_text(LINES_YAML, encoding="utf-8")
+    camera_dir, matrices_dir = tmp_path / "homography", tmp_path / "matrices"
+    camera_dir.mkdir()
+    matrices_dir.mkdir()
     cfg = SimpleNamespace(counting=CountingConfig(enabled=True), collision_output_dir=tmp_path / "out",
-                          benchmark_name="CCTV", split_name="val", tracker_name="YOLO11x")
+                          benchmark_name="CCTV", split_name="val", tracker_name="YOLO11x",
+                          homography_camera_dir=camera_dir, homography_matrices_dir=matrices_dir)
     return seq_dir, cfg, lines_dir, tmp_path / "out" / SEQ / "counting"
 
 
@@ -98,7 +102,8 @@ def test_summary_states_its_limitations_and_the_lines(setup) -> None:
 
     assert {item["code"] for item in summary["limitations"]} == {"id_switches", "not_roi_filtered"}
     assert summary["lines"] == [{"name": "gate", "points": [[0.0, 10.0], [10.0, 10.0]],
-                                 "forward_label": "down", "backward_label": "up"}]
+                                 "forward_label": "down", "backward_label": "up",
+                                 "label_source": {"forward": "manual", "backward": "manual"}}]
     assert (out_dir / "counts.csv").read_text() == HEADER + "\n"
 
 
@@ -127,3 +132,34 @@ def test_counting_and_conflict_modules_import_in_any_order(module: str) -> None:
     result = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True, text=True, timeout=120)
 
     assert result.returncode == 0, result.stderr
+
+
+NO_LABELS_YAML = LINES_YAML.replace("    forward_label: down\n    backward_label: up\n", "")
+
+
+def test_labels_are_derived_from_the_geometry_when_not_typed(setup) -> None:
+    seq_dir, cfg, lines_dir, out_dir = setup
+    (lines_dir / "C000025.yaml").write_text(NO_LABELS_YAML, encoding="utf-8")
+    write_tracks(seq_dir, {"car": [(1, 1, 5, 5), (2, 1, 5, 15)]})
+
+    summary = run(seq_dir, cfg, lines_dir)
+
+    assert (summary["lines"][0]["forward_label"], summary["lines"][0]["backward_label"]) == ("down", "up")
+    assert summary["lines"][0]["label_source"] == {"forward": "screen", "backward": "screen"}
+    assert (out_dir / "counts.csv").read_text().splitlines()[1] == "2,0.4,gate,forward,down,car,1,1"
+
+
+def test_a_camera_with_a_homography_gets_compass_labels(setup) -> None:
+    import numpy as np
+
+    seq_dir, cfg, lines_dir, out_dir = setup
+    (lines_dir / "C000025.yaml").write_text(NO_LABELS_YAML, encoding="utf-8")
+    (cfg.homography_camera_dir / "C000025.yaml").write_text("camera: C000025\nmatrix_tag: T\n", encoding="utf-8")
+    np.save(cfg.homography_matrices_dir / "H_T.npy", np.eye(3))
+    write_tracks(seq_dir, {"car": [(1, 1, 5, 5), (2, 1, 5, 15)]})
+
+    summary = run(seq_dir, cfg, lines_dir)
+
+    assert (summary["lines"][0]["forward_label"], summary["lines"][0]["backward_label"]) == ("southbound", "northbound")
+    assert summary["lines"][0]["label_source"] == {"forward": "compass", "backward": "compass"}
+    assert (out_dir / "counts.csv").read_text().splitlines()[1] == "2,0.4,gate,forward,southbound,car,1,1"

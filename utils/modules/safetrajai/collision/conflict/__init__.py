@@ -26,6 +26,7 @@ from safetrajai.collision.homography.camera_config import load_camera_config_for
 from safetrajai.collision.homography.georef import meters_per_pixel
 from safetrajai.collision.homography.points import prebuilt_satellite_image_path
 from safetrajai.collision.counting.crossing import find_crossings
+from safetrajai.collision.counting.labels import resolve_labels
 from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, resolve_counting_lines
 from safetrajai.collision.counting.tracks import load_counting_tracks
 from safetrajai.collision.homography.satellite import image_tag
@@ -107,9 +108,10 @@ def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndar
     if lines is None:
         return None
     crossings = find_crossings(load_counting_tracks(seq_output_dir, cfg), lines)
+    labelled = [(line, resolve_labels(line, H)) for line in lines]
     projected = tuple(
         BevCountingLine(line.name, *(tuple(p) for p in project_points(np.array([line.p1, line.p2]), H)),
-                        line.forward_label, line.backward_label) for line in lines)
+                        labels.forward, labels.backward) for line, labels in labelled)
     return BevCounting(projected, crossings)
 
 
