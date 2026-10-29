@@ -37,6 +37,13 @@ DEFAULT_CLASS_PAIRS: FrozenSet[Tuple[str, str]] = frozenset(
 
 
 @dataclass(frozen=True)
+class BevVideoConfig:
+    enabled: bool = False
+    max_side_px: int = 960
+    tail_s: float = 3.0
+
+
+@dataclass(frozen=True)
 class ConflictConfig:
     enabled: bool = False
     # kinematics
@@ -68,6 +75,8 @@ class ConflictConfig:
     # class properties
     object_length_m: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_OBJECT_LENGTH_M))
     object_mass_kg: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_OBJECT_MASS_KG))
+    # optional outputs (off by default)
+    bev_video: BevVideoConfig = BevVideoConfig()
 
     def collision_distance_m(self, class_a: str, class_b: str) -> float:
         if self.ttc_distance_mode == "class_length":
@@ -109,6 +118,27 @@ def _class_pairs(value: Any) -> FrozenSet[Tuple[str, str]]:
     return pairs
 
 
+def _bev_video(value: Any) -> BevVideoConfig:
+    """`bev_video: true` or a block {enabled, max_side_px, tail_s}."""
+    if isinstance(value, bool):
+        return BevVideoConfig(enabled=value)
+    if not isinstance(value, Mapping):
+        raise ValueError(f"conflict_analysis.bev_video 必須是 true／false 或設定區塊，目前是 {value!r}")
+    unknown = sorted(set(value) - {f.name for f in fields(BevVideoConfig)})
+    if unknown:
+        raise ValueError(f"conflict_analysis.bev_video 有未知欄位：{unknown}")
+    enabled = value.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError(f"conflict_analysis.bev_video.enabled 必須是 true 或 false，目前是 {enabled!r}")
+    max_side = value.get("max_side_px", BevVideoConfig.max_side_px)
+    if isinstance(max_side, bool) or not isinstance(max_side, int) or max_side <= 0:
+        raise ValueError(f"conflict_analysis.bev_video.max_side_px 必須是正整數，目前是 {max_side!r}")
+    tail = value.get("tail_s", BevVideoConfig.tail_s)
+    if isinstance(tail, bool) or not isinstance(tail, (int, float)) or not tail > 0:
+        raise ValueError(f"conflict_analysis.bev_video.tail_s 必須大於 0，目前是 {tail!r}")
+    return BevVideoConfig(enabled=enabled, max_side_px=max_side, tail_s=float(tail))
+
+
 def load_conflict_config(block: Optional[Mapping[str, Any]]) -> ConflictConfig:
     """Validate the `conflict_analysis:` block; a missing block means disabled."""
     if not block:
@@ -136,5 +166,7 @@ def load_conflict_config(block: Optional[Mapping[str, Any]]) -> ConflictConfig:
     for name in ("object_length_m", "object_mass_kg"):
         if name in values:
             values[name] = _class_map(values[name], name)
+    if "bev_video" in values:
+        values["bev_video"] = _bev_video(values["bev_video"])
     values["enabled"] = bool(values.get("enabled", False))
     return ConflictConfig(**values)

@@ -51,6 +51,7 @@ def _side_key(kins: Sequence[Kinematics], side: int, i: int, j: int) -> str:
 
 def _params(cfg: ConflictConfig) -> Dict[str, Any]:
     params = {f.name: getattr(cfg, f.name) for f in fields(cfg)}
+    params.pop("bev_video")  # optional output: not part of the metric parameters, keeps summary.json unchanged
     params["class_pairs"] = [list(p) for p in sorted(cfg.class_pairs)]
     params["angle_types"] = [list(t) for t in cfg.angle_types]
     params["object_length_m"] = dict(sorted(cfg.object_length_m.items()))

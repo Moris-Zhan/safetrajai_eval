@@ -4,7 +4,7 @@
 > 規模：XS 1 檔／S 1–2 檔／M 3–5 檔。
 
 通用驗證（每個任務都做）：
-- [ ] 完整 `pytest` 通過（只增不減；目前 907 passed, 11 skipped）
+- [ ] 完整 `pytest` 通過（只增不減；目前 919 passed, 11 skipped）
 - [ ] `git diff --stat` 未觸及 `Sub_Module/`、tracker override、`utils/modules/_vendor/trackeval/`、`utils/model.py`、`tests/golden/`
 - [ ] 新功能關閉（預設）時既有輸出不變
 
@@ -47,7 +47,7 @@
 
 ## 階段 3：F3 鳥瞰影片（分支 `feature/bev-video`）
 
-- [ ] **F3a**（S）`conflict_analysis.bev_video`（預設 false）、尾跡長度等欄位，進 `conflict/config.py`
+- [x] **F3a**（S）`conflict_analysis.bev_video`（預設 false）、尾跡長度等欄位，進 `conflict/config.py`
   - 驗收：缺欄位維持現況；未知值報錯；既有 `ConflictConfig` 預設不變
   - 已決定：`max_side_px` 預設 960、`tail_s` 預設 3 秒
 - [ ] **F3b**（M）`conflict/bev.py`：逐幀繪製函式（衛星圖底圖、軌跡尾跡與 ID、速度 km/h）
