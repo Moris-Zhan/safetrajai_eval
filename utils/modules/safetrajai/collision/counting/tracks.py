@@ -13,7 +13,7 @@ from safetrajai.collision.trajectory_adapter import _read_class_trajectory_file
 
 CLASSES: Tuple[str, ...] = tuple(CLASS_NAMES[i] for i in sorted(CLASS_NAMES))
 # Stage1 tracks are not ROI-filtered; the reader wants a polygon, so give it one that holds every box centre.
-_EVERYWHERE = np.array([[-1e9, -1e9], [1e9, -1e9], [1e9, 1e9], [-1e9, 1e9]], dtype=np.float32)
+EVERYWHERE_POLYGON = np.array([[-1e9, -1e9], [1e9, -1e9], [1e9, 1e9], [-1e9, 1e9]], dtype=np.float32)
 
 
 def load_counting_tracks(seq_output_dir: Path, cfg) -> Tuple[CountingTrack, ...]:
@@ -21,7 +21,7 @@ def load_counting_tracks(seq_output_dir: Path, cfg) -> Tuple[CountingTrack, ...]
     tracks = []
     for class_name in CLASSES:
         path = traj_root / f"{cfg.tracker_name}__{class_name}" / "data" / f"{seq_output_dir.name}.txt"
-        for track_id, rows in sorted(_read_class_trajectory_file(path, _EVERYWHERE).items()):
+        for track_id, rows in sorted(_read_class_trajectory_file(path, EVERYWHERE_POLYGON).items()):
             rows = sorted(rows, key=lambda r: r[0])
             frames = np.array([r[0] for r in rows], dtype=np.int64)
             points = np.array([(left + w / 2.0, top + h) for _, left, top, w, h, _ in rows], dtype=np.float64)

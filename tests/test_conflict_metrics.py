@@ -809,3 +809,102 @@ def test_bev_video_records_the_conflict_events_it_links(tmp_path) -> None:
 
     summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["bev_video"]["event_links"] == summary["num_events"] >= 1
+
+
+# =============================================================================
+# Blind area (F4): conflict_analysis.blind_area
+# =============================================================================
+
+VIEW_CAMERA = GEOREF_CAMERA + "camera_view_point: [20, 300]\n"
+
+
+def blind_setup(tmp_path, camera_yaml: "str | None" = VIEW_CAMERA, with_satellite: bool = True, **blind_options):
+    import dataclasses
+
+    from safetrajai.collision.conflict.config import BlindAreaConfig
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path, with_satellite=with_satellite)
+    cfg.conflict_analysis = dataclasses.replace(
+        cfg.conflict_analysis, bev_video=type(cfg.conflict_analysis.bev_video)(),
+        blind_area=BlindAreaConfig(enabled=True, **blind_options))
+    (cfg.homography_camera_dir / "C999001.yaml").write_text(camera_yaml, encoding="utf-8")
+    return seq_dir, cfg, out_dir
+
+
+def read_summary(out_dir):
+    import json
+
+    return json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+
+
+def test_blind_area_is_not_written_or_mentioned_by_default(tmp_path) -> None:
+    seq_dir, cfg, out_dir = sequence_setup(tmp_path, VIEW_CAMERA)
+    run_entry(seq_dir, cfg)
+
+    assert not (out_dir / "blind_area.csv").exists()
+    summary = read_summary(out_dir)
+    assert "blind_area" not in summary
+    assert "blind_area_2d" not in {item["code"] for item in summary["limitations"]}
+
+
+def test_blind_area_csv_and_summary(tmp_path) -> None:
+    import csv
+
+    seq_dir, cfg, out_dir = blind_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    assert (out_dir / "blind_area.csv").exists()
+    with (out_dir / "blind_area.csv").open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert list(rows[0]) == ["frame", "time_s", "num_occluders", "blind_area_m2", "roi_area_m2", "blind_ratio"]
+    assert [int(r["frame"]) for r in rows] == list(range(1, 31))
+    assert max(float(r["blind_ratio"]) for r in rows) > 0
+    assert all(0.0 <= float(r["blind_ratio"]) <= 1.0 for r in rows)
+    summary = read_summary(out_dir)
+    blind = summary["blind_area"]
+    assert blind["written"] is True and blind["frames"] == 30 and blind["viewpoint_px"] == [20.0, 300.0]
+    assert blind["occluder_classes"] == ["car", "small_truck", "bus", "truck"]
+    assert 0.0 < blind["max_blind_ratio"] <= 1.0
+    assert {"viewpoint_inside_skips", "occluders_without_heading", "frames_without_heading"} <= set(blind)
+    assert "blind_area_2d" in {item["code"] for item in summary["limitations"]}
+
+
+def test_blind_area_without_a_viewpoint_is_skipped_and_recorded(tmp_path) -> None:
+    seq_dir, cfg, out_dir = blind_setup(tmp_path, camera_yaml=GEOREF_CAMERA)
+    run_entry(seq_dir, cfg)
+
+    assert not (out_dir / "blind_area.csv").exists()
+    assert read_summary(out_dir)["blind_area"] == {"written": False, "skipped_reason": "no_camera_view_point"}
+
+
+def test_blind_area_without_a_satellite_image_is_skipped_and_recorded(tmp_path) -> None:
+    seq_dir, cfg, out_dir = blind_setup(tmp_path, with_satellite=False)
+    run_entry(seq_dir, cfg)
+
+    assert not (out_dir / "blind_area.csv").exists()
+    assert read_summary(out_dir)["blind_area"] == {"written": False, "skipped_reason": "no_satellite_image"}
+
+
+def test_blind_area_ignores_classes_that_are_not_occluders(tmp_path) -> None:
+    import csv
+
+    seq_dir, cfg, out_dir = blind_setup(tmp_path, occluder_classes=("bus",))
+    run_entry(seq_dir, cfg)
+
+    with (out_dir / "blind_area.csv").open(encoding="utf-8") as f:
+        assert {float(r["blind_ratio"]) for r in csv.DictReader(f)} == {0.0}
+
+
+def test_blind_area_uses_occluders_outside_the_roi(tmp_path, monkeypatch) -> None:
+    import csv
+
+    import safetrajai.collision.conflict as conflict
+
+    top_strip = np.array([[0, 0], [640, 0], [640, 100], [0, 100]], dtype=np.float32)    # the cars drive at y = 300
+    monkeypatch.setattr(conflict, "resolve_roi", lambda seq_name, image_size: top_strip)
+    seq_dir, cfg, out_dir = blind_setup(tmp_path, camera_yaml=GEOREF_CAMERA + "camera_view_point: [300, 560]\n")
+    run_entry(seq_dir, cfg)
+
+    assert read_summary(out_dir)["num_tracks"] == 0              # the ROI filter keeps no vehicle
+    with (out_dir / "blind_area.csv").open(encoding="utf-8") as f:
+        assert max(float(r["blind_ratio"]) for r in csv.DictReader(f)) > 0     # but their shadows reach into it

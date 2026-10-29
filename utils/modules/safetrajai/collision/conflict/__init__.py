@@ -28,11 +28,12 @@ from safetrajai.collision.homography.points import prebuilt_satellite_image_path
 from safetrajai.collision.counting.crossing import find_crossings
 from safetrajai.collision.counting.labels import resolve_labels
 from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, resolve_counting_lines
-from safetrajai.collision.counting.tracks import load_counting_tracks
+from safetrajai.collision.counting.tracks import EVERYWHERE_POLYGON, load_counting_tracks
 from safetrajai.collision.homography.satellite import image_tag
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 from safetrajai.roi import resolve_roi
 
+from .blind_area import compute_blind_area, polygon_mask
 from .bev import BevCounting, BevCountingLine, BevEvent, bev_tracks, write_bev_video
 from .chains import build_chains
 from .config import ConflictConfig
@@ -114,6 +115,39 @@ def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndar
         BevCountingLine(line.name, *(tuple(p) for p in project_points(np.array([line.p1, line.p2]), H)),
                         labels.forward, labels.backward) for line, labels in labelled)
     return BevCounting(projected, crossings)
+
+
+def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, fps: float, roi: np.ndarray,
+                H: np.ndarray, mpp: float) -> Dict[str, Any]:
+    camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
+    if camera_cfg.camera_view_point is None:
+        return {"written": False, "skipped_reason": "no_camera_view_point"}
+    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
+    background = cv2.imread(str(image_path)) if image_path.exists() else None
+    if background is None:
+        return {"written": False, "skipped_reason": "no_satellite_image"}
+    viewpoint = (float(camera_cfg.camera_view_point[0]), float(camera_cfg.camera_view_point[1]))
+    # Occluders are every tracked vehicle, not only those inside the ROI: a large vehicle outside it still casts a shadow in.
+    tracks = load_tracks(seq_output_dir, cfg.benchmark_name, cfg.split_name, cfg.tracker_name, EVERYWHERE_POLYGON, H, mpp)
+    all_frames = [int(f) for t in tracks for f in t.frames]
+    frames = range(min(all_frames), max(all_frames) + 1) if all_frames else range(0)
+    occluders = [compute_kinematics(t, fps, ccfg) for t in tracks if t.class_name in ccfg.blind_area.occluder_classes]
+    result = compute_blind_area(
+        occluders, viewpoint, polygon_mask(project_points(roi, H), background.shape[:2]), mpp, fps, frames,
+        ccfg.object_length_m, ccfg.object_width_m)
+    write_csv(result.columns, out_dir / "blind_area.csv")
+    ratios = np.array(result.columns["blind_ratio"], dtype=np.float64)
+    return {
+        "written": True,
+        "viewpoint_px": list(viewpoint),
+        "occluder_classes": list(ccfg.blind_area.occluder_classes),
+        "frames": len(ratios),
+        "mean_blind_ratio": float(np.nanmean(ratios)) if len(ratios) else None,
+        "max_blind_ratio": float(np.nanmax(ratios)) if len(ratios) else None,
+        "viewpoint_inside_skips": result.viewpoint_inside_skips,
+        "occluders_without_heading": result.occluders_without_heading,
+        "frames_without_heading": result.frames_without_heading,
+    }
 
 
 def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
@@ -338,6 +372,12 @@ def run_conflict_analysis_for_sequence(
         summary["limitations"].append({
             "code": "bev_video_fps",
             "detail": "bev.mp4 的輸出 fps 固定為 5（既有 VideoWriterWithFfmpeg 行為，未修正）；序列不是 5 fps 時，播放速度與實際時間不同。",
+        })
+    if ccfg.blind_area.enabled:
+        summary["blind_area"] = _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp)
+        summary["limitations"].append({
+            "code": "blind_area_2d",
+            "detail": "盲區把車輛視為沒有高度的矩形，陰影是從視點投影到地面的平面區域，所以會高估盲區（真實車輛只遮住視線高度以下的範圍）；視點與朝向的誤差也直接影響結果。",
         })
     write_json(summary, out_dir / "summary.json")
     print(

@@ -9,10 +9,14 @@ shadows overestimate the blind area (nothing is hidden behind the roof line of a
 from __future__ import annotations
 
 import math
-from typing import Optional, Sequence, Tuple
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
+
+from .kinematics import Kinematics
 
 Point = Tuple[float, float]
 
@@ -86,3 +90,68 @@ def blind_area_px(viewpoint: Point, bodies: Sequence[np.ndarray], roi: np.ndarra
             continue
         blind |= _fill(shadow, shape) & ~_fill(corners, shape)
     return float(np.count_nonzero(blind & roi)), skipped
+
+
+@dataclass(frozen=True)
+class BlindAreaResult:
+    columns: Dict[str, List[Any]]
+    viewpoint_inside_skips: int       # body-frames without a shadow because the viewpoint was inside the body
+    occluders_without_heading: int    # tracks that never moved fast enough to have a heading
+    frames_without_heading: int       # body-frames skipped because no heading was known yet
+
+
+def _last_valid(values: np.ndarray) -> np.ndarray:
+    """Forward fill of NaN; leading NaN stay NaN."""
+    valid = np.where(~np.isnan(values), np.arange(len(values)), -1)
+    index = np.maximum.accumulate(valid)
+    return np.where(index >= 0, values[np.maximum(index, 0)], np.nan)
+
+
+def compute_blind_area(
+    occluders: Sequence[Kinematics],
+    viewpoint: Point,
+    roi: np.ndarray,
+    meters_per_pixel: float,
+    fps: float,
+    frames: Sequence[int],
+    lengths_m: Mapping[str, float],
+    widths_m: Mapping[str, float],
+) -> BlindAreaResult:
+    """Blind-area ratio inside `roi` for every frame in `frames`.
+
+    Bodies sit on each track's bottom-centre point in map pixels and point along the smoothed velocity
+    direction; a vehicle that is (nearly) still keeps its last valid heading, and one that has not had a
+    heading yet is skipped. `num_occluders` counts the bodies that cast a shadow.
+    """
+    bodies_by_frame: Dict[int, List[np.ndarray]] = defaultdict(list)
+    never_moved = frames_skipped = 0
+    for kin in occluders:
+        heading = _last_valid(kin.heading_deg)
+        if np.all(np.isnan(heading)):
+            never_moved += 1
+            continue
+        track = kin.track
+        length_px = lengths_m[track.class_name] / meters_per_pixel
+        width_px = widths_m[track.class_name] / meters_per_pixel
+        for frame, centre, angle in zip(track.frames, track.map_xy, heading):
+            if np.isnan(angle):
+                frames_skipped += 1
+                continue
+            bodies_by_frame[int(frame)].append(body_rectangle(tuple(centre), math.radians(angle), length_px, width_px))
+
+    roi_px = float(np.count_nonzero(roi))
+    pixel_area = meters_per_pixel ** 2
+    columns: Dict[str, List[Any]] = {name: [] for name in (
+        "frame", "time_s", "num_occluders", "blind_area_m2", "roi_area_m2", "blind_ratio")}
+    inside_skips = 0
+    for frame in frames:
+        bodies = bodies_by_frame.get(int(frame), [])
+        blind_px, skipped = blind_area_px(viewpoint, bodies, roi)
+        inside_skips += skipped
+        columns["frame"].append(int(frame))
+        columns["time_s"].append(int(frame) / fps)
+        columns["num_occluders"].append(len(bodies) - skipped)
+        columns["blind_area_m2"].append(blind_px * pixel_area)
+        columns["roi_area_m2"].append(roi_px * pixel_area)
+        columns["blind_ratio"].append(blind_px / roi_px if roi_px > 0 else float("nan"))
+    return BlindAreaResult(columns, inside_skips, never_moved, frames_skipped)
