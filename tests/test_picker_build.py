@@ -119,3 +119,17 @@ def test_cli_reports_a_missing_camera_without_a_traceback(tmp_path: Path) -> Non
 
     assert result.returncode != 0
     assert "C999999" in result.stderr and "Traceback" not in result.stderr
+
+
+def test_cameras_are_the_folders_that_hold_videos(inputs: dict) -> None:
+    from safetrajai.picker.build import list_cameras
+
+    videos = inputs["videos_root"]
+    (videos / "empty").mkdir()
+    (videos / "temp").mkdir()
+    (videos / "temp" / "x.mp4").write_bytes(b"")
+    (videos / "OTHER").mkdir()
+    (videos / "OTHER" / "a.mp4").write_bytes(b"")
+    (videos / "notes.txt").write_text("not a folder")
+
+    assert list_cameras(videos) == ["C000054", "OTHER"]
