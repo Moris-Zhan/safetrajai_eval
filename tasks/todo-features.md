@@ -70,7 +70,7 @@
 - [x] **F4b**（M）`conflict/blind_area.py`：矩形＋視點 → 陰影多邊形；與 ROI 相交；面積比例
   - 驗收：合成矩形與已知視點，面積比例與手算值一致（容許誤差寫進測試）；視點在矩形內等退化情況有明確行為
   - 已決定：不用 `shapely`，以 `cv2` 光柵化
-- [ ] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
+- [x] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
   - 驗收：無 `camera_view_point` 或 m/px 不可用 → `skipped_reason`；`limitations` 含 2D 假設
 - [ ] **F4d**（S）盲區疊進鳥瞰影片
   - 驗收：F4 關閉時畫面不含盲區
