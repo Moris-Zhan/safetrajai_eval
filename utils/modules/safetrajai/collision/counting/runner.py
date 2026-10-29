@@ -10,19 +10,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
-from safetrajai.classes import CLASS_NAMES
 from safetrajai.collision.conflict.output import write_csv, write_json
-from safetrajai.collision.counting.crossing import CountingTrack, find_crossings
+from safetrajai.collision.counting.crossing import find_crossings
+from safetrajai.collision.counting.labels import ResolvedLabels, resolve_labels
 from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, CountingLine, resolve_counting_lines
-from safetrajai.collision.trajectory_adapter import _read_class_trajectory_file
+from safetrajai.collision.counting.tracks import CLASSES, load_counting_tracks
+from safetrajai.collision.homography import points as homography_points
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 
-CLASSES: Tuple[str, ...] = tuple(CLASS_NAMES[i] for i in sorted(CLASS_NAMES))
 DIRECTIONS = ("forward", "backward")
-# Stage1 tracks are not ROI-filtered; the reader wants a polygon, so give it one that holds every box centre.
-_EVERYWHERE = np.array([[-1e9, -1e9], [1e9, -1e9], [1e9, 1e9], [-1e9, 1e9]], dtype=np.float32)
 
 LIMITATIONS: List[Dict[str, str]] = [
     {"code": "id_switches",
@@ -32,22 +28,10 @@ LIMITATIONS: List[Dict[str, str]] = [
 ]
 
 
-def _load_tracks(seq_output_dir: Path, cfg) -> Tuple[CountingTrack, ...]:
-    traj_root = seq_output_dir / "trackers" / "mot_challenge" / f"{cfg.benchmark_name}-{cfg.split_name}"
-    tracks = []
-    for class_name in CLASSES:
-        path = traj_root / f"{cfg.tracker_name}__{class_name}" / "data" / f"{seq_output_dir.name}.txt"
-        for track_id, rows in sorted(_read_class_trajectory_file(path, _EVERYWHERE).items()):
-            rows = sorted(rows, key=lambda r: r[0])
-            frames = np.array([r[0] for r in rows], dtype=np.int64)
-            points = np.array([(left + w / 2.0, top + h) for _, left, top, w, h, _ in rows], dtype=np.float64)
-            tracks.append(CountingTrack(class_name, int(track_id), frames, points))
-    return tuple(tracks)
-
-
-def _line_record(line: CountingLine) -> Dict[str, Any]:
+def _line_record(line: CountingLine, labels: ResolvedLabels) -> Dict[str, Any]:
     return {"name": line.name, "points": [list(line.p1), list(line.p2)],
-            "forward_label": line.forward_label, "backward_label": line.backward_label}
+            "forward_label": labels.forward, "backward_label": labels.backward,
+            "label_source": {"forward": labels.forward_source, "backward": labels.backward_source}}
 
 
 def run_counting_for_sequence(
@@ -61,7 +45,8 @@ def run_counting_for_sequence(
 
     Args:
         seq_output_dir: stage1 序列目錄（含 trackers/）
-        cfg: AppConfig，需要 counting、collision_output_dir、benchmark_name、split_name、tracker_name
+        cfg: AppConfig，需要 counting、collision_output_dir、benchmark_name、split_name、tracker_name、
+             homography_camera_dir、homography_matrices_dir（有 Homography 時標籤用羅盤方向）
         fps: 序列影片幀率（時間欄位為 frame / fps，與衝突指標一致）
         bounds: (height, width) 影片解析度，用來核對 counting_lines 的 image_size
         lines_dir: counting_lines 設定檔目錄
@@ -81,9 +66,12 @@ def run_counting_for_sequence(
         print(f"  [{seq_name}] 計數線統計略過（no_counting_lines），只輸出 {out_dir / 'summary.json'}")
         return summary
 
-    tracks = _load_tracks(seq_output_dir, cfg)
-    label = {(line.name, "forward"): line.forward_label for line in lines}
-    label.update({(line.name, "backward"): line.backward_label for line in lines})
+    tracks = load_counting_tracks(seq_output_dir, cfg)
+    homography, _ = homography_points.resolve_camera_homography(
+        seq_name, cfg.homography_camera_dir, cfg.homography_matrices_dir)
+    resolved = {line.name: resolve_labels(line, homography) for line in lines}
+    label = {(name, "forward"): labels.forward for name, labels in resolved.items()}
+    label.update({(name, "backward"): labels.backward for name, labels in resolved.items()})
     running: Counter = Counter()
     columns: Dict[str, list] = {name: [] for name in (
         "frame", "time_s", "line", "direction", "label", "class", "track_id", "cumulative")}
@@ -100,7 +88,7 @@ def run_counting_for_sequence(
     write_csv(columns, out_dir / "counts.csv")
 
     summary.update({
-        "skipped_reason": None, "num_tracks": len(tracks), "lines": [_line_record(l) for l in lines],
+        "skipped_reason": None, "num_tracks": len(tracks), "lines": [_line_record(l, resolved[l.name]) for l in lines],
         "totals": totals, "limitations": LIMITATIONS,
     })
     write_json(summary, out_dir / "summary.json")

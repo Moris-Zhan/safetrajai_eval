@@ -1,0 +1,12 @@
+# config/counting_lines/C000011.yaml — 鏡頭 C000011 的計數線（CCTV 首幀像素座標）
+camera: C000011
+image_size: [704, 480]
+lines:
+  - name: "line_1"
+    points: [[349, 150], [618, 210]]
+  - name: "line_2"
+    points: [[633, 216], [412, 473]]
+  - name: "line_3"
+    points: [[317, 476], [51, 246]]
+  - name: "line_4"
+    points: [[47, 236], [328, 143]]

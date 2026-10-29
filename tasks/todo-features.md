@@ -4,7 +4,7 @@
 > 規模：XS 1 檔／S 1–2 檔／M 3–5 檔。
 
 通用驗證（每個任務都做）：
-- [ ] 完整 `pytest` 通過（只增不減；目前 907 passed, 11 skipped）
+- [ ] 完整 `pytest` 通過（只增不減；目前 947 passed, 11 skipped）
 - [ ] `git diff --stat` 未觸及 `Sub_Module/`、tracker override、`utils/modules/_vendor/trackeval/`、`utils/model.py`、`tests/golden/`
 - [ ] 新功能關閉（預設）時既有輸出不變
 
@@ -47,19 +47,19 @@
 
 ## 階段 3：F3 鳥瞰影片（分支 `feature/bev-video`）
 
-- [ ] **F3a**（S）`conflict_analysis.bev_video`（預設 false）、尾跡長度等欄位，進 `conflict/config.py`
+- [x] **F3a**（S）`conflict_analysis.bev_video`（預設 false）、尾跡長度等欄位，進 `conflict/config.py`
   - 驗收：缺欄位維持現況；未知值報錯；既有 `ConflictConfig` 預設不變
   - 已決定：`max_side_px` 預設 960、`tail_s` 預設 3 秒
-- [ ] **F3b**（M）`conflict/bev.py`：逐幀繪製函式（衛星圖底圖、軌跡尾跡與 ID、速度 km/h）
+- [x] **F3b**（M）`conflict/bev.py`：逐幀繪製函式（衛星圖底圖、軌跡尾跡與 ID、速度 km/h）
   - 驗收：輸入輸出形狀與尺寸；已知軌跡在已知像素有繪製；不測影片像素
-- [ ] **F3c**（M）runner 輸出 `conflict/bev.mp4`，沿用 `VideoWriterWithFfmpeg`
+- [x] **F3c**（M）runner 輸出 `conflict/bev.mp4`，沿用 `VideoWriterWithFfmpeg`
   - 驗收：關閉不產生檔案；開啟時對可用鏡頭產生非空 mp4；m/px 不可用或無衛星圖 → `summary.json` 記錄原因
-- [ ] **F3d**（S）疊加衝突事件配對連線，及計數線與累計數（F2 開啟時）
+- [x] **F3d**（S）疊加衝突事件配對連線，及計數線與累計數（F2 開啟時）
   - 驗收：F2 關閉時畫面不含計數線元素
-- [ ] **F3e**（S）文件
+- [x] **F3e**（S）文件｜`Markdown/bev/bev-video-guide.md`、`README.md`
 
 ### 檢查點 F3
-- [ ] 測試通過；用一支真實序列產生一次 `bev.mp4` 並實際檢視（同一次實跑一併驗證計數線；需先用選點器畫一條線；先告知範圍再執行）；既有 `conflict` 輸出不變；審閱
+- [x] 測試通過；用一支真實序列產生一次 `bev.mp4` 並實際檢視（同一次實跑一併驗證計數線；需先用選點器畫一條線；先告知範圍再執行）；既有 `conflict` 輸出不變；審閱
 
 ---
 
