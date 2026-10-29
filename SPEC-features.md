@@ -96,7 +96,7 @@ Markdown/                                        每個功能補對應教學（�
   lines:
     - name: north_gate
       points: [[120, 300], [480, 310]]   # 畫線順序 p1 → p2
-      forward_label: southbound          # 沿 p1→p2 看（影像座標，y 向下），從左側穿越到右側
+      forward_label: southbound          # 可省略（Q62：預設由程式依方向自動判斷）；沿 p1→p2 看（影像座標，y 向下），從左側穿越到右側
       backward_label: northbound         # 反向；兩個標籤皆可省略，預設 "forward"／"backward"
   ```
 
@@ -208,6 +208,7 @@ F1 → F2 → F3 → F4。F1 最先，因為 F2、F4 需要它取得資料；F3 
 | Q59 | 只算陰影、不含車體；視點在矩形內時該物件當幀不產生陰影並計數 |
 | Q60 | 朝向門檻沿用 `min_speed_mps`；遮蔽物用不過濾 ROI 的全部軌跡 |
 | Q61 | `blind_area.csv` 欄位如 F4；F2 合併前不單獨實跑，改在 F3 檢查點以同一支真實序列實跑 |
+| Q62 | 計數線方向標籤由程式自動判斷：有 Homography 為 8 個羅盤方向（`northbound`…）、否則畫面方向（`up`…）；不寫進 YAML、可手寫覆寫、`summary.json` 記錄 `label_source`；頁面只畫線並以箭頭標示 forward |
 
 待實作時確認（不阻擋規格）：
 1. ~~盲區的多邊形運算要不要用 `shapely`~~ 已決定不用（Q58）。

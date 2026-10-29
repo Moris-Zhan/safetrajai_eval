@@ -8,7 +8,7 @@ stage3 的選用功能：統計車輛、機車、行人等穿越指定線段的�
 python scripts/picker/make_picker.py --camera C000025 --mode counting-lines
 ```
 
-在瀏覽器的 CCTV 首幀每兩點畫一條線，可命名並填方向標籤，複製或下載 YAML，存成 `config/counting_lines/<camera>.yaml`（步驟見 [`Markdown/picker/picker-guide.md`](../picker/picker-guide.md)）：
+在瀏覽器的 CCTV 首幀每兩點畫一條線，可命名（可省略，預設 `line_1`、`line_2`…），頁面用黃色箭頭標示 forward 的穿越方向；複製或下載 YAML，存成 `config/counting_lines/<camera>.yaml`（步驟見 [`Markdown/picker/picker-guide.md`](../picker/picker-guide.md)）：
 
 ```yaml
 camera: C000025
@@ -16,8 +16,8 @@ image_size: [640, 480]       # 必須與影片解析度一致，否則報錯（�
 lines:
   - name: north_gate         # 名稱不可空白或重複
     points: [[120, 300], [480, 310]]   # 畫線順序 p1 → p2
-    forward_label: southbound          # 可省略，預設 "forward"
-    backward_label: northbound         # 可省略，預設 "backward"
+    forward_label: southbound          # 可省略：預設由程式依線的方向自動判斷（見下）
+    backward_label: northbound         # 可省略
 ```
 
 ## 2. 開啟
@@ -51,6 +51,17 @@ counting:
 | 垂直線，由下畫到上 | 由左往右 | 由右往左 |
 
 斜線同一個規則。要讓某個方向剛好是 forward，就先決定好行進方向再決定線要從哪一端畫起；畫反了不會出錯，只是 forward 與 backward 的數字（與標籤）互換。
+
+### 方向標籤自動判斷
+
+頁面只負責畫線；`forward`／`backward` 的標籤由程式在執行時依線的方向決定，不寫進 YAML：
+
+- **有 Homography 的鏡頭**：把方向換到衛星圖（上方為北），標籤為 8 個羅盤方向：`northbound`、`northeastbound`、`eastbound`、`southeastbound`、`southbound`、`southwestbound`、`westbound`、`northwestbound`。
+- **沒有 Homography 的鏡頭**：退回畫面方向：`up`、`up_right`、`right`、`down_right`、`down`、`down_left`、`left`、`up_left`。之後補上 Homography，標籤會自動升級成羅盤方向，不必重畫。
+- 標籤描述的是**車輛在該方向穿越時的行進方向**（水平線由左畫到右、畫面上方為北時，forward 是 `southbound`）。
+- 在 YAML 手寫 `forward_label`／`backward_label` 仍然有效並優先；兩個方向各自判斷，只寫一個時另一個仍自動推得。
+- `summary.json` 每條線記錄 `label_source`（`manual`／`compass`／`screen`），看得出標籤怎麼來的。
+- 鳥瞰影片的計數面板使用 OpenCV 內建字型，**畫不出中文**，所以自動標籤一律是英文；手寫中文標籤只會出現在 `counts.csv`／`summary.json`，影片面板會變成問號。
 
 ## 4. 輸出：`collision_output/<seq>/counting/`
 
