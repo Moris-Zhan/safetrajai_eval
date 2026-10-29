@@ -193,13 +193,13 @@
 ## 階段 4：交付
 
 ### T9：交付報告
-- [ ] 淨減行數（`git diff main --shortstat`）
-- [ ] D 級 9 個疑似死碼清單（保留，供使用者日後決定）
-- [ ] 聲明 golden「未跑」及理由；若中途有任何輸出差異需列出
-- [ ] 殘餘待辦：上游 LICENSE 是否補上、`Sub_Module.md` 過時、文件盤點（`docs/` 已移出 repo）、`SPEC-features.md` 的啟動
+- [x] 淨減行數（`git diff main --shortstat`）（淨 −522 行，見 `tasks/delivery-report.md`）
+- [x] D 級 9 個疑似死碼清單（保留，供使用者日後決定）
+- [x] 聲明 golden「未跑」及理由；若中途有任何輸出差異需列出（實際已跑兩次且 identical，報告第 5 節說明與規格的差異）
+- [x] 殘餘待辦：上游 LICENSE 是否補上、`Sub_Module.md` 過時、文件盤點（`docs/` 已移出 repo）、`SPEC-features.md` 的啟動
 - 依賴：全部
 
 ### 檢查點 D（完成）
-- [ ] SPEC 第 9 節成功標準逐項通過
-- [ ] 「絕對不做」清單零違反
+- [x] SPEC 第 9 節成功標準逐項通過（逐項結果見報告第 2 節）
+- [x] 「絕對不做」清單零違反
 - [ ] 使用者核准合併；之後才開始 `SPEC-features.md`
