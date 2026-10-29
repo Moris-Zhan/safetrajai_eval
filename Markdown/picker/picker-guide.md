@@ -38,3 +38,11 @@ python scripts/picker/serve_picker.py --host 127.0.0.1 # 只開本機，配合 S
 - **只有純 HTTP，沒有加密**：只在信任的網路（內網、VPN）使用；不信任的網路請改走 SSH 通道或 `kubectl port-forward` 並用 `--host 127.0.0.1`。不要直接暴露到公開網路。
 - 路由只認列出的鏡頭與四種模式，請求路徑不會碰到檔案系統。
 - 選點後仍是在頁面上複製或下載 YAML，再自行放進 `config/`；服務不會寫入任何設定檔。
+
+### 背景啟動
+
+```bash
+bash scripts/picker/start_picker_service.sh     # 背景啟動；該連接埠已有服務回應時什麼都不做
+```
+
+環境變數 `PICKER_PORT`（預設 8765）、`PICKER_LOG`（預設 `runs/picker/server.log`，權限 600，被 git 忽略）。日誌第一行含帶權杖的網址。服務是普通的背景行程，pod 重啟後要再執行一次。
