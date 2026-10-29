@@ -161,30 +161,30 @@
 
 ### T6：B 級消除重複邏輯（每項一個 commit；先寫特徵化測試再抽取）
 
-- [ ] **B2**：新增 `grid_search/cli.py`，抽出三支腳本 `main()` 後段約 100 行共用邏輯；各腳本只保留 `PARAM_GRIDS`、預設值與 botsort 專屬參數；保留 `imgsz=1280`／`gmc` 等寫死值、botsort `model` 候選重複的 `yolo11x.pt`、`--model`｜M｜驗證：`--help` 與六類加 `_default` 的 `--dry-run` 逐位元相同
-- [ ] **B3**：影片尺寸讀取 helper（`tracking_pipeline` 2 處、`core.score_params`、`run_stage3`）；不併入 `get_video_wh()`｜S
-- [ ] **B4**：序列檔名縮短邏輯（`" 中華三路 民生二路(東北角)_"` 的 replace，`sequence_tracker.py`、`core.py`）｜S｜驗證：新增特徵化測試
-- [ ] **B1**：共用的 label 寫出邏輯（`sequence_tracker._process_frame` 與 `core._run_tracking_for_video`）；**先確認是否動到 pipeline 行為路徑，是則停下來問使用者是否跑 golden**｜M
-- [ ] **B5**：合併兩支視覺化腳本的共用部分（`CLASS_COLORS`、`_color_for_id`、`parse_seqinfo`、`draw_gt_on_frame`），逐位元保留現行行為｜M
-- [ ] **B6**：`stage3` 的 `_ensure_stage1_output_exists()` 後的重複掃描，保留 soft-skip 行為｜S
-- [ ] **B7**：`excel_export.py:240-262` 的 `key_means`／`key_mid` 以後綴參數化｜S｜驗證：合成資料逐格比對
-- [ ] **B8**：預設類別清單改由 `classes.py` 推導（先確認匯出方式）｜XS
-- [ ] **B9**：`excel_export.py:354-384` DET 曲線的巢狀 `downsample_idx` 與重複分支｜S｜驗證：合成資料逐格比對
-- [ ] **B10**：`file_md5` 與 `md5_file`：先確認呼叫端，傳回值型別不同，無法安全合併就不做並回報｜XS
+- [x] **B2**：新增 `grid_search/cli.py`，抽出三支腳本 `main()` 後段約 100 行共用邏輯；各腳本只保留 `PARAM_GRIDS`、預設值與 botsort 專屬參數；保留 `imgsz=1280`／`gmc` 等寫死值、botsort `model` 候選重複的 `yolo11x.pt`、`--model`｜M｜驗證：`--help` 與六類加 `_default` 的 `--dry-run` 逐位元相同
+- [x] **B3**：影片尺寸讀取 helper（`tracking_pipeline` 2 處、`core.score_params`、`run_stage3`）；不併入 `get_video_wh()`｜S
+- [x] **B4**：序列檔名縮短邏輯（`" 中華三路 民生二路(東北角)_"` 的 replace，`sequence_tracker.py`、`core.py`）｜S｜驗證：新增特徵化測試
+- [x] **B1**：共用的 label 寫出邏輯（`sequence_tracker._process_frame` 與 `core._run_tracking_for_video`）；**先確認是否動到 pipeline 行為路徑，是則停下來問使用者是否跑 golden**｜M
+- [x] **B5**：合併兩支視覺化腳本的共用部分（`CLASS_COLORS`、`_color_for_id`、`parse_seqinfo`、`draw_gt_on_frame`），逐位元保留現行行為｜M
+- [x] **B6**：`stage3` 的 `_ensure_stage1_output_exists()` 後的重複掃描，保留 soft-skip 行為｜S
+- [x] **B7**：`excel_export.py:240-262` 的 `key_means`／`key_mid` 以後綴參數化｜S｜驗證：合成資料逐格比對
+- [x] **B8**：預設類別清單改由 `classes.py` 推導（先確認匯出方式）｜XS
+- [x] **B9**：`excel_export.py:354-384` DET 曲線的巢狀 `downsample_idx` 與重複分支｜S｜驗證：合成資料逐格比對
+- [x] **B10**：`file_md5` 與 `md5_file`：先確認呼叫端，傳回值型別不同，無法安全合併就不做並回報｜XS｜結果：評估後不做（回傳型別不同，不改呼叫端無法合併）
 
 ### 檢查點 C（T6 完成後）
-- [ ] `pytest` 全過，新增特徵化測試；`--help`／`--dry-run` 與基準相同
-- [ ] 第一方程式碼淨減少行數；無新增循環 import
+- [x] `pytest` 全過，新增特徵化測試；`--help`／`--dry-run` 與基準相同（790 passed, 11 skipped；golden 於 T5 後與 B1 後各跑一次，皆 identical）
+- [x] 第一方程式碼淨減少行數；無新增循環 import（第一方 .py 17,202 → 16,680 行，淨 −522；tests +614 行；追蹤檔案 446 → 320）
 - [ ] **與使用者一起審閱再繼續**
 
 ### T7：視覺化類別顏色修正（行為變更）
-- [ ] 先寫失敗測試：`visualize_gt_on_video.py` 的 `CLASS_COLORS` 以 0 起算、GT `class_id` 以 1 起算，目前每個類別拿到上一個類別的顏色
-- [ ] 修正對照；commit message 標明這是行為變更
+- [x] 先寫失敗測試：`visualize_gt_on_video.py` 的 `CLASS_COLORS` 以 0 起算、GT `class_id` 以 1 起算，目前每個類別拿到上一個類別的顏色
+- [x] 修正對照；commit message 標明這是行為變更
 - 驗收：新測試通過；輸出影片顏色變更寫入 commit message
 - 依賴：B5｜規模：S
 
 ### T8：雜項
-- [ ] `git mv ".claude/agents/project-manger copy.md" ".claude/agents/qa-engineer.md"`，內容不動
+- [x] `git mv ".claude/agents/project-manger copy.md" ".claude/agents/qa-engineer.md"`，內容不動
 - 驗收：`pytest`
 - 依賴：無｜規模：XS
 
