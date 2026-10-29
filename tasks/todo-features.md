@@ -65,7 +65,7 @@
 
 ## 階段 4：F4 盲區分析（分支 `feature/blind-area`）
 
-- [ ] **F4a**（S）`blind_area` 設定（`enabled`、`occluder_classes`）與 `object_width_m`（預設 car 1.8、small_truck 2.0、bus 2.5、truck 2.5）
+- [x] **F4a**（S）`blind_area` 設定（`enabled`、`occluder_classes`）與 `object_width_m`（預設 car 1.8、small_truck 2.0、bus 2.5、truck 2.5）
   - 驗收：預設關閉；類別必須在 6 類內；寬度為 6 類都給值且為正數
 - [ ] **F4b**（M）`conflict/blind_area.py`：矩形＋視點 → 陰影多邊形；與 ROI 相交；面積比例
   - 驗收：合成矩形與已知視點，面積比例與手算值一致（容許誤差寫進測試）；視點在矩形內等退化情況有明確行為
