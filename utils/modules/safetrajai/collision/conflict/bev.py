@@ -86,6 +86,8 @@ def _font_scale(image: np.ndarray) -> float:
 def _draw_legend(image: np.ndarray) -> None:
     font = _font_scale(image)
     row = int(30 * font) + 3
+    text_width = max(cv2.getTextSize(name, cv2.FONT_HERSHEY_SIMPLEX, font, 1)[0][0] for name in CLASS_ORDER)
+    cv2.rectangle(image, (0, 0), (12 + row + text_width, 8 + row * len(CLASS_ORDER)), _PANEL_BGR, -1)
     for index, class_name in enumerate(CLASS_ORDER):
         top = 4 + index * row
         cv2.rectangle(image, (4, top), (4 + row - 3, top + row - 3), CLASS_COLORS_BGR[class_name], -1)
