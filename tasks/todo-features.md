@@ -4,7 +4,7 @@
 > 規模：XS 1 檔／S 1–2 檔／M 3–5 檔。
 
 通用驗證（每個任務都做）：
-- [ ] 完整 `pytest` 通過（只增不減；目前 899 passed, 11 skipped）
+- [ ] 完整 `pytest` 通過（只增不減；目前 907 passed, 11 skipped）
 - [ ] `git diff --stat` 未觸及 `Sub_Module/`、tracker override、`utils/modules/_vendor/trackeval/`、`utils/model.py`、`tests/golden/`
 - [ ] 新功能關閉（預設）時既有輸出不變
 
@@ -33,7 +33,7 @@
   - 驗收：方向（左→右 forward，與 SPEC 範例一致）、交點在線段外不算、同軌跡同線同方向只計一次、來回各一次、類別分組、抖動不重複計數
   - 驗證：`pytest tests/test_counting_crossing.py`（手算案例；變異檢查：方向對調、移除線段範圍檢查皆使測試失敗）
   - 依賴：F2a｜檔案：`crossing.py`、測試
-- [ ] **F2d**（M）`counting/runner.py` 與 `run_stage3()` 接線，輸出 `counts.csv`、`summary.json`
+- [x] **F2d**（M）`counting/runner.py` 與 `run_stage3()` 接線，輸出 `counts.csv`、`summary.json`
   - 驗收：無設定檔 → 只寫 `summary.json` 並 `skipped_reason: no_counting_lines`；`limitations` 含 ID 切換與 stage1 不依 ROI 過濾；`enabled: false` 時 stage3 既有輸出與呼叫不變
   - 驗證：合成序列端對端測試；`tests/test_stage3_sequences.py` 延伸（開／關兩種）
   - 依賴：F2b、F2c｜檔案：`runner.py`、`tracking_pipeline.py`、測試
