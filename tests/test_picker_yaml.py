@@ -106,6 +106,17 @@ def test_counting_lines_keep_the_documented_structure() -> None:
     }
 
 
+def test_counting_line_text_values_are_json_quoted_and_empty_labels_are_dropped() -> None:
+    text = counting_lines_yaml("C000025", (640, 480), [
+        {"name": "north gate: 北門", "points": [[1, 2], [3, 4]], "forward_label": "", "backward_label": "a\"b"},
+    ])
+
+    assert '  - name: "north gate: 北門"' in text
+    assert '    backward_label: "a\\"b"' in text
+    assert "forward_label" not in text
+    assert yaml.safe_load(text)["lines"][0] == {"name": "north gate: 北門", "points": [[1, 2], [3, 4]], "backward_label": 'a"b'}
+
+
 @pytest.mark.parametrize("lines", [
     [],                                                                           # no lines
     [{"name": "a", "points": [[1, 2]]}],                                          # one point

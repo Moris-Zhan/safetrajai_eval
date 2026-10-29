@@ -7,11 +7,16 @@ so that update_camera_config_fields can still rewrite them later.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping, Sequence
 
 from safetrajai.collision.homography.camera_config import format_yaml_value
 
 MIN_HOMOGRAPHY_POINTS = 4
+
+
+def _quoted(text: str) -> str:
+    return json.dumps(text, ensure_ascii=False)
 
 
 def _number(value: Any) -> bool:
@@ -81,7 +86,7 @@ def _counting_line(line: Mapping[str, Any], index: int) -> dict:
         raise ValueError(f"{label}.points 兩個點相同，線段長度為 0")
     result = {"name": name, "points": points}
     for key in ("forward_label", "backward_label"):
-        if line.get(key) is not None:
+        if line.get(key) not in (None, ""):
             if not isinstance(line[key], str):
                 raise ValueError(f"{label}.{key} 必須是文字")
             result[key] = line[key]
@@ -106,9 +111,9 @@ def counting_lines_yaml(camera: str, image_size: Sequence, lines: Sequence[Mappi
         "lines:",
     ]
     for line in checked:
-        out.append(f"  - name: {format_yaml_value(line['name'])}")
+        out.append(f"  - name: {_quoted(line['name'])}")
         out.append(f"    points: {format_yaml_value(line['points'])}")
         for key in ("forward_label", "backward_label"):
             if key in line:
-                out.append(f"    {key}: {format_yaml_value(line[key])}")
+                out.append(f"    {key}: {_quoted(line[key])}")
     return "\n".join(out) + "\n"
