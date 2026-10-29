@@ -76,6 +76,9 @@ python scripts/reid_train/acceptance_grid.py configs --name <run> [--subsets tun
 #   執行：python track_eval.py --config runs/reid_domain/accept/configs/<run>_tune.yaml > runs/reid_domain/accept/<run>/tune/run.log 2>&1
 python scripts/reid_train/acceptance_grid.py summarize --baseline baseline --runs <run...> --out <prefix>  # 逐類別彙總與 spec 判定（CSV＋Markdown）
 
+# 網頁選點器（輸出 runs/picker/，不修改 config）：homography｜checkpoints｜counting-lines｜camera-position
+python scripts/picker/make_picker.py --camera <cam> --mode homography
+
 # 在序列影片上疊 GT／追蹤結果
 python scripts/visualization/visualize_gt_on_video.py --trackeval_root <path> --video_path <path> --output_video <path>
 ```
@@ -93,7 +96,7 @@ python scripts/visualization/visualize_gt_on_video.py --trackeval_root <path> --
 ```
 track_eval.py                相容入口 wrapper → safetrajai.cli.run_pipeline.main()
 scripts/                     CLI，依功能分資料夾：pipeline/（run_pipeline、run_evaluation）、grid_search/、homography/（validate_homography 等）、
-                             visualization/（visualize_gt_*）、picker/（ROI 選點器）、reid_data/（Re-ID 資料切分與稽核）、reid_train/
+                             visualization/（visualize_gt_*）、picker/（ROI 選點器、make_picker.py 多模式網頁選點器）、reid_data/（Re-ID 資料切分與稽核）、reid_train/
 utils/modules/safetrajai/
   paths.py                   唯一的 PROJECT_ROOT／CONFIG_DIR（需要定位 repo 內檔案時一律用它）
   classes.py                 類別 ID 契約（CLASS_NAMES、MOT_CLASS_ID）
