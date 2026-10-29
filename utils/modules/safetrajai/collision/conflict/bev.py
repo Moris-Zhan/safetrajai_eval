@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from safetrajai.classes import CLASS_NAMES
+from safetrajai.collision.counting.crossing import Crossing
 from safetrajai.pipeline.video_io import VideoWriterWithFfmpeg
 
 from .config import BevVideoConfig
@@ -26,6 +27,9 @@ CLASS_COLORS_BGR: Dict[str, Tuple[int, int, int]] = {
     "small_truck": (255, 200, 0), "bus": (0, 0, 255), "truck": (255, 0, 0),
 }
 _WHITE = (255, 255, 255)
+_EVENT_LINK_BGR = (0, 0, 255)
+_COUNTING_LINE_BGR = (0, 255, 255)
+_PANEL_BGR = (30, 30, 30)
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,39 @@ class BevTrack:
     frames: np.ndarray      # (N,) int, ascending
     map_xy: np.ndarray      # (N, 2) satellite-image pixels, unscaled
     speed_kmh: np.ndarray   # (N,) NaN where unknown
+
+
+@dataclass(frozen=True)
+class BevEvent:
+    """A conflict event: tracks i and j (indices into the drawn tracks) are linked from start to end frame."""
+    start_frame: int
+    end_frame: int
+    i: int
+    j: int
+
+
+@dataclass(frozen=True)
+class BevCountingLine:
+    name: str
+    p1: Tuple[float, float]   # satellite-image pixels, unscaled
+    p2: Tuple[float, float]
+    forward_label: str
+    backward_label: str
+
+
+@dataclass(frozen=True)
+class BevCounting:
+    lines: Tuple[BevCountingLine, ...]
+    crossings: Tuple[Crossing, ...]
+
+
+def cumulative_counts(counting: BevCounting, frame: int) -> Dict[Tuple[str, str], int]:
+    """Crossings up to and including `frame`, all classes, for every line and both directions."""
+    counts = {(line.name, direction): 0 for line in counting.lines for direction in ("forward", "backward")}
+    for crossing in counting.crossings:
+        if crossing.frame <= frame:
+            counts[(crossing.line, crossing.direction)] += 1
+    return counts
 
 
 def bev_scale(size_wh: Tuple[int, int], max_side_px: int) -> float:
@@ -55,13 +92,44 @@ def _draw_legend(image: np.ndarray) -> None:
         cv2.putText(image, class_name, (8 + row, top + row - 4), cv2.FONT_HERSHEY_SIMPLEX, font, _WHITE, 1, cv2.LINE_AA)
 
 
+def _draw_counting(out: np.ndarray, scale: float, frame: int, counting: BevCounting) -> None:
+    font = _font_scale(out)
+    for line in counting.lines:
+        p1 = tuple(int(v) for v in np.rint(np.array(line.p1) * scale))
+        p2 = tuple(int(v) for v in np.rint(np.array(line.p2) * scale))
+        cv2.line(out, p1, p2, _COUNTING_LINE_BGR, 2)
+    counts = cumulative_counts(counting, frame)
+    rows = [f"{l.name}  {l.forward_label} {counts[(l.name, 'forward')]} / {l.backward_label} {counts[(l.name, 'backward')]}"
+            for l in counting.lines]
+    sizes = [cv2.getTextSize(r, cv2.FONT_HERSHEY_SIMPLEX, font, 1)[0] for r in rows]
+    row_h = int(30 * font) + 6
+    width = max(w for w, _ in sizes) + 8
+    left = out.shape[1] - width - 4
+    cv2.rectangle(out, (left, 4), (left + width, 4 + row_h * len(rows) + 2), _PANEL_BGR, -1)
+    for index, row in enumerate(rows):
+        cv2.putText(out, row, (left + 4, 4 + row_h * (index + 1) - 3), cv2.FONT_HERSHEY_SIMPLEX, font, _WHITE, 1, cv2.LINE_AA)
+
+
 def draw_bev_frame(
     image: np.ndarray, scale: float, frame: int, tracks: Sequence[BevTrack], tail_frames: int,
+    *, events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None,
 ) -> np.ndarray:
     """A copy of `image` with the tracks present at `frame` (trail of the last `tail_frames` frames, id, speed)."""
     out = image.copy()
     font = _font_scale(out)
     radius = max(2, int(round(10 * font)))
+    if counting is not None:
+        _draw_counting(out, scale, frame, counting)
+    for event in events:
+        if not event.start_frame <= frame <= event.end_frame:
+            continue
+        ends = []
+        for track in (tracks[event.i], tracks[event.j]):
+            at = np.flatnonzero(track.frames == frame)
+            if len(at):
+                ends.append(tuple(int(v) for v in np.rint(track.map_xy[at[0]] * scale)))
+        if len(ends) == 2:
+            cv2.line(out, ends[0], ends[1], _EVENT_LINK_BGR, 1)
     for track in tracks:
         current = np.flatnonzero(track.frames == frame)
         if not len(current):
@@ -87,6 +155,7 @@ def bev_tracks(kins: Sequence[Kinematics]) -> Tuple[BevTrack, ...]:
 
 def write_bev_video(
     out_path: Path, background: np.ndarray, tracks: Sequence[BevTrack], cfg: BevVideoConfig, fps: float,
+    events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None,
 ) -> Dict[str, Any]:
     """Write `out_path` from the first to the last frame that has a track; returns what was written."""
     if not tracks:
@@ -101,7 +170,13 @@ def write_bev_video(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     writer = VideoWriterWithFfmpeg(out_path, 5, out_w, out_h)
     for frame in range(first, last + 1):
-        writer.write(draw_bev_frame(base, scale, frame, tracks, tail_frames))
+        writer.write(draw_bev_frame(base, scale, frame, tracks, tail_frames, events=events, counting=counting))
     writer.close()
-    return {"written": True, "frames": last - first + 1, "size": [out_w, out_h], "scale": scale,
-            "tail_frames": tail_frames}
+    info = {"written": True, "frames": last - first + 1, "size": [out_w, out_h], "scale": scale,
+            "tail_frames": tail_frames, "event_links": len(events)}
+    if counting is not None:
+        final = cumulative_counts(counting, last)
+        info["counting"] = {"lines": [l.name for l in counting.lines],
+                            "final_counts": {l.name: {d: final[(l.name, d)] for d in ("forward", "backward")}
+                                             for l in counting.lines}}
+    return info

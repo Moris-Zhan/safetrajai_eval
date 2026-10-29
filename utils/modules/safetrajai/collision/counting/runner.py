@@ -10,19 +10,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
-from safetrajai.classes import CLASS_NAMES
 from safetrajai.collision.conflict.output import write_csv, write_json
-from safetrajai.collision.counting.crossing import CountingTrack, find_crossings
+from safetrajai.collision.counting.crossing import find_crossings
 from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, CountingLine, resolve_counting_lines
-from safetrajai.collision.trajectory_adapter import _read_class_trajectory_file
+from safetrajai.collision.counting.tracks import CLASSES, load_counting_tracks
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 
-CLASSES: Tuple[str, ...] = tuple(CLASS_NAMES[i] for i in sorted(CLASS_NAMES))
 DIRECTIONS = ("forward", "backward")
-# Stage1 tracks are not ROI-filtered; the reader wants a polygon, so give it one that holds every box centre.
-_EVERYWHERE = np.array([[-1e9, -1e9], [1e9, -1e9], [1e9, 1e9], [-1e9, 1e9]], dtype=np.float32)
 
 LIMITATIONS: List[Dict[str, str]] = [
     {"code": "id_switches",
@@ -30,19 +24,6 @@ LIMITATIONS: List[Dict[str, str]] = [
     {"code": "not_roi_filtered",
      "detail": "stage1 軌跡不依 ROI 過濾（ADR 0005），計數線在 ROI 外的穿越也會被計入。"},
 ]
-
-
-def _load_tracks(seq_output_dir: Path, cfg) -> Tuple[CountingTrack, ...]:
-    traj_root = seq_output_dir / "trackers" / "mot_challenge" / f"{cfg.benchmark_name}-{cfg.split_name}"
-    tracks = []
-    for class_name in CLASSES:
-        path = traj_root / f"{cfg.tracker_name}__{class_name}" / "data" / f"{seq_output_dir.name}.txt"
-        for track_id, rows in sorted(_read_class_trajectory_file(path, _EVERYWHERE).items()):
-            rows = sorted(rows, key=lambda r: r[0])
-            frames = np.array([r[0] for r in rows], dtype=np.int64)
-            points = np.array([(left + w / 2.0, top + h) for _, left, top, w, h, _ in rows], dtype=np.float64)
-            tracks.append(CountingTrack(class_name, int(track_id), frames, points))
-    return tuple(tracks)
 
 
 def _line_record(line: CountingLine) -> Dict[str, Any]:
@@ -81,7 +62,7 @@ def run_counting_for_sequence(
         print(f"  [{seq_name}] 計數線統計略過（no_counting_lines），只輸出 {out_dir / 'summary.json'}")
         return summary
 
-    tracks = _load_tracks(seq_output_dir, cfg)
+    tracks = load_counting_tracks(seq_output_dir, cfg)
     label = {(line.name, "forward"): line.forward_label for line in lines}
     label.update({(line.name, "backward"): line.backward_label for line in lines})
     running: Counter = Counter()

@@ -673,6 +673,7 @@ def test_golden_compare_treats_equal_infinities_as_identical(monkeypatch) -> Non
 
 def bev_setup(tmp_path, with_satellite: bool = True, **bev_options):
     import dataclasses
+    import types
 
     import cv2
 
@@ -683,6 +684,7 @@ def bev_setup(tmp_path, with_satellite: bool = True, **bev_options):
     satellite_dir = tmp_path / "satellite"
     satellite_dir.mkdir()
     cfg.homography_satellite_dir = satellite_dir
+    cfg.counting = types.SimpleNamespace(enabled=False)
     if with_satellite:
         cv2.imwrite(str(satellite_dir / "T.png"), np.full((640, 640, 3), 80, np.uint8))
     return seq_dir, cfg, out_dir
@@ -739,3 +741,71 @@ def test_missing_satellite_image_skips_only_the_video(tmp_path) -> None:
     summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["bev_video"] == {"written": False, "skipped_reason": "no_satellite_image"}
     assert summary["num_events"] >= 1
+
+
+COUNTING_LINE = "camera: C999001\nimage_size: [640, 480]\nlines:\n  - name: gate\n    points: [[250, 200], [250, 400]]\n"
+
+
+def counting_setup(tmp_path, lines_text: "str | None" = COUNTING_LINE, enabled: bool = True):
+    from safetrajai.collision.counting.config import CountingConfig
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path)
+    lines_dir = tmp_path / "counting_lines"
+    lines_dir.mkdir()
+    if lines_text is not None:
+        (lines_dir / "C999001.yaml").write_text(lines_text, encoding="utf-8")
+    cfg.counting = CountingConfig(enabled=enabled)
+    cfg.counting_lines_dir = lines_dir
+    return seq_dir, cfg, out_dir
+
+
+def test_bev_video_shows_the_counting_lines_when_counting_is_enabled(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = counting_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    bev = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))["bev_video"]
+    assert bev["written"] is True and bev["counting"]["lines"] == ["gate"]
+    assert bev["counting"]["final_counts"] == {"gate": {"forward": 0, "backward": 1}}
+
+
+def test_bev_counts_equal_the_counting_statistics(tmp_path) -> None:
+    import json
+
+    from safetrajai.collision.counting.runner import run_counting_for_sequence
+
+    seq_dir, cfg, out_dir = counting_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+    totals = run_counting_for_sequence(seq_dir, cfg, fps=10.0, bounds=(480, 640), lines_dir=cfg.counting_lines_dir)["totals"]
+
+    shown = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))["bev_video"]["counting"]["final_counts"]
+    assert shown == {line: {d: per_direction["all"] for d, per_direction in directions.items()}
+                     for line, directions in totals.items()}
+
+
+@pytest.mark.parametrize("kwargs", [{"enabled": False}, {"lines_text": None}])
+def test_bev_video_has_no_counting_without_counting_or_lines(tmp_path, kwargs) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = counting_setup(tmp_path, **kwargs)
+    run_entry(seq_dir, cfg)
+
+    assert "counting" not in json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))["bev_video"]
+
+
+def test_counting_lines_with_a_wrong_image_size_are_an_error(tmp_path) -> None:
+    seq_dir, cfg, _ = counting_setup(tmp_path, COUNTING_LINE.replace("[640, 480]", "[1280, 720]"))
+
+    with pytest.raises(ValueError, match="image_size"):
+        run_entry(seq_dir, cfg)
+
+
+def test_bev_video_records_the_conflict_events_it_links(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["bev_video"]["event_links"] == summary["num_events"] >= 1

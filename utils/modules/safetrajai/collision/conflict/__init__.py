@@ -25,11 +25,14 @@ from safetrajai.collision.homography import points as homography_points
 from safetrajai.collision.homography.camera_config import load_camera_config_for_sequence
 from safetrajai.collision.homography.georef import meters_per_pixel
 from safetrajai.collision.homography.points import prebuilt_satellite_image_path
+from safetrajai.collision.counting.crossing import find_crossings
+from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, resolve_counting_lines
+from safetrajai.collision.counting.tracks import load_counting_tracks
 from safetrajai.collision.homography.satellite import image_tag
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 from safetrajai.roi import resolve_roi
 
-from .bev import bev_tracks, write_bev_video
+from .bev import BevCounting, BevCountingLine, BevEvent, bev_tracks, write_bev_video
 from .chains import build_chains
 from .config import ConflictConfig
 from .events import build_events, overlap_at_start_pairs, threshold_counts
@@ -38,7 +41,7 @@ from .kinematics import Kinematics, compute_kinematics, smoothing_window_frames
 from .output import point_columns, records, write_csv, write_json
 from .pairs import build_pairs
 from .pet import compute_pet
-from .tracks import Track, load_tracks
+from .tracks import Track, load_tracks, project_points
 from .ttc import ttc_for_pairs
 
 SMOOTHING_METHOD = "centred_moving_average"
@@ -96,13 +99,30 @@ def _skip(out_dir: Path, seq_name: str, camera: str, tag: Optional[str], reason:
     return summary
 
 
-def _bev_video(out_dir: Path, cfg, seq_name: str, kins, ccfg: ConflictConfig, fps: float) -> Dict[str, Any]:
-    camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_name)
+def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndarray) -> Optional[BevCounting]:
+    if not cfg.counting.enabled:
+        return None
+    lines = resolve_counting_lines(
+        seq_output_dir.name, (bounds[1], bounds[0]), getattr(cfg, "counting_lines_dir", COUNTING_LINES_DIR))
+    if lines is None:
+        return None
+    crossings = find_crossings(load_counting_tracks(seq_output_dir, cfg), lines)
+    projected = tuple(
+        BevCountingLine(line.name, *(tuple(p) for p in project_points(np.array([line.p1, line.p2]), H)),
+                        line.forward_label, line.backward_label) for line in lines)
+    return BevCounting(projected, crossings)
+
+
+def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
+               bounds: Tuple[int, int], H: np.ndarray) -> Dict[str, Any]:
+    camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
     image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
     background = cv2.imread(str(image_path)) if image_path.exists() else None
     if background is None:
         return {"written": False, "skipped_reason": "no_satellite_image"}
-    return write_bev_video(out_dir / "bev.mp4", background, bev_tracks(kins), ccfg.bev_video, fps)
+    links = tuple(BevEvent(e.start_frame, e.end_frame, e.i, e.j) for e in events)
+    counting = _bev_counting(cfg, seq_output_dir, bounds, H)
+    return write_bev_video(out_dir / "bev.mp4", background, bev_tracks(kins), ccfg.bev_video, fps, links, counting)
 
 
 def _pair_frame_columns(kins, pairs, ttc, metrics, neighbours, fps, mpp, H_inv) -> Dict[str, Any]:
@@ -311,7 +331,7 @@ def run_conflict_analysis_for_sequence(
         "limitations": _limitations(ccfg, fps, acceleration_available),
     }
     if ccfg.bev_video.enabled:
-        summary["bev_video"] = _bev_video(out_dir, cfg, seq_name, kins, ccfg, fps)
+        summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H)
         summary["limitations"].append({
             "code": "bev_video_fps",
             "detail": "bev.mp4 的輸出 fps 固定為 5（既有 VideoWriterWithFfmpeg 行為，未修正）；序列不是 5 fps 時，播放速度與實際時間不同。",

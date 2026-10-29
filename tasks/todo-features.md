@@ -4,7 +4,7 @@
 > 規模：XS 1 檔／S 1–2 檔／M 3–5 檔。
 
 通用驗證（每個任務都做）：
-- [ ] 完整 `pytest` 通過（只增不減；目前 932 passed, 11 skipped）
+- [ ] 完整 `pytest` 通過（只增不減；目前 947 passed, 11 skipped）
 - [ ] `git diff --stat` 未觸及 `Sub_Module/`、tracker override、`utils/modules/_vendor/trackeval/`、`utils/model.py`、`tests/golden/`
 - [ ] 新功能關閉（預設）時既有輸出不變
 
@@ -54,7 +54,7 @@
   - 驗收：輸入輸出形狀與尺寸；已知軌跡在已知像素有繪製；不測影片像素
 - [x] **F3c**（M）runner 輸出 `conflict/bev.mp4`，沿用 `VideoWriterWithFfmpeg`
   - 驗收：關閉不產生檔案；開啟時對可用鏡頭產生非空 mp4；m/px 不可用或無衛星圖 → `summary.json` 記錄原因
-- [ ] **F3d**（S）疊加衝突事件配對連線，及計數線與累計數（F2 開啟時）
+- [x] **F3d**（S）疊加衝突事件配對連線，及計數線與累計數（F2 開啟時）
   - 驗收：F2 關閉時畫面不含計數線元素
 - [ ] **F3e**（S）文件
 

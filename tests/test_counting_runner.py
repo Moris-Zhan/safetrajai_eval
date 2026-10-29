@@ -115,3 +115,15 @@ def test_tracks_are_not_filtered_by_a_roi(setup, tmp_path: Path) -> None:
     write_tracks(seq_dir, {"car": [(1, 1, 300, 5), (2, 1, 300, 15)]})   # centre far outside the 64x48 frame
 
     assert run(seq_dir, cfg, lines_dir)["totals"]["gate"]["forward"]["car"] == 1
+
+
+@pytest.mark.parametrize("module", [
+    "safetrajai.collision.counting.runner", "safetrajai.collision.counting.tracks",
+    "safetrajai.collision.conflict", "safetrajai.collision.conflict.bev"])
+def test_counting_and_conflict_modules_import_in_any_order(module: str) -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True, text=True, timeout=120)
+
+    assert result.returncode == 0, result.stderr
