@@ -49,7 +49,7 @@
 
 - [ ] **F3a**（S）`conflict_analysis.bev_video`（預設 false）、尾跡長度等欄位，進 `conflict/config.py`
   - 驗收：缺欄位維持現況；未知值報錯；既有 `ConflictConfig` 預設不變
-  - 待確認：解析度與尾跡長度預設
+  - 已決定：`max_side_px` 預設 960、`tail_s` 預設 3 秒
 - [ ] **F3b**（M）`conflict/bev.py`：逐幀繪製函式（衛星圖底圖、軌跡尾跡與 ID、速度 km/h）
   - 驗收：輸入輸出形狀與尺寸；已知軌跡在已知像素有繪製；不測影片像素
 - [ ] **F3c**（M）runner 輸出 `conflict/bev.mp4`，沿用 `VideoWriterWithFfmpeg`
@@ -59,7 +59,7 @@
 - [ ] **F3e**（S）文件
 
 ### 檢查點 F3
-- [ ] 測試通過；用一支真實序列產生一次 `bev.mp4` 並實際檢視；既有 `conflict` 輸出不變；審閱
+- [ ] 測試通過；用一支真實序列產生一次 `bev.mp4` 並實際檢視（同一次實跑一併驗證計數線；需先用選點器畫一條線；先告知範圍再執行）；既有 `conflict` 輸出不變；審閱
 
 ---
 
@@ -69,7 +69,7 @@
   - 驗收：預設關閉；類別必須在 6 類內；寬度為 6 類都給值且為正數
 - [ ] **F4b**（M）`conflict/blind_area.py`：矩形＋視點 → 陰影多邊形；與 ROI 相交；面積比例
   - 驗收：合成矩形與已知視點，面積比例與手算值一致（容許誤差寫進測試）；視點在矩形內等退化情況有明確行為
-  - 待確認：**是否使用 `shapely`（先問使用者）**；預設以 `cv2`／`numpy`
+  - 已決定：不用 `shapely`，以 `cv2` 光柵化
 - [ ] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
   - 驗收：無 `camera_view_point` 或 m/px 不可用 → `skipped_reason`；`limitations` 含 2D 假設
 - [ ] **F4d**（S）盲區疊進鳥瞰影片
