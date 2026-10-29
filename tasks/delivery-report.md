@@ -1,6 +1,6 @@
 # 重構交付報告
 
-分支 `refactor/simplify-codebase`（從 `main` 分出），共 40 個 commit（含本報告自己的 commit 與合併前的數字修正）。所有數字都是 2026-10-29 當天實測，不是推估。
+分支 `refactor/simplify-codebase`（從 `main` 分出），約 40 個 commit，確切數量以 `git rev-list --count main..refactor/simplify-codebase` 為準（合併前為 41）。所有數字都是 2026-10-29 當天實測，不是推估。
 
 ## 1. 結論
 
