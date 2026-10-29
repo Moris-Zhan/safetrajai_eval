@@ -87,3 +87,31 @@ def test_image_size_mismatch_is_an_error_not_a_rescale(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="image_size"):
         resolve_counting_lines(SEQ_NAME, (1280, 720), tmp_path)
+
+
+def test_counting_block_defaults_to_disabled_and_is_read_by_app_config() -> None:
+    from safetrajai.evaluation.config_loader import AppConfig
+
+    assert AppConfig({}).counting.enabled is False
+    assert AppConfig({"counting": {}}).counting.enabled is False
+    assert AppConfig({"counting": {"enabled": True}}).counting.enabled is True
+
+
+@pytest.mark.parametrize("block, message", [
+    ({"enabled": "yes"}, "enabled"),
+    ({"enabled": True, "threshold": 1}, "threshold"),
+    ("on", "counting"),
+])
+def test_bad_counting_blocks_are_rejected(block, message: str) -> None:
+    from safetrajai.collision.counting.config import load_counting_config
+
+    with pytest.raises(ValueError, match=message):
+        load_counting_config(block)
+
+
+def test_existing_scenario_configs_keep_counting_disabled() -> None:
+    from safetrajai.evaluation.config_loader import load_config
+    from safetrajai.paths import CONFIG_DIR
+
+    for path in sorted((CONFIG_DIR / "collision").glob("*.yaml")):
+        assert load_config(str(path)).counting.enabled is False, path
