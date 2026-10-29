@@ -38,7 +38,7 @@
   - 驗證：合成序列端對端測試；`tests/test_stage3_sequences.py` 延伸（開／關兩種）
   - 依賴：F2b、F2c｜檔案：`runner.py`、`tracking_pipeline.py`、測試
   - 待確認：`counts.csv` 欄位與取樣（見計畫待確認事項 2）
-- [ ] **F2e**（S）文件｜`Markdown/` 教學（座標空間、去重規則、輸出欄位）、`README.md`、`CLAUDE.md`、`SPEC-features.md` 補決策
+- [x] **F2e**（S）文件｜`Markdown/` 教學（座標空間、去重規則、輸出欄位）、`README.md`、`CLAUDE.md`、`SPEC-features.md` 補決策
 
 ### 檢查點 F2
 - [ ] 全部測試通過；關閉時既有輸出不變；與使用者審閱後合併 `feature/counting-lines` 並開 F3
