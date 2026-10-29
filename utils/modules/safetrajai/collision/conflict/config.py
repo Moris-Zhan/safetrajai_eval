@@ -20,6 +20,10 @@ CLASSES: Tuple[str, ...] = tuple(CLASS_NAMES[i] for i in sorted(CLASS_NAMES))
 DEFAULT_OBJECT_LENGTH_M: Mapping[str, float] = {
     "person": 0.4, "car": 5.0, "scooter": 1.8, "small_truck": 6.0, "bus": 12.0, "truck": 7.0,
 }
+# Body width for the blind-area rectangles; person and scooter are never occluders by default.
+DEFAULT_OBJECT_WIDTH_M: Mapping[str, float] = {
+    "person": 0.5, "car": 1.8, "scooter": 0.8, "small_truck": 2.0, "bus": 2.5, "truck": 2.5,
+}
 DEFAULT_OBJECT_MASS_KG: Mapping[str, float] = {
     "person": 70.0, "car": 2150.0, "scooter": 200.0, "small_truck": 5000.0, "bus": 16000.0, "truck": 17000.0,
 }
@@ -41,6 +45,12 @@ class BevVideoConfig:
     enabled: bool = False
     max_side_px: int = 960
     tail_s: float = 3.0
+
+
+@dataclass(frozen=True)
+class BlindAreaConfig:
+    enabled: bool = False
+    occluder_classes: Tuple[str, ...] = ("car", "small_truck", "bus", "truck")
 
 
 @dataclass(frozen=True)
@@ -75,8 +85,10 @@ class ConflictConfig:
     # class properties
     object_length_m: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_OBJECT_LENGTH_M))
     object_mass_kg: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_OBJECT_MASS_KG))
+    object_width_m: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_OBJECT_WIDTH_M))
     # optional outputs (off by default)
     bev_video: BevVideoConfig = BevVideoConfig()
+    blind_area: BlindAreaConfig = BlindAreaConfig()
 
     def collision_distance_m(self, class_a: str, class_b: str) -> float:
         if self.ttc_distance_mode == "class_length":
@@ -139,6 +151,27 @@ def _bev_video(value: Any) -> BevVideoConfig:
     return BevVideoConfig(enabled=enabled, max_side_px=max_side, tail_s=float(tail))
 
 
+def _blind_area(value: Any) -> BlindAreaConfig:
+    """`blind_area: true` or a block {enabled, occluder_classes}."""
+    if isinstance(value, bool):
+        return BlindAreaConfig(enabled=value)
+    if not isinstance(value, Mapping):
+        raise ValueError(f"conflict_analysis.blind_area 必須是 true／false 或設定區塊，目前是 {value!r}")
+    unknown = sorted(set(value) - {f.name for f in fields(BlindAreaConfig)})
+    if unknown:
+        raise ValueError(f"conflict_analysis.blind_area 有未知欄位：{unknown}")
+    enabled = value.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError(f"conflict_analysis.blind_area.enabled 必須是 true 或 false，目前是 {enabled!r}")
+    occluders = value.get("occluder_classes", BlindAreaConfig.occluder_classes)
+    if isinstance(occluders, str) or not isinstance(occluders, (list, tuple)) or not occluders:
+        raise ValueError(f"conflict_analysis.blind_area.occluder_classes 必須是非空的類別清單，目前是 {occluders!r}")
+    unknown_classes = sorted({str(c) for c in occluders} - set(CLASSES))
+    if unknown_classes:
+        raise ValueError(f"conflict_analysis.blind_area.occluder_classes 含未知類別：{unknown_classes}")
+    return BlindAreaConfig(enabled=enabled, occluder_classes=tuple(dict.fromkeys(str(c) for c in occluders)))
+
+
 def load_conflict_config(block: Optional[Mapping[str, Any]]) -> ConflictConfig:
     """Validate the `conflict_analysis:` block; a missing block means disabled."""
     if not block:
@@ -163,10 +196,12 @@ def load_conflict_config(block: Optional[Mapping[str, Any]]) -> ConflictConfig:
         values["class_pairs"] = _class_pairs(values["class_pairs"])
     if "stat_thresholds_s" in values:
         values["stat_thresholds_s"] = tuple(float(t) for t in values["stat_thresholds_s"])
-    for name in ("object_length_m", "object_mass_kg"):
+    for name in ("object_length_m", "object_mass_kg", "object_width_m"):
         if name in values:
             values[name] = _class_map(values[name], name)
     if "bev_video" in values:
         values["bev_video"] = _bev_video(values["bev_video"])
+    if "blind_area" in values:
+        values["blind_area"] = _blind_area(values["blind_area"])
     values["enabled"] = bool(values.get("enabled", False))
     return ConflictConfig(**values)
