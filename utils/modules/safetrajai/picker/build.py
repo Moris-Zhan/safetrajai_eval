@@ -33,6 +33,14 @@ def raw_videos_root() -> Path:
     return (PROJECT_ROOT / raw_roots.pop()).resolve()
 
 
+def list_cameras(videos_root: Path | None = None) -> List[str]:
+    """Camera folders under the raw video root that hold at least one mp4 (the `temp` quarantine is skipped)."""
+    root = videos_root if videos_root is not None else raw_videos_root()
+    return sorted(
+        d.name for d in Path(root).iterdir()
+        if d.is_dir() and d.name != "temp" and next(d.glob("*.mp4"), None) is not None)
+
+
 def _picker_image(name: str, frame) -> PickerImage:
     height, width = frame.shape[:2]
     ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
