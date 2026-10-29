@@ -24,9 +24,12 @@ from safetrajai.collision import output as collision_output
 from safetrajai.collision.homography import points as homography_points
 from safetrajai.collision.homography.camera_config import load_camera_config_for_sequence
 from safetrajai.collision.homography.georef import meters_per_pixel
+from safetrajai.collision.homography.points import prebuilt_satellite_image_path
+from safetrajai.collision.homography.satellite import image_tag
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 from safetrajai.roi import resolve_roi
 
+from .bev import bev_tracks, write_bev_video
 from .chains import build_chains
 from .config import ConflictConfig
 from .events import build_events, overlap_at_start_pairs, threshold_counts
@@ -91,6 +94,15 @@ def _skip(out_dir: Path, seq_name: str, camera: str, tag: Optional[str], reason:
     write_json(summary, out_dir / "summary.json")
     print(f"  [{seq_name}] 衝突指標分析略過（{reason}），只輸出 {out_dir / 'summary.json'}")
     return summary
+
+
+def _bev_video(out_dir: Path, cfg, seq_name: str, kins, ccfg: ConflictConfig, fps: float) -> Dict[str, Any]:
+    camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_name)
+    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
+    background = cv2.imread(str(image_path)) if image_path.exists() else None
+    if background is None:
+        return {"written": False, "skipped_reason": "no_satellite_image"}
+    return write_bev_video(out_dir / "bev.mp4", background, bev_tracks(kins), ccfg.bev_video, fps)
 
 
 def _pair_frame_columns(kins, pairs, ttc, metrics, neighbours, fps, mpp, H_inv) -> Dict[str, Any]:
@@ -298,6 +310,12 @@ def run_conflict_analysis_for_sequence(
         "chain_size_counts": {str(size): n for size, n in sorted(chain_sizes.items())},
         "limitations": _limitations(ccfg, fps, acceleration_available),
     }
+    if ccfg.bev_video.enabled:
+        summary["bev_video"] = _bev_video(out_dir, cfg, seq_name, kins, ccfg, fps)
+        summary["limitations"].append({
+            "code": "bev_video_fps",
+            "detail": "bev.mp4 的輸出 fps 固定為 5（既有 VideoWriterWithFfmpeg 行為，未修正）；序列不是 5 fps 時，播放速度與實際時間不同。",
+        })
     write_json(summary, out_dir / "summary.json")
     print(
         f"  [{seq_name}] 衝突指標：tracks={len(tracks)}  配對列={len(pairs)}  事件={len(events)}  "

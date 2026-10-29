@@ -7,12 +7,17 @@ Pure functions on numpy images; positions are satellite-image pixels and are sca
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, Sequence, Tuple
 
 import cv2
 import numpy as np
 
 from safetrajai.classes import CLASS_NAMES
+from safetrajai.pipeline.video_io import VideoWriterWithFfmpeg
+
+from .config import BevVideoConfig
+from .kinematics import Kinematics
 
 CLASS_ORDER: Tuple[str, ...] = tuple(CLASS_NAMES[i] for i in sorted(CLASS_NAMES))
 # BGR, one fixed colour per class of the class contract.
@@ -72,3 +77,31 @@ def draw_bev_frame(
         cv2.putText(out, label, (x + radius + 3, y - radius), cv2.FONT_HERSHEY_SIMPLEX, font, color, 1, cv2.LINE_AA)
     _draw_legend(out)
     return out
+
+
+def bev_tracks(kins: Sequence[Kinematics]) -> Tuple[BevTrack, ...]:
+    """Tracks with the smoothed speed of the conflict analysis in km/h (NaN where it is undefined)."""
+    return tuple(
+        BevTrack(k.track.class_name, k.track.track_id, k.track.frames, k.track.map_xy, k.speed * 3.6) for k in kins)
+
+
+def write_bev_video(
+    out_path: Path, background: np.ndarray, tracks: Sequence[BevTrack], cfg: BevVideoConfig, fps: float,
+) -> Dict[str, Any]:
+    """Write `out_path` from the first to the last frame that has a track; returns what was written."""
+    if not tracks:
+        return {"written": False, "skipped_reason": "no_tracks"}
+    height, width = background.shape[:2]
+    scale = bev_scale((width, height), cfg.max_side_px)
+    out_w, out_h = int(round(width * scale)) // 2 * 2, int(round(height * scale)) // 2 * 2   # even sizes for H.264
+    base = cv2.resize(background, (out_w, out_h)) if (out_w, out_h) != (width, height) else background
+    tail_frames = max(1, int(round(cfg.tail_s * fps)))
+    first = int(min(t.frames[0] for t in tracks))
+    last = int(max(t.frames[-1] for t in tracks))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = VideoWriterWithFfmpeg(out_path, 5, out_w, out_h)
+    for frame in range(first, last + 1):
+        writer.write(draw_bev_frame(base, scale, frame, tracks, tail_frames))
+    writer.close()
+    return {"written": True, "frames": last - first + 1, "size": [out_w, out_h], "scale": scale,
+            "tail_frames": tail_frames}

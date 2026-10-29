@@ -669,3 +669,73 @@ def test_golden_compare_treats_equal_infinities_as_identical(monkeypatch) -> Non
     assert compare.compare_scalars("-inf", "-inf").identical
     assert not compare.compare_scalars("inf", "-inf").identical
     assert not compare.compare_scalars("inf", "1.0").identical
+
+
+def bev_setup(tmp_path, with_satellite: bool = True, **bev_options):
+    import dataclasses
+
+    import cv2
+
+    from safetrajai.collision.conflict.config import BevVideoConfig
+
+    seq_dir, cfg, out_dir = sequence_setup(tmp_path, GEOREF_CAMERA)
+    cfg.conflict_analysis = dataclasses.replace(cfg.conflict_analysis, bev_video=BevVideoConfig(enabled=True, **bev_options))
+    satellite_dir = tmp_path / "satellite"
+    satellite_dir.mkdir()
+    cfg.homography_satellite_dir = satellite_dir
+    if with_satellite:
+        cv2.imwrite(str(satellite_dir / "T.png"), np.full((640, 640, 3), 80, np.uint8))
+    return seq_dir, cfg, out_dir
+
+
+def test_bev_video_is_not_written_or_mentioned_by_default(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = sequence_setup(tmp_path, GEOREF_CAMERA)
+    run_entry(seq_dir, cfg)
+
+    assert not (out_dir / "bev.mp4").exists()
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert "bev_video" not in summary
+    assert "bev_video_fps" not in {item["code"] for item in summary["limitations"]}
+
+
+def test_bev_video_is_written_and_recorded(tmp_path) -> None:
+    import json
+
+    import cv2
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    assert tuple(sorted(p.name for p in out_dir.iterdir())) == tuple(sorted(OUT_FILES + ("bev.mp4",)))
+    assert (out_dir / "bev.mp4").stat().st_size > 0
+    capture = cv2.VideoCapture(str(out_dir / "bev.mp4"))
+    ok, frame = capture.read()
+    capture.release()
+    assert ok and frame.shape == (640, 640, 3)
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["bev_video"]["written"] is True and summary["bev_video"]["frames"] == 30
+    assert summary["bev_video"]["size"] == [640, 640] and summary["bev_video"]["tail_frames"] == 30
+    assert "bev_video_fps" in {item["code"] for item in summary["limitations"]}
+
+
+def test_bev_video_is_scaled_to_max_side_px(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path, max_side_px=320)
+    run_entry(seq_dir, cfg)
+
+    assert json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))["bev_video"]["size"] == [320, 320]
+
+
+def test_missing_satellite_image_skips_only_the_video(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path, with_satellite=False)
+    run_entry(seq_dir, cfg)
+
+    assert tuple(sorted(p.name for p in out_dir.iterdir())) == tuple(sorted(OUT_FILES))
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["bev_video"] == {"written": False, "skipped_reason": "no_satellite_image"}
+    assert summary["num_events"] >= 1
