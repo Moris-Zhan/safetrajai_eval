@@ -12,7 +12,7 @@ python scripts/picker/make_picker.py --camera C000054 --mode homography
 |---|---|---|---|
 | `homography` | 左（CCTV 首幀）右（衛星圖）**成對**點選，至少 4 組 | `cctv_points`／`map_points` 貼進 `config/homography/<camera>.yaml` | CCTV＋衛星圖 |
 | `checkpoints` | 成對點選驗證點（至少 1 組，少於 4 組頁面會警告） | 存成 `config/homography_checkpoints/<camera>.yaml` | CCTV＋衛星圖 |
-| `counting-lines` | 在 CCTV 首幀依序點兩點成一條線，可填名稱（可省略），黃色箭頭標示 forward 方向；方向標籤由程式自動判斷 | 存成 `config/counting_lines/<camera>.yaml`（讀取端於後續功能加入） | CCTV |
+| `counting-lines` | 在 CCTV 首幀依序點兩點成一條線，可填名稱（可省略），黃色箭頭標示 forward、白色箭頭標示 backward；方向標籤由程式自動判斷 | 存成 `config/counting_lines/<camera>.yaml`（讀取端於後續功能加入） | CCTV |
 | `camera-position` | 在衛星圖上點相機位置 | `camera_view_point` 貼進 `config/homography/<camera>.yaml` | 衛星圖 |
 
 ## 操作

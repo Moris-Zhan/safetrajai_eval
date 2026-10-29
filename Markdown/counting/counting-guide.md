@@ -8,7 +8,7 @@ stage3 的選用功能：統計車輛、機車、行人等穿越指定線段的�
 python scripts/picker/make_picker.py --camera C000025 --mode counting-lines
 ```
 
-在瀏覽器的 CCTV 首幀每兩點畫一條線，可命名（可省略，預設 `line_1`、`line_2`…），頁面用黃色箭頭標示 forward 的穿越方向；複製或下載 YAML，存成 `config/counting_lines/<camera>.yaml`（步驟見 [`Markdown/picker/picker-guide.md`](../picker/picker-guide.md)）：
+在瀏覽器的 CCTV 首幀每兩點畫一條線，可命名（可省略，預設 `line_1`、`line_2`…），頁面用黃色箭頭標示 forward、白色箭頭標示 backward 的穿越方向（畫反了兩個箭頭會互換位置）；複製或下載 YAML，存成 `config/counting_lines/<camera>.yaml`（步驟見 [`Markdown/picker/picker-guide.md`](../picker/picker-guide.md)）：
 
 ```yaml
 camera: C000025
