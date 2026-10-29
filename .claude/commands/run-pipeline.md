@@ -3,7 +3,7 @@ description: 依指定情境執行或規劃追蹤評估 pipeline
 argument-hint: [config 路徑] [--stage stage1|stage2|stage3]
 ---
 
-閱讀 $ARGUMENTS 指定的設定檔；未指定時使用 `config/bytetrack.yaml`。先整理這次會執行的階段、資料來源、模型、輸出位置與預期耗時。
+閱讀 $ARGUMENTS 指定的設定檔；未指定時使用 `config/tracking/bytetrack.yaml`。先整理這次會執行的階段、資料來源、模型、輸出位置與預期耗時。
 
 執行前確認：
 
@@ -17,7 +17,7 @@ argument-hint: [config 路徑] [--stage stage1|stage2|stage3]
 
 ```bash
 python track_eval.py --config <config 路徑>
-# 等同：python scripts/run_pipeline.py --config <config 路徑>
+# 等同：python scripts/pipeline/run_pipeline.py --config <config 路徑>
 ```
 
 完成後回報各 stage 是否成功、輸出目錄、每序列主要結果，以及任何跳過或警告。

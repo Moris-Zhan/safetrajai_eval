@@ -1,4 +1,4 @@
-# config/roi/C000056.yaml — 鏡頭 C000056 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）
+# config/roi/C000056.yaml — 鏡頭 C000056 的 ROI（關注區域，見 CONTEXT.md）
 camera: C000056
 image_size: [704, 480]
 polygon:

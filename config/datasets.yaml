@@ -1,7 +1,7 @@
 # config/datasets.yaml
 # dataset id → 根路徑/子目錄名稱對照表。
 # config/*.yaml 的 paths.dataset 欄位用短 id 取代重複的長路徑字面值；
-# 詳見 docs/superpowers/specs/2026-09-03-dataset-path-refactor-design.md 第 3.3 節。
+# 詳見 Markdown/config/per-camera-configs.md 第 2 節。
 #
 # role：eval（附人工 GT、只用於評估）或 source（無人工 GT、用來產生訓練資料），見 CONTEXT.md。
 #       eval 與 source 的 cameras 不得重疊（tests/test_smoke.py 檢查）。

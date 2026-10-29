@@ -1,0 +1,175 @@
+# =============================================================================
+# config/reid/botsort_save_reid_crops.yaml — 情境 3：BoTSORT 追蹤 + 開啟 save_reid_crops
+#                                        （只跑 stage1，蒐集 Re-ID 訓練用裁切影像，不跑 stage2 評估）
+# 用法：python track_eval.py --config config/reid/botsort_save_reid_crops.yaml
+# 追蹤參數沿用 config/tracking/botsort_noreid.yaml（ReID 關閉）——這裡的目的是蒐集資料，
+# 不需要追蹤本身就啟用 ReID；save/save_txt 關閉以減少蒐集資料時的不必要磁碟用量。
+# =============================================================================
+
+
+paths:
+  dataset: cctv_all8
+  TRACKEVAL_OUT_DIR: trackeval_output
+  OUTPUT_ROOT: ./runs/track_eval
+
+
+models:
+  det_model_path: ./models/yolo/yolo11x_dennis.pt
+
+trackeval:
+  benchmark_name: CCTV
+  split_name:     val
+  tracker_name:   YOLO11x
+
+
+# 只跑 stage1（tracking + 裁切蒐集），不需要 stage2 評估
+stages:
+  run_stage1: true
+  run_stage2: false
+
+eval_flags:
+  run_det_eval:   false
+  run_track_eval: true
+
+
+classes_to_run:
+  person:      0
+  car:         1
+  scooter:     2
+  small_truck: 3
+  bus:         4
+  truck:       5
+
+
+logging:
+  verbose: false
+  debug:   false
+
+tracking_params:
+  tracker: botsort
+  conf:        0.15
+  iou:         0.50
+  imgsz:       640
+  frame_rate:  30
+  gmc_method:  ecc
+
+save params:
+  show: false
+  save: false        # 不需要標註影片
+  save_txt: false     # 不需要 YOLO label txt
+  show_unmatched: false
+  show_removed: false
+  save_reid_crops: true
+  reid_crop_dir: ./dataset/reid/crops
+
+
+# -----------------------------------------------------------------------------
+# Class-aware tracker 逐類別參數表（BoTSORT，ReID 關閉——跟 config/tracking/botsort_noreid.yaml 相同）
+# -----------------------------------------------------------------------------
+class_tracking:
+  class_names:
+    0: person
+    1: car
+    2: scooter
+    3: small_truck
+    4: bus
+    5: truck
+
+  class_tracking_params:
+    car:
+      center_dist_weight: 0.4
+      fuse_score: true
+      match_thresh: 0.7
+      new_track_thresh: 0.25
+      norm_factor: 80.0
+      second_match_thresh: 0.6
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    bus:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.7
+      norm_factor: 200.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.55
+      unconfirmed_match_thresh: 0.95
+      use_reid: false
+      proximity_thresh: 0.1
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x_dennis.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    small_truck:
+      center_dist_weight: 0.2
+      fuse_score: true
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    truck:
+      center_dist_weight: 0.2
+      fuse_score: false
+      match_thresh: 0.6
+      norm_factor: 100.0
+      new_track_thresh: 0.15
+      second_match_thresh: 0.45
+      unconfirmed_match_thresh: 0.9
+      use_reid: false
+      proximity_thresh: 0.6
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 90  # 幀；原 BoTSORT 3.0 × 30fps
+    person:
+      center_dist_weight: 0.25
+      fuse_score: false
+      match_thresh: 0.9
+      new_track_thresh: 0.25
+      norm_factor: 150.0
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
+      use_reid: false
+      proximity_thresh: 0.3
+      appearance_thresh: 0.3
+      model: models/yolo/yolo11x.pt
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+    scooter:
+      center_dist_weight: 0.25
+      fuse_score: true
+      match_thresh: 0.9
+      new_track_thresh: 0.1
+      norm_factor: 200.0
+      second_match_thresh: 0.4
+      unconfirmed_match_thresh: 0.8
+      use_reid: false
+      proximity_thresh: 0.5
+      appearance_thresh: 0.1
+      model: models/yolo/yolo11x.pt
+      track_buffer: 60  # 幀；原 BoTSORT 2.0 × 30fps
+
+  default_tracking_params:
+    match_thresh: 0.80
+    appearance_thresh: 0.35
+    new_track_thresh: 0.15
+    second_match_thresh: 0.5
+    unconfirmed_match_thresh: 0.7
+    use_reid: false
+    model: ./yolo11x-cls-reid.pt
+
+  class_conf_thresh:
+    person: 0.15
+    car: 0.15
+    scooter: 0.10
+    small_truck: 0.15
+    bus: 0.15
+    truck: 0.15
+
+  default_conf_thresh: 0.15

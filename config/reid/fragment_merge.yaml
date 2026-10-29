@@ -1,0 +1,22 @@
+# config/reid/fragment_merge.yaml — 遮擋碎片合併（change merge-occlusion-fragments，見 CONTEXT.md「碎片合併」）
+# 用於 scripts/reid_data/extract_fragment_features.py 與 build_fragment_merges.py。
+#
+# 候選：同一序列、同一類別，A 結束後「保留期限幀數＋margin_frames」幀內 B 出現，
+#       B 起點距 A 末段每幀速度外插位置 ≤ position_factor × 框尺寸（面積平方根，取兩者較大）。
+#       保留期限幀數直接取 track_config 的逐類別 track_buffer，不依追蹤器或幀率換算（track_buffer 在兩種追蹤器都是正整數幀數）。
+# 外觀：A 最後 endpoint_crops 張與 B 最前 endpoint_crops 張的 DINOv2 特徵平均的 cosine ≥ threshold。
+
+track_config: config/reid/reid_crops.yaml   # track_buffer（幀）取自此檔（裁切蒐集時的追蹤參數）
+margin_frames: 10                      # 來源影片 10fps，相當於原本的 1 秒
+position_factor: 2.0
+endpoint_crops: 3
+threshold: 0.911305                    # 2026-09-28 以 110 組人工確認校準：門檻以上 31/32 正確（見 change 的 verification.md）
+
+# 門檻校準的人工確認樣本（design D4）
+sample:
+  strata_quantiles: [0.5, 0.9]         # 依候選相似度分位數分成 低 / 中 / 高 三層
+  counts: {low: 20, mid: 30, high: 30}
+  major_cameras: [C000054]             # 其餘鏡頭合計至少 min_other 組
+  min_other: 10
+  target_accuracy: 0.95
+  min_above: 15                        # 門檻以上樣本少於此數時需補抽

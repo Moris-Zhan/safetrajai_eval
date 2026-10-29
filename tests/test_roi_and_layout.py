@@ -78,7 +78,7 @@ def test_roi_image_size_mismatch_is_rejected(tmp_path: Path) -> None:
 
 
 def test_config_with_det_corner_is_rejected(tmp_path: Path) -> None:
-    legacy = yaml.safe_load((CONFIG_DIR / "bytetrack.yaml").read_text(encoding="utf-8"))
+    legacy = yaml.safe_load((CONFIG_DIR / "tracking" / "bytetrack.yaml").read_text(encoding="utf-8"))
     legacy["det_corner"] = [[0, 0], [10, 0], [10, 10]]
     legacy_path = tmp_path / "legacy.yaml"
     legacy_path.write_text(yaml.safe_dump(legacy, allow_unicode=True), encoding="utf-8")

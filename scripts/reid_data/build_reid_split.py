@@ -6,10 +6,10 @@
   - <crop-root>/_index/*.csv       裁切蒐集時寫出的索引（每張裁切一列）
   - <exclusions>                   人工排除清單（class,identity,image,action），可不存在
   - <auto-exclusions>              自動排除清單（class,identity,image,action,rule），可不存在；兩份清單都套用
-  - --exclude-cameras              抽查不合格而整支排除的鏡頭（見 docs/adr/0007），其所有裁切不進入版本
+  - --exclude-cameras              抽查不合格而整支排除的鏡頭（見 CONTEXT.md「抽查」），其所有裁切不進入版本
   - --merges                       碎片合併清單（class,identity,merged_identity,...，build_fragment_merges.py 產生）；
                                    預設不套用。套用時在排除之後、最少張數之前把原始身分改名為合併後的身分
-  - config/reid_split.yaml         切分規則（val 的鏡頭與日期、每身分張數上下限）
+  - config/reid/reid_split.yaml         切分規則（val 的鏡頭與日期、每身分張數上下限）
 輸出（dataset/reid/splits/<version>/，版本已存在時報錯）：
   - manifest.csv                   crop_path,identity,class,camera,date,split
   - summary.json                   各類別／split／鏡頭的身分數與張數、兩份排除清單的筆數、被排除的鏡頭、
@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--exclude-cameras", nargs="*", default=[], help="整支排除的鏡頭，例如 C000056")
     parser.add_argument("--merges", default=None, help="碎片合併清單，例如 dataset/reid/fragment_merges.csv")
-    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid" / "reid_split.yaml"))
     parser.add_argument("--splits-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "splits"))
     args = parser.parse_args()
 

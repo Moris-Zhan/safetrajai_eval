@@ -1,4 +1,4 @@
-# config/roi/C000025.yaml — 鏡頭 C000025 的 ROI（關注區域，見 CONTEXT.md、docs/adr/0005）
+# config/roi/C000025.yaml — 鏡頭 C000025 的 ROI（關注區域，見 CONTEXT.md）
 # 由舊情境 config 的頂層 det_corner 移植，座標為 image_size 下的像素（左上→右上→右下→左下）。
 camera: C000025
 image_size: [640, 480]

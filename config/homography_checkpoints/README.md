@@ -23,7 +23,7 @@ check points 必須是額外挑選、跟訓練點不同的點位，才是有意�
 
 ## 目前狀態
 
-由 `scripts/migrate_homography_config.py` 從舊的 tag 鍵資料轉入：
+由 `scripts/homography/migrate_homography_config.py` 從舊的 tag 鍵資料轉入：
 
 - `C000025.yaml`：2 點，從舊的 tag 鍵 YAML 原樣複製（檔頭有信心度說明，是目視估計），點數不足。
 - `C000297.yaml`：10 點，從 `models/homography/checkpoints/check_pts_{cctv,sat}_<tag>.npy` 轉入，數值逐位元保留。
@@ -53,7 +53,7 @@ sat_points:
 
 `cctv_points` / `sat_points` 必須一一對應、順序相同、數量相等。
 
-4. 執行 `python scripts/validate_homography.py`，會輸出到 `models/homography/validation_output/`：
+4. 執行 `python scripts/homography/validate_homography.py`，會輸出到 `models/homography/validation_output/`：
    - `summary.csv`：每台鏡頭一列（`check_*` 驗證誤差、`train_residual_*` 擬合殘差、公尺欄位）
    - overlay 圖（CCTV warp 疊到衛星圖，綠點=GT、紅點=預測）
    - 誤差熱力圖（IDW/Linear/RBF 空間內插，check points ≥ 4 個才會產生）

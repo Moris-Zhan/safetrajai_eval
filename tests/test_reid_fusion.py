@@ -216,7 +216,7 @@ def test_invalid_fusion_params_rejected_before_tracking(tmp_path, key, value) ->
     from safetrajai.paths import CONFIG_DIR
     from safetrajai.tracking import config as tracking_config
 
-    cfg = yaml.safe_load((CONFIG_DIR / "reid_crops.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((CONFIG_DIR / "reid" / "reid_crops.yaml").read_text(encoding="utf-8"))
     cfg["class_tracking"]["class_tracking_params"]["scooter"][key] = value
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
@@ -232,7 +232,7 @@ def test_valid_fusion_params_load(tmp_path) -> None:
     from safetrajai.paths import CONFIG_DIR
     from safetrajai.tracking import config as tracking_config
 
-    cfg = yaml.safe_load((CONFIG_DIR / "reid_crops.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((CONFIG_DIR / "reid" / "reid_crops.yaml").read_text(encoding="utf-8"))
     cfg["class_tracking"]["class_tracking_params"]["car"].update(
         reid_center_gate_px=80, reid_center_gate_px_per_frame=0, appearance_veto_sim=0.6)
     path = tmp_path / "ok.yaml"
@@ -247,7 +247,7 @@ def test_legacy_per_second_gate_param_rejected(tmp_path) -> None:
     from safetrajai.paths import CONFIG_DIR
     from safetrajai.tracking import config as tracking_config
 
-    cfg = yaml.safe_load((CONFIG_DIR / "reid_crops.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((CONFIG_DIR / "reid" / "reid_crops.yaml").read_text(encoding="utf-8"))
     cfg["class_tracking"]["class_tracking_params"]["car"]["reid_center_gate_px_per_s"] = 40
     path = tmp_path / "legacy.yaml"
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")

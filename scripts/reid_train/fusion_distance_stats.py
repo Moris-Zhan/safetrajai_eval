@@ -10,7 +10,7 @@
                   --legacy-crop 改用修改前的裁切（框放大 1.02 倍、加 10px 邊），只用來量測參考
   - --version     資料集版本；val 的分布只作對照
   - --config      追蹤情境設定（預設 botsort_reid_timm.yaml）：各類別的 norm_factor（干擾物半徑＝2×norm_factor）
-                  與 track_buffer（保留期限幀數，ADR 0009，不換算）；reid_crops.yaml 是依 10fps 來源設定的，
+                  與 track_buffer（保留期限幀數，不換算）；reid_crops.yaml 是依 10fps 來源設定的，
                   不能用於 C000025
   - --reference        參考的結果 JSON（dinov2s_v3 以 --legacy-crop 量測）
   - --noise-reference  兩個結果 JSON（只換種子的兩個模型，皆以緊框量測），差距即雜訊底線
@@ -112,7 +112,7 @@ def main() -> None:
     parser.add_argument("--tune-root", default=str(PROJECT_ROOT / "dataset" / "eval" / "cctv_all8_subsets" / "tune"))
     parser.add_argument("--version", default="v3", help="資料集版本（val 分布只作對照）")
     parser.add_argument("--pack-dir", default=None, help="預設 ~/.cache/safetrajai/reid_packs/<version>/")
-    parser.add_argument("--config", default=str(CONFIG_DIR / "botsort_reid_timm.yaml"),
+    parser.add_argument("--config", default=str(CONFIG_DIR / "tracking" / "botsort_reid_timm.yaml"),
                         help="讀取各類別的 norm_factor 與 track_buffer（保留期限幀數）")
     parser.add_argument("--legacy-crop", action="store_true", help="用修改前的裁切（量測參考用）")
     parser.add_argument("--reference", default=None, help="參考的結果 JSON")

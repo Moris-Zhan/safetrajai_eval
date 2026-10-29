@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 遮擋碎片合併清單（change merge-occlusion-fragments，spec: reid-dataset）。
-讀取裁切索引、兩份排除清單、碎片端點特徵（extract_fragment_features.py）與 config/fragment_merge.yaml，
+讀取裁切索引、兩份排除清單、碎片端點特徵（extract_fragment_features.py）與 config/reid/fragment_merge.yaml，
 在同一序列、同一類別內以時間、外插位置與外觀一對一配對碎片，串成合併後的身分。
 只寫合併紀錄與報告，不搬移、改名或刪除任何裁切，也不修改索引與排除清單。
 
@@ -213,7 +213,7 @@ def main() -> None:
     parser.add_argument("--exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "exclusions.csv"))
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--features", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid" / "fragment_features.npz"))
-    parser.add_argument("--config", default=str(CONFIG_DIR / "fragment_merge.yaml"))
+    parser.add_argument("--config", default=str(CONFIG_DIR / "reid" / "fragment_merge.yaml"))
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dataset" / "reid" / "fragment_merges.csv"))
     parser.add_argument("--review-dir", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid" / "fragment_review"))
     parser.add_argument("--apply", action="store_true", help="寫出合併清單（預設只 dry-run）")

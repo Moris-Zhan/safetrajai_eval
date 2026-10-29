@@ -13,7 +13,7 @@ Re-ID 身分人工審查頁（spec: reid-dataset，design D7）。
 頁面上的「產生確認清單」按鈕匯出 CSV（欄位：class,identity,image,action），交給
 apply_review_exclusions.py 合併進排除清單。只產生報告與縮圖，不改動任何裁切。
 
---audit-only（見 docs/adr/0007、CONTEXT.md「抽查」）：不看標記，改從自動排除後剩下的身分產生審查頁。
+--audit-only（見 CONTEXT.md「抽查」）：不看標記，改從自動排除後剩下的身分產生審查頁。
   - 被自動排除清單整段排除的身分不進入母體；縮圖不含已被排除的單張裁切。
   - 身分數佔全部 ≥ --major-share 的鏡頭抽 --audit-major 個，依類別比例分層（每類至少 2 個）；
     其他鏡頭各抽 --audit-minor 個（不足全數）。bus 另抽 --audit-bus 個，person 全數審查。
@@ -341,8 +341,8 @@ def main() -> None:
     parser.add_argument("--page-size", type=int, default=100)
     parser.add_argument("--audit-per-camera", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid_split.yaml"))
-    parser.add_argument("--audit-only", action="store_true", help="只產生自動排除後的抽查頁（見 docs/adr/0007）")
+    parser.add_argument("--rules", default=str(PROJECT_ROOT / "config" / "reid" / "reid_split.yaml"))
+    parser.add_argument("--audit-only", action="store_true", help="只產生自動排除後的抽查頁")
     parser.add_argument("--auto-exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "auto_exclusions.csv"))
     parser.add_argument("--exclusions", default=str(PROJECT_ROOT / "dataset" / "reid" / "exclusions.csv"))
     parser.add_argument("--major-share", type=float, default=0.05)

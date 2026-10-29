@@ -3,7 +3,7 @@ description: 執行、檢查或修改 TTC/PET 碰撞偵測流程
 argument-hint: [config 路徑、序列名稱或需求]
 ---
 
-閱讀 $ARGUMENTS，並以 `config/collision_detect.yaml` 與 `.claude/rules/collision-and-homography.md` 為準。
+閱讀 $ARGUMENTS，並以 `config/collision/collision_detect.yaml` 與 `.claude/rules/collision-and-homography.md` 為準。
 
 先確認：
 

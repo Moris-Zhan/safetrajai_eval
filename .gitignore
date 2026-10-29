@@ -5,7 +5,6 @@ runs/
 runs.zip
 models/
 wandb/
-video/
 PaperSurvey/
 
 # Python
@@ -38,7 +37,3 @@ build/
 # Secrets (API keys, NAS credentials)
 .env
 .env.*
-
-# Local reference frames extracted for manual geocoding
-openspec/changes/*/images/
-openspec/changes/archive/*/images/

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-計算抽查的不合格率（見 CONTEXT.md「抽查」「不合格率」、docs/adr/0007）。
+計算抽查的不合格率（見 CONTEXT.md「抽查」「不合格率」）。
 
 讀取 generate_identity_review.py --audit-only 輸出的 audit_sample.csv 與使用者匯出的確認清單，
 只看鏡頭抽查（camera_audit）的身分：需要整段排除（確認清單中 image 為空）的比例即不合格率，
@@ -63,7 +63,7 @@ def main() -> None:
     parser.add_argument("--audit-sample", default=str(PROJECT_ROOT / "dataset" / "reports" / "reid" / "review" / "audit_sample.csv"))
     parser.add_argument("--confirm-csv", nargs="+", required=True, help="審查頁匯出的確認清單（可多份）")
     parser.add_argument("--crop-root", default=str(PROJECT_ROOT / "dataset" / "reid" / "crops"))
-    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid_split.yaml"))
+    parser.add_argument("--rules", default=str(CONFIG_DIR / "reid" / "reid_split.yaml"))
     parser.add_argument("--major-share", type=float, default=0.05)
     parser.add_argument("--threshold", type=float, default=0.1)
     args = parser.parse_args()

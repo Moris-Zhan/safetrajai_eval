@@ -58,7 +58,7 @@ def config_state():
 @pytest.mark.parametrize("value", [None, 0, -1, 2.5, 90.0, True, "90"])
 @pytest.mark.parametrize("use_default", [False, True])
 def test_invalid_buffer_rejected_atomically(tmp_path, restore_config, value, use_default):
-    data = yaml.safe_load((CONFIG_DIR / "botsort_noreid.yaml").read_text())
+    data = yaml.safe_load((CONFIG_DIR / "tracking" / "botsort_noreid.yaml").read_text())
     section = data["class_tracking"]
     # Keep unrelated classes valid while exercising one invalid effective value.
     for params in section["class_tracking_params"].values():
@@ -85,7 +85,7 @@ def test_invalid_buffer_rejected_atomically(tmp_path, restore_config, value, use
 
 
 def test_missing_class_uses_default_buffer(tmp_path, restore_config):
-    data = yaml.safe_load((CONFIG_DIR / "botsort_noreid.yaml").read_text())
+    data = yaml.safe_load((CONFIG_DIR / "tracking" / "botsort_noreid.yaml").read_text())
     section = data["class_tracking"]
     for params in section["class_tracking_params"].values():
         params["track_buffer"] = 90
@@ -97,7 +97,12 @@ def test_missing_class_uses_default_buffer(tmp_path, restore_config):
     assert config.get_params_for_class(1)["track_buffer"] == 17
 
 
-@pytest.mark.parametrize("path", sorted(CONFIG_DIR.glob("*.yaml")) + sorted((PROJECT_ROOT / "tests/golden/configs").glob("*.yaml")))
+SCENARIO_CONFIGS = sorted(
+    p for d in ("", "tracking", "grid_search", "reid", "collision") for p in (CONFIG_DIR / d).glob("*.yaml")
+)
+
+
+@pytest.mark.parametrize("path", SCENARIO_CONFIGS + sorted((PROJECT_ROOT / "tests/golden/configs").glob("*.yaml")))
 def test_scenario_buffers_are_positive_integer_frames(path, restore_config):
     if "class_tracking" not in (yaml.safe_load(path.read_text()) or {}):
         pytest.skip("not a tracking scenario")

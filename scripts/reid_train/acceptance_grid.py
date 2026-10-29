@@ -2,7 +2,7 @@
 """
 Re-ID 追蹤驗收：產生驗收設定與彙總結果（spec: reid-model；change separability-gate-object-pairs D4）。
 
-configs：以情境設定（預設 config/botsort_reid_timm.yaml）為底，套用 --set CLASS.KEY=VALUE，為每個子集
+configs：以情境設定（預設 config/tracking/botsort_reid_timm.yaml）為底，套用 --set CLASS.KEY=VALUE，為每個子集
   （dataset/eval/cctv_all8_subsets/<subset>/）各寫一份設定到 <out-root>/configs/<name>_<subset>.yaml，
   輸出目錄（OUTPUT_ROOT）為 <out-root>/<name>/<subset>/；寫出後以 load_track_config() 驗證。
   執行：python track_eval.py --config <out-root>/configs/<name>_<subset>.yaml > <out-root>/<name>/<subset>/run.log 2>&1
@@ -117,7 +117,7 @@ def main() -> None:
     configs.add_argument("--name", required=True, help="組名，例如 baseline、a_car_1w")
     configs.add_argument("--set", action="append", help="CLASS.KEY=VALUE（VALUE 以 YAML 解析），可重複")
     configs.add_argument("--subsets", nargs="+", default=["tune", "holdout"])
-    configs.add_argument("--base", default=str(CONFIG_DIR / "botsort_reid_timm.yaml"))
+    configs.add_argument("--base", default=str(CONFIG_DIR / "tracking" / "botsort_reid_timm.yaml"))
     configs.add_argument("--out-root", default=str(DEFAULT_OUT_ROOT))
 
     summ = sub.add_parser("summarize", help="彙總並逐類別判定")

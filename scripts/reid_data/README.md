@@ -4,7 +4,7 @@ Re-ID 訓練資料由 change `rebuild-reid-dataset`（2026-09-24）從 `dataset/
 
 **蒐集 → 標記 → 自動排除 → 抽查 → 排除 → 碎片合併 → manifest**
 
-裁切只寫一次，之後的標記、排除、抽查、切分都只產生紀錄，不搬移、改名或刪除任何裁切。術語（裁切、身分、碎片、碎片合併、污染身分、誤偵測身分、殘缺裁切、標記、排除、自動排除、抽查、不合格率、資料集版本、隔離）見 `CONTEXT.md`；排除與隔離的差異見 `docs/adr/0006`，為什麼以自動排除為主、人工只抽查見 `docs/adr/0007`。
+裁切只寫一次，之後的標記、排除、抽查、切分都只產生紀錄，不搬移、改名或刪除任何裁切。術語（裁切、身分、碎片、碎片合併、污染身分、誤偵測身分、殘缺裁切、標記、排除、自動排除、抽查、不合格率、資料集版本、隔離）見 `CONTEXT.md`；排除只寫紀錄、不動檔案，隔離才是 `mv` 到 `temp/`；品質把關以自動排除為主、人工只抽查。
 
 > 舊的 `crop_dataset/`、`reid_category_dataset/`、`reid_dataset/` 是舊追蹤器產生的無效資料，已隔離到 `dataset/reid/temp/`（見該目錄的 `DO_NOT_USE.md`），不可引用或拿來訓練。
 
@@ -37,13 +37,13 @@ dataset/reports/reid/                        標記（detect_contamination.py）
 ## 1. 蒐集裁切
 
 ```bash
-python track_eval.py --config config/reid_crops.yaml
+python track_eval.py --config config/reid/reid_crops.yaml
 ```
 
 - 只從 `config/datasets.yaml` 中 `role: source` 的 `reid_sources` 蒐集；評估鏡頭（C000025）一律拒絕，每支鏡頭都必須有 `config/roi/<camera>.yaml`，否則在追蹤前就報錯，不會寫出任何東西。
 - 規則：框中心點在 ROI 內、最短邊 ≥ 32px、每條軌跡依影片時間每 0.5 秒最多 1 張。
 - 每支序列在結束時一次寫出索引；索引已存在時報錯，重跑前要先移走舊輸出。
-- 工具模型與追蹤參數（dennis@640、`frame_rate: auto`、`gmc_method: sparseOptFlow`、四輪車加重 `center_dist_weight`）的選定依據見 `openspec/changes/archive/2026-09-24-rebuild-reid-dataset/verification.md`。
+- 工具模型與追蹤參數（dennis@640、`frame_rate: auto`、`gmc_method: sparseOptFlow`、四輪車加重 `center_dist_weight`）。
 - 只跑部分鏡頭時，在另建的設定中加上 `paths.cameras: [<camera>, ...]`（只能取 `reid_sources` 登記鏡頭的子集）。
 
 ## 2. 污染標記
@@ -53,7 +53,7 @@ python scripts/reid_data/detect_contamination.py
 ```
 
 - 每張裁切只讀一次，以 DINOv2（timm `vit_small_patch14_dinov2`，第一次使用時從 HF Hub 下載）抽特徵。
-- 只標記裁切數 ≥ `config/reid_split.yaml` 的 `min_crops_per_identity` 的身分（不足的身分不會進 manifest）。
+- 只標記裁切數 ≥ `config/reid/reid_split.yaml` 的 `min_crops_per_identity` 的身分（不足的身分不會進 manifest）。
 - 四種標記：
   - **類別一致性**：只在人／二輪／四輪粗分組之間不一致時標記（`class_consistency.csv`）。
   - **外觀離群**：裁切到身分平均特徵的 cosine 距離超過同類別第 99 百分位（`appearance_outliers.csv`）。
@@ -110,9 +110,9 @@ python scripts/reid_data/build_fragment_merges.py --calibrate <fragment_confirm.
 python scripts/reid_data/build_fragment_merges.py --apply              # 寫 dataset/reid/fragment_merges.csv
 ```
 
-- 參數在 `config/fragment_merge.yaml`。同一序列、同一類別內，兩段軌跡 A、B 同時符合下列條件才合併：
+- 參數在 `config/reid/fragment_merge.yaml`。同一序列、同一類別內，兩段軌跡 A、B 同時符合下列條件才合併：
   - B 的第一張與 A 的最後一張的幀差 > 0，且 ≤ 保留期限幀數＋`margin_frames`（10）。
-    - 保留期限幀數直接取 `config/reid_crops.yaml` 的逐類別 `track_buffer`（ADR 0009），不依追蹤器或序列幀率換算。car 為 30，加上餘裕 10，候選窗為 40 幀。
+    - 保留期限幀數直接取 `config/reid/reid_crops.yaml` 的逐類別 `track_buffer`，不依追蹤器或序列幀率換算。car 為 30，加上餘裕 10，候選窗為 40 幀。
     - 設定以多數來源 10fps 換算成 30／20 幀。C000011、C000056（14fps）、C000012（15fps）、C000043（9fps）與原規則有差異，只在之後重新蒐集裁切或重建候選時套用；既有裁切、合併清單與 v3 不重建。
   - B 的起點在 A 末段每幀速度（最後兩張的幀差）外插位置的 2 倍框尺寸以內。
   - A 最後 3 張與 B 最前 3 張的 DINOv2 特徵平均 cosine ≥ `threshold`。
@@ -130,7 +130,7 @@ python scripts/reid_data/build_reid_split.py --version v3 --merges dataset/reid/
 python scripts/reid_data/build_reid_split.py --version <v> --exclude-cameras C000056  # 整支排除抽查不合格的鏡頭
 ```
 
-- 依序套用：自動與人工兩份排除清單（`--auto-exclusions`、`--exclusions`，任一份列出即移除）→ 合併清單（`--merges`，預設不套用）→ 捨棄少於 4 張的身分 → 每個身分依時間均勻抽樣到最多 30 張 → 依鏡頭與日期切分（`config/reid_split.yaml`：C000054 的 20250629 為 val，其他全部為 train）。
+- 依序套用：自動與人工兩份排除清單（`--auto-exclusions`、`--exclusions`，任一份列出即移除）→ 合併清單（`--merges`，預設不套用）→ 捨棄少於 4 張的身分 → 每個身分依時間均勻抽樣到最多 30 張 → 依鏡頭與日期切分（`config/reid/reid_split.yaml`：C000054 的 20250629 為 val，其他全部為 train）。
 - 同一個身分只會出現在一個 split；評估鏡頭永遠不會出現；相同輸入產生逐位元組相同的 manifest；不複製影像。
 - 版本目錄已存在時報錯，不覆寫。
 
@@ -148,11 +148,10 @@ python scripts/reid_data/build_reid_split.py --version <v> --exclude-cameras C00
 | person | 372 | 130 | 29（23／6） | 28（23／5） | 28（23／5） |
 | **合計** | **288,547** | **61,162** | **24,056（20,795／3,261）** | **22,164（19,043／3,121）** | **22,223（19,101／3,122）** |
 
-- `v2`（156,141 張裁切）：套用自動排除 4,374 列（整段 1,847 個身分、單張 2,527 張）與人工排除 80 列；抽查 223 個身分，各鏡頭的不合格率都不超過 10%（C000054 為 1.7%），沒有鏡頭被排除。細節見 `openspec/changes/archive/*-auto-reid-exclusions/verification.md`。
+- `v2`（156,141 張裁切）：套用自動排除 4,374 列（整段 1,847 個身分、單張 2,527 張）與人工排除 80 列；抽查 223 個身分，各鏡頭的不合格率都不超過 10%（C000054 為 1.7%），沒有鏡頭被排除。
 - `v3`（156,186 張）＝ `v2` 的規則＋碎片合併（`fragment_merges.csv`：734 個原始身分併成 560 條鏈，門檻 0.911305）。有 282 個身分由合併而來，其中 187 個是 `v2` 沒有的。
   - 這份合併清單是用修改前的秒數時間條件產生的。改成幀數規則（change `retention-window-frames`）後會少 2 筆，都在非 10fps 序列；決定不重建，下次重建時才套用新規則。
   - 門檻以上的人工確認為 31/32 正確，錯誤合併率的 95% 上限約 16%；錯誤都是 car，集中在 C000033。
-  - 細節見 `openspec/changes/archive/*-merge-occlusion-fragments/verification.md`。
 - change `train-reid-timm` 以 `v2`、`v3` 各訓練一個 DINOv2 ViT-S/14 模型（val mAP 0.785／0.783），兩者在 C000025 的追蹤結果相同，依平手規則採用 `v3`（`models/class_reid_weights/dinov2s_v3/`）。
 - `v1` 是審查前的基準版本（174,344 張裁切），仍含號誌誤判、串錯與殘缺框，只供比較。
 - person 與 small_truck 的身分明顯不足，是來源影片本身的限制。
