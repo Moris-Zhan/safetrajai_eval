@@ -29,7 +29,7 @@ _TAG_SUFFIX_RE = re.compile(r"-(\d+)-(\d+)-(\d+)-(\d+)$")
 _KNOWN_FIELDS = (
     "camera", "name", "matrix_tag", "needs_recalibration", "satellite",
     "latlon", "latlon_source", "latlon_date", "osm_roads",
-    "scale_check", "scale_check_date", "cctv_points", "map_points",
+    "scale_check", "scale_check_date", "cctv_points", "map_points", "camera_view_point",
 )
 
 Point = Tuple[float, float]
@@ -63,6 +63,7 @@ class CameraHomographyConfig:
     scale_check_date: Optional[str] = None
     cctv_points: Optional[Tuple[Point, ...]] = None
     map_points: Optional[Tuple[Point, ...]] = None
+    camera_view_point: Optional[Point] = None
 
 
 def camera_config_path(camera_dir: Path, camera: str) -> Path:
@@ -103,6 +104,18 @@ def _parse_points(raw: Mapping[str, Any], path: Path, field: str) -> Optional[Tu
     ):
         _fail(path, field, "必須是 [[x, y], ...] 格式")
     return tuple((float(x), float(y)) for x, y in value)
+
+
+def _parse_point(raw: Mapping[str, Any], path: Path, field: str) -> Optional[Point]:
+    value = raw.get(field)
+    if value is None:
+        return None
+    if not (
+        isinstance(value, list) and len(value) == 2
+        and all(isinstance(c, (int, float)) and not isinstance(c, bool) for c in value)
+    ):
+        _fail(path, field, "必須是 [x, y] 格式")
+    return (float(value[0]), float(value[1]))
 
 
 def _parse_satellite(raw: Mapping[str, Any], path: Path) -> Optional[SatelliteParams]:
@@ -190,6 +203,7 @@ def _config_from_text(text: str, path: Path) -> CameraHomographyConfig:
         scale_check_date=_optional_str(raw, path, "scale_check_date"),
         cctv_points=cctv_points,
         map_points=map_points,
+        camera_view_point=_parse_point(raw, path, "camera_view_point"),
     )
 
 
