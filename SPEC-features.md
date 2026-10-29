@@ -1,6 +1,6 @@
 # 規格：Sub_Module 功能整合（Features Spec）
 
-> 狀態：草稿，待使用者確認。
+> 狀態：已確認，執行中（2026-10-29 起）。進度：F1 完成並已合併；F2 進行中。計畫與任務清單見 `tasks/plan-features.md`、`tasks/todo-features.md`。
 > 本規格在重構（`SPEC.md`）的 T9 完成後才開始執行（Q36）；兩份規格的範圍互不重疊，重構期間 `Sub_Module/` 完全不動。
 > 套件路徑以重構後為準：`utils/modules/safetrajai/`；config 路徑以重構後為準（`config/<功能>/`）。
 

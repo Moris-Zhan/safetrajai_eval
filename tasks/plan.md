@@ -1,7 +1,8 @@
 # 實作計畫：safetrajai_eval 精簡重構
 
 > 依據：`SPEC.md`（已確認）。新功能另見 `SPEC-features.md`，在本計畫 T9 之後才開始，不在本計畫範圍。
-> 任務細項與勾選清單見 `tasks/todo.md`。狀態：待使用者審閱，核准後才開始 T0。
+> 任務細項與勾選清單見 `tasks/todo.md`。
+> **狀態：已全部完成並合併進 `main`（2026-10-29，merge commit `8b5eb4e`）。** 實際結果與偏離規格之處見 `tasks/delivery-report.md`（例如 golden 原訂不跑，實際在 T5 後與 B1 後各跑一次，皆與基準 identical）。新功能計畫見 `tasks/plan-features.md`。
 
 ## 概觀
 
@@ -11,7 +12,7 @@
 2. **精簡冗餘**：刪除註解掉的程式碼與失效引用（A 級）、消除重複邏輯（B 級）。
 3. **文件**：同步路徑、拆分 `USAGE.md` 成模組教學、新增 config 使用教學。
 
-基準線：`main` 上 `pytest` = 739 passed, 11 skipped（約 43 秒）。golden 本輪不跑。
+基準線：`main` 上 `pytest` = 739 passed, 11 skipped（約 43 秒）。golden 原訂本輪不跑；實際執行結果：pytest 790 passed, 11 skipped，golden 兩次 identical。
 
 ## 架構決策
 
@@ -77,7 +78,7 @@ T5 起的任務建立在最終目錄（T2–T4 完成後）上；T3、T3b、T4b 
 | 工作樹原本就有使用者的未提交修改（`skills-lock.json` 等） | 中 | 只 `git add` 自己改的檔案；T1 只暫存指定路徑 |
 | 上游 LICENSE 抓不到原文 | 低 | 不自己編寫，記入待辦 |
 
-## 待確認事項（進入實作時才需要使用者決定）
+## 待確認事項（進入實作時才需要使用者決定；皆已處理）
 
 1. T2b 資料搬動前，貼出指令與還原方式請使用者同意。
 2. T2d 補 LICENSE 需要一次對外網路請求，執行前提醒使用者。
