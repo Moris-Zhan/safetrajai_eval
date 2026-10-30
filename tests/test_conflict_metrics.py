@@ -1,7 +1,5 @@
 """Unit tests for the stage3 conflict-metrics analysis (change conflict-metrics, ADR 0011)."""
 
-import math
-
 import numpy as np
 import pytest
 
