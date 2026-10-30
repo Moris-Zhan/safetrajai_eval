@@ -31,7 +31,7 @@ _EVENT_LINK_BGR = (0, 0, 255)
 _COUNTING_LINE_BGR = (0, 255, 255)
 _PANEL_BGR = (30, 30, 30)
 _SHADOW_KEEP = 0.5            # share of the base map that stays visible inside a blind-area shadow
-_VIEWPOINT_BGR = (255, 255, 0)
+_VIEWPOINT_BGR = _WHITE
 
 
 @dataclass(frozen=True)
