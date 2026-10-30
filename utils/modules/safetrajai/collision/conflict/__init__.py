@@ -137,7 +137,7 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
     roi_mask = polygon_mask(project_points(roi, H), background.shape[:2])
     result = compute_blind_area(
         occluders, viewpoint, roi_mask, mpp, fps, frames, ccfg.object_length_m, ccfg.object_width_m,
-        keep_shadows=ccfg.bev_video.enabled)
+        ccfg.max_gap_frames, keep_shadows=ccfg.bev_video.enabled)
     write_csv(result.columns, out_dir / "blind_area.csv")
     ratios = np.array(result.columns["blind_ratio"], dtype=np.float64)
     drawn = BevBlindArea(viewpoint, roi_mask, result.shadows) if ccfg.bev_video.enabled else None

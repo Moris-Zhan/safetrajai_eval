@@ -27,7 +27,7 @@ def track(class_name: str, track_id: int, xs, ys, first_frame: int = 1) -> Track
 def run(tracks, frames=None, viewpoint=VIEWPOINT):
     kins = [compute_kinematics(t, FPS, CFG) for t in tracks]
     frame_list = frames if frames is not None else sorted({int(f) for t in tracks for f in t.frames})
-    return compute_blind_area(kins, viewpoint, ROI, MPP, FPS, frame_list, LENGTHS, WIDTHS)
+    return compute_blind_area(kins, viewpoint, ROI, MPP, FPS, frame_list, LENGTHS, WIDTHS, CFG.max_gap_frames)
 
 
 def east_car(n: int = 8, start_x: float = 100.0, step: float = 5.0, y: float = 200.0, track_id: int = 1) -> Track:
@@ -112,6 +112,20 @@ def test_the_bodies_use_the_class_length_and_width() -> None:
 def test_a_zero_area_roi_gives_a_nan_ratio() -> None:
     kins = [compute_kinematics(east_car(), FPS, CFG)]
 
-    result = compute_blind_area(kins, VIEWPOINT, np.zeros(SHAPE, dtype=bool), MPP, FPS, [1, 2], LENGTHS, WIDTHS)
+    result = compute_blind_area(
+        kins, VIEWPOINT, np.zeros(SHAPE, dtype=bool), MPP, FPS, [1, 2], LENGTHS, WIDTHS, CFG.max_gap_frames)
 
     assert all(np.isnan(r) for r in result.columns["blind_ratio"])
+
+
+def test_a_frame_gap_starts_a_new_segment_without_the_old_heading() -> None:
+    first = [(100.0 + 5.0 * k, 200.0) for k in range(8)]          # frames 1-8, heading east
+    second = [(100.0, 100.0 + 5.0 * k) for k in range(8)]         # frames 30-37, heading south
+    gapped = Track("car", 1, np.array(list(range(1, 9)) + list(range(30, 38))), *(np.array(first + second),) * 2,
+                   np.array(first + second) * MPP)
+
+    result = run([gapped])
+
+    assert result.columns["num_occluders"][result.columns["frame"].index(30)] == 0    # no heading yet: not the eastward one
+    assert result.columns["num_occluders"][result.columns["frame"].index(31)] == 1
+    assert result.frames_without_heading == 2                                          # the first frame of each segment

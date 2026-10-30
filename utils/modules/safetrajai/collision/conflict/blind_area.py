@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from .kinematics import Kinematics
+from .kinematics import Kinematics, segment_bounds
 
 Point = Tuple[float, float]
 
@@ -101,11 +101,19 @@ class BlindAreaResult:
     shadows: Mapping[int, Tuple[np.ndarray, ...]]   # frame -> shadow quads, only filled with keep_shadows
 
 
-def _last_valid(values: np.ndarray) -> np.ndarray:
-    """Forward fill of NaN; leading NaN stay NaN."""
-    valid = np.where(~np.isnan(values), np.arange(len(values)), -1)
-    index = np.maximum.accumulate(valid)
-    return np.where(index >= 0, values[np.maximum(index, 0)], np.nan)
+def _last_valid(values: np.ndarray, frames: np.ndarray, max_gap_frames: int) -> np.ndarray:
+    """Forward fill of NaN inside each segment of the track; leading NaN of a segment stay NaN.
+
+    A frame gap longer than `max_gap_frames` starts a new segment (as in the kinematics), so the heading
+    from before the gap is not carried over to a vehicle that may now move in another direction.
+    """
+    filled = np.full_like(values, np.nan)
+    for start, end in segment_bounds(frames, max_gap_frames):
+        segment = values[start:end]
+        valid = np.where(~np.isnan(segment), np.arange(len(segment)), -1)
+        index = np.maximum.accumulate(valid)
+        filled[start:end] = np.where(index >= 0, segment[np.maximum(index, 0)], np.nan)
+    return filled
 
 
 def compute_blind_area(
@@ -117,6 +125,7 @@ def compute_blind_area(
     frames: Sequence[int],
     lengths_m: Mapping[str, float],
     widths_m: Mapping[str, float],
+    max_gap_frames: int,
     keep_shadows: bool = False,
 ) -> BlindAreaResult:
     """Blind-area ratio inside `roi` for every frame in `frames`.
@@ -129,7 +138,7 @@ def compute_blind_area(
     bodies_by_frame: Dict[int, List[np.ndarray]] = defaultdict(list)
     never_moved = frames_skipped = 0
     for kin in occluders:
-        heading = _last_valid(kin.heading_deg)
+        heading = _last_valid(kin.heading_deg, kin.track.frames, max_gap_frames)
         if np.all(np.isnan(heading)):
             never_moved += 1
             continue
