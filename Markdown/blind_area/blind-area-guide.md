@@ -46,7 +46,7 @@ conflict_analysis:
 ## 4. 幾何假設
 
 - **遮蔽物**：車輛視為矩形。中心是框底邊中點投影到衛星圖座標；長度取 `object_length_m`，寬度取 `object_width_m`；朝向是平滑後的速度方向。
-- **朝向**：速度低於 `min_speed_mps` 時沿用前一個有效朝向；軌跡最前面還沒有朝向的幀，該車該幀不計；整條軌跡都沒動過的車不計。數量見 `summary.json` 的 `occluders_without_heading`、`frames_without_heading`。
+- **朝向**：速度低於 `min_speed_mps` 時沿用前一個有效朝向（幀間斷超過 `max_gap_frames` 會把軌跡分成新的一段，朝向不跨段沿用）；軌跡或分段最前面還沒有朝向的幀，該車該幀不計；整條軌跡都沒動過的車不計。數量見 `summary.json` 的 `occluders_without_heading`、`frames_without_heading`。
 - **遮蔽物來源**：全部軌跡（不依 ROI 過濾），因為 ROI 外的大車也會把陰影投進 ROI；面積只算 ROI 內。
 - **陰影**：從視點看過去，矩形後方、兩條輪廓射線之間的區域，不含車體本身；多個陰影重疊的部分只算一次，站在別人陰影裡的車仍算盲區。
 - **視點在車體內或邊上**：該車該幀不產生陰影，次數記在 `viewpoint_inside_skips`。
@@ -64,7 +64,7 @@ conflict_analysis:
 | `roi_area_m2` | ROI 面積（平方公尺） |
 | `blind_ratio` | `blind_area_m2 / roi_area_m2` |
 
-盲區成功輸出時，`conflict_events.csv`／`.json` 另外多一欄 `mean_blind_ratio`：事件從開始幀到結束幀（含）的 `blind_ratio` 平均（沒有對應幀時為空值）。盲區關閉或被略過時沒有這一欄，事件檔與原來完全相同。
+盲區成功輸出時，`conflict_events.csv`／`.json` 另外多一欄 `mean_blind_ratio`：事件從開始幀到結束幀（含）的 `blind_ratio` 平均（沒有對應幀時，CSV 為 `nan`、JSON 為 `null`）。盲區關閉或被略過時沒有這一欄，事件檔與原來完全相同。
 
 `summary.json` 的 `blind_area` 區塊記錄視點、遮蔽類別、影格數、平均與最大比例及上述略過次數。
 
