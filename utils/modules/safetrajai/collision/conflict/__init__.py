@@ -118,15 +118,16 @@ def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndar
 
 
 def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, fps: float, roi: np.ndarray,
-                H: np.ndarray, mpp: float) -> Tuple[Dict[str, Any], Optional[BevBlindArea]]:
-    """Summary block and, when the bird's-eye video needs it, the shadows to draw."""
+                H: np.ndarray, mpp: float,
+                ) -> Tuple[Dict[str, Any], Optional[BevBlindArea], Optional[Dict[int, float]]]:
+    """Summary block, the shadows to draw when the bird's-eye video needs them, and the ratio of every frame."""
     camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
     if camera_cfg.camera_view_point is None:
-        return {"written": False, "skipped_reason": "no_camera_view_point"}, None
+        return {"written": False, "skipped_reason": "no_camera_view_point"}, None, None
     image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
     background = cv2.imread(str(image_path)) if image_path.exists() else None
     if background is None:
-        return {"written": False, "skipped_reason": "no_satellite_image"}, None
+        return {"written": False, "skipped_reason": "no_satellite_image"}, None, None
     viewpoint = (float(camera_cfg.camera_view_point[0]), float(camera_cfg.camera_view_point[1]))
     # Occluders are every tracked vehicle, not only those inside the ROI: a large vehicle outside it still casts a shadow in.
     tracks = load_tracks(seq_output_dir, cfg.benchmark_name, cfg.split_name, cfg.tracker_name, EVERYWHERE_POLYGON, H, mpp)
@@ -150,7 +151,7 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
         "viewpoint_inside_skips": result.viewpoint_inside_skips,
         "occluders_without_heading": result.occluders_without_heading,
         "frames_without_heading": result.frames_without_heading,
-    }, drawn
+    }, drawn, dict(zip(result.columns["frame"], result.columns["blind_ratio"]))
 
 
 def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
@@ -245,6 +246,11 @@ def _event_columns(kins, events, ttc, fps, mpp, H_inv) -> Dict[str, Any]:
     return columns
 
 
+def _mean_blind_ratio(ratio_by_frame: Dict[int, float], start: int, end: int) -> float:
+    values = [ratio_by_frame[f] for f in range(start, end + 1) if f in ratio_by_frame]
+    return float(np.mean(values)) if values else float("nan")
+
+
 def _pet_columns(tracks, pet_rows, mpp, H_inv) -> Dict[str, Any]:
     columns: Dict[str, Any] = {
         "class1": [tracks[r.i].class_name for r in pet_rows],
@@ -326,7 +332,13 @@ def run_conflict_analysis_for_sequence(
     acceleration_available = fps >= ccfg.min_fps_for_acceleration
 
     pair_columns = _pair_frame_columns(kins, pairs, ttc, metrics, neighbours, fps, mpp, H_inv)
+    blind_summary, blind_drawn, blind_ratios = (
+        _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp) if ccfg.blind_area.enabled else (None, None, None))
     event_columns = _event_columns(kins, events, ttc, fps, mpp, H_inv)
+    if blind_ratios is not None:
+        event_columns["mean_blind_ratio"] = [
+            _mean_blind_ratio(blind_ratios, start, end)
+            for start, end in zip(event_columns["start_frame"], event_columns["end_frame"])]
     write_csv(pair_columns, out_dir / "pair_frames.csv")
     write_csv(event_columns, out_dir / "conflict_events.csv")
     write_json(records(event_columns), out_dir / "conflict_events.json")
@@ -370,8 +382,6 @@ def run_conflict_analysis_for_sequence(
         "chain_size_counts": {str(size): n for size, n in sorted(chain_sizes.items())},
         "limitations": _limitations(ccfg, fps, acceleration_available),
     }
-    blind_summary, blind_drawn = (
-        _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp) if ccfg.blind_area.enabled else (None, None))
     if ccfg.bev_video.enabled:
         summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H, blind_drawn)
         summary["limitations"].append({

@@ -949,3 +949,40 @@ def test_bev_video_has_no_blind_area_when_it_was_skipped(tmp_path) -> None:
     summary = read_summary(out_dir)
     assert summary["bev_video"]["written"] is True and "blind_area" not in summary["bev_video"]
     assert summary["blind_area"]["skipped_reason"] == "no_camera_view_point"
+
+
+def read_csv_rows(path):
+    import csv
+
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def test_events_carry_the_mean_blind_ratio_over_their_frames(tmp_path) -> None:
+    import json
+
+    seq_dir, cfg, out_dir = blind_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    events = read_csv_rows(out_dir / "conflict_events.csv")
+    ratio_by_frame = {int(r["frame"]): float(r["blind_ratio"]) for r in read_csv_rows(out_dir / "blind_area.csv")}
+    assert events and list(events[0])[-1] == "mean_blind_ratio"
+    for event in events:
+        frames = range(int(event["start_frame"]), int(event["end_frame"]) + 1)
+        expected = sum(ratio_by_frame[f] for f in frames) / len(frames)
+        assert float(event["mean_blind_ratio"]) == pytest.approx(expected)
+    assert any(float(e["mean_blind_ratio"]) > 0 for e in events)
+    assert "mean_blind_ratio" in json.loads((out_dir / "conflict_events.json").read_text(encoding="utf-8"))[0]
+
+
+@pytest.mark.parametrize("mode", ["off", "no_viewpoint", "no_satellite"])
+def test_events_have_no_blind_column_unless_the_blind_area_was_written(tmp_path, mode) -> None:
+    if mode == "off":
+        seq_dir, cfg, out_dir = sequence_setup(tmp_path, VIEW_CAMERA)
+    elif mode == "no_viewpoint":
+        seq_dir, cfg, out_dir = blind_setup(tmp_path, camera_yaml=GEOREF_CAMERA)
+    else:
+        seq_dir, cfg, out_dir = blind_setup(tmp_path, with_satellite=False)
+    run_entry(seq_dir, cfg)
+
+    assert "mean_blind_ratio" not in read_csv_rows(out_dir / "conflict_events.csv")[0]
