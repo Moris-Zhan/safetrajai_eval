@@ -142,7 +142,7 @@ Markdown/                                        每個功能補對應教學（�
   - 朝向的速度門檻沿用 `min_speed_mps`；靜止時沿用前一個有效朝向，從未有有效朝向的物件才被跳過，數量寫進 `summary.json`。
   - 遮蔽物用不過濾 ROI 的全部軌跡（ROI 外的大車也會把陰影投進 ROI），面積只算 ROI 內。
   - `blind_area.csv` 欄位：`frame, time_s, num_occluders, blind_area_m2, roi_area_m2, blind_ratio`。
-- 與衝突事件的整合（事件註記盲區比例）不在本規格內，等逐幀輸出完成並檢視數據後再決定。
+- 與衝突事件的整合（Q63，使用者在 F4 完成後決定做）：盲區成功輸出時，`conflict_events.{csv,json}` 多一欄 `mean_blind_ratio`（事件起訖幀的 `blind_ratio` 平均）；關閉或略過時事件檔不變。
 
 ## 7. 執行順序
 
@@ -209,6 +209,7 @@ F1 → F2 → F3 → F4。F1 最先，因為 F2、F4 需要它取得資料；F3 
 | Q60 | 朝向門檻沿用 `min_speed_mps`；遮蔽物用不過濾 ROI 的全部軌跡 |
 | Q61 | `blind_area.csv` 欄位如 F4；F2 合併前不單獨實跑，改在 F3 檢查點以同一支真實序列實跑 |
 | Q62 | 計數線方向標籤由程式自動判斷：有 Homography 為 8 個羅盤方向（`northbound`…）、否則畫面方向（`up`…）；不寫進 YAML、可手寫覆寫、`summary.json` 記錄 `label_source`；頁面只畫線並以箭頭標示 forward |
+| Q63 | 事件註記盲區比例：多一欄 `mean_blind_ratio`，只在盲區成功輸出時出現 |
 
 待實作時確認（不阻擋規格）：
 1. ~~盲區的多邊形運算要不要用 `shapely`~~ 已決定不用（Q58）。
