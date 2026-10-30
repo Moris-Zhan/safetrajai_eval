@@ -12,7 +12,7 @@ TTC／PET 輸出不經過這裡，也不受影響（design 第 2 節）。
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -123,16 +123,21 @@ def _satellite_background(cfg, camera_cfg) -> Optional[np.ndarray]:
     return cv2.imread(str(image_path)) if image_path.exists() else None
 
 
+@dataclass(frozen=True)
+class BlindAreaOutput:
+    summary: Dict[str, Any]                                   # the `blind_area` block of summary.json
+    drawn: Optional[BevBlindArea] = None                      # shadows for the video; only when it is enabled
+    ratio_by_frame: Optional[Dict[int, float]] = None         # None when the blind area was skipped
+
+
 def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, fps: float, roi: np.ndarray,
-                H: np.ndarray, mpp: float,
-                ) -> Tuple[Dict[str, Any], Optional[BevBlindArea], Optional[Dict[int, float]]]:
-    """Summary block, the shadows to draw when the bird's-eye video needs them, and the ratio of every frame."""
+                H: np.ndarray, mpp: float) -> BlindAreaOutput:
     camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
     if camera_cfg.camera_view_point is None:
-        return {"written": False, "skipped_reason": "no_camera_view_point"}, None, None
+        return BlindAreaOutput({"written": False, "skipped_reason": "no_camera_view_point"})
     background = _satellite_background(cfg, camera_cfg)
     if background is None:
-        return {"written": False, "skipped_reason": "no_satellite_image"}, None, None
+        return BlindAreaOutput({"written": False, "skipped_reason": "no_satellite_image"})
     viewpoint = (float(camera_cfg.camera_view_point[0]), float(camera_cfg.camera_view_point[1]))
     # Occluders are every tracked vehicle, not only those inside the ROI: a large vehicle outside it still casts a shadow in.
     tracks = load_tracks(seq_output_dir, cfg.benchmark_name, cfg.split_name, cfg.tracker_name, EVERYWHERE_POLYGON, H, mpp)
@@ -146,7 +151,7 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
     write_csv(result.columns, out_dir / "blind_area.csv")
     ratios = np.array(result.columns["blind_ratio"], dtype=np.float64)
     drawn = BevBlindArea(viewpoint, roi_mask, result.shadows) if ccfg.bev_video.enabled else None
-    return {
+    summary = {
         "written": True,
         "viewpoint_px": list(viewpoint),
         "occluder_classes": list(ccfg.blind_area.occluder_classes),
@@ -156,7 +161,8 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
         "viewpoint_inside_skips": result.viewpoint_inside_skips,
         "occluders_without_heading": result.occluders_without_heading,
         "frames_without_heading": result.frames_without_heading,
-    }, drawn, dict(zip(result.columns["frame"], result.columns["blind_ratio"]))
+    }
+    return BlindAreaOutput(summary, drawn, dict(zip(result.columns["frame"], result.columns["blind_ratio"])))
 
 
 def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
@@ -336,12 +342,11 @@ def run_conflict_analysis_for_sequence(
     acceleration_available = fps >= ccfg.min_fps_for_acceleration
 
     pair_columns = _pair_frame_columns(kins, pairs, ttc, metrics, neighbours, fps, mpp, H_inv)
-    blind_summary, blind_drawn, blind_ratios = (
-        _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp) if ccfg.blind_area.enabled else (None, None, None))
+    blind = _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp) if ccfg.blind_area.enabled else None
     event_columns = _event_columns(kins, events, ttc, fps, mpp, H_inv)
-    if blind_ratios is not None:
+    if blind is not None and blind.ratio_by_frame is not None:
         event_columns["mean_blind_ratio"] = [
-            _mean_blind_ratio(blind_ratios, start, end)
+            _mean_blind_ratio(blind.ratio_by_frame, start, end)
             for start, end in zip(event_columns["start_frame"], event_columns["end_frame"])]
     write_csv(pair_columns, out_dir / "pair_frames.csv")
     write_csv(event_columns, out_dir / "conflict_events.csv")
@@ -387,13 +392,13 @@ def run_conflict_analysis_for_sequence(
         "limitations": _limitations(ccfg, fps, acceleration_available),
     }
     if ccfg.bev_video.enabled:
-        summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H, blind_drawn)
+        summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H, blind.drawn if blind else None)
         summary["limitations"].append({
             "code": "bev_video_fps",
             "detail": "bev.mp4 的輸出 fps 固定為 5（既有 VideoWriterWithFfmpeg 行為，未修正）；序列不是 5 fps 時，播放速度與實際時間不同。",
         })
     if ccfg.blind_area.enabled:
-        summary["blind_area"] = blind_summary
+        summary["blind_area"] = blind.summary
         summary["limitations"].append({
             "code": "blind_area_2d",
             "detail": "盲區把車輛視為沒有高度的矩形，陰影是從視點投影到地面的平面區域，所以會高估盲區（真實車輛只遮住視線高度以下的範圍）；視點與朝向的誤差也直接影響結果。",
