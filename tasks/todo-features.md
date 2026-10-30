@@ -72,7 +72,7 @@
   - 已決定：不用 `shapely`，以 `cv2` 光柵化
 - [x] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
   - 驗收：無 `camera_view_point` 或 m/px 不可用 → `skipped_reason`；`limitations` 含 2D 假設
-- [ ] **F4d**（S）盲區疊進鳥瞰影片
+- [x] **F4d**（S）盲區疊進鳥瞰影片
   - 驗收：F4 關閉時畫面不含盲區
 - [ ] **F4e**（S）文件（幾何假設、`camera_view_point` 取得方式）
 
