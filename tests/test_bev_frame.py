@@ -171,12 +171,19 @@ def test_without_blind_area_the_frame_is_unchanged() -> None:
     assert np.array_equal(draw_bev_frame(GRAY, 1.0, 3, [], 10), draw_bev_frame(GRAY, 1.0, 3, [], 10, blind=None))
 
 
-def test_blind_area_is_scaled_with_the_image() -> None:
-    half = cv2.resize(GRAY, (150, 150))
-    image = draw_bev_frame(half, 0.5, 3, [], 10, blind=blind())
+def test_blind_area_is_scaled_with_the_video(tmp_path) -> None:
+    from safetrajai.collision.conflict.bev import write_bev_video
+    from safetrajai.collision.conflict.config import BevVideoConfig
 
-    assert image[100, 88].max() < 100                     # (175, 200) at half size
-    assert tuple(image[100, 62]) == (100, 100, 100)       # (125, 200) is outside the ROI
+    out_path = tmp_path / "bev.mp4"
+    info = write_bev_video(out_path, GRAY, [track()], BevVideoConfig(enabled=True, max_side_px=150), 5.0, blind=blind())
+    capture = cv2.VideoCapture(str(out_path))
+    frames = [capture.read()[1] for _ in range(3)]
+    capture.release()
+
+    assert info["size"] == [150, 150]
+    assert frames[2][120, 88].max() < 100                 # (175, 240) at half size is in the ROI and the shadow
+    assert abs(int(frames[2][120, 62].mean()) - 100) < 12    # (125, 240) is outside the ROI (codec noise only)
 
 
 # --- label placement -----------------------------------------------------------------------------------------

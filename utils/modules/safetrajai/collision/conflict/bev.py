@@ -6,7 +6,7 @@ Pure functions on numpy images; positions are satellite-image pixels and are sca
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, Mapping, Sequence, Tuple
 
@@ -70,7 +70,7 @@ class BevCounting:
 @dataclass(frozen=True)
 class BevBlindArea:
     viewpoint: Tuple[float, float]                  # satellite-image pixels, unscaled
-    roi: np.ndarray                                 # (H, W) bool at satellite-image resolution; shadows show only inside
+    roi: np.ndarray                                 # (H, W) bool at the resolution of the frames drawn; shadows show only inside
     shadows: Mapping[int, Tuple[np.ndarray, ...]]   # frame -> shadow quads (4, 2), unscaled
 
 
@@ -132,8 +132,7 @@ def _draw_blind_area(out: np.ndarray, scale: float, frame: int, blind: BevBlindA
         mask = np.zeros(out.shape[:2], dtype=np.uint8)
         for quad in shadows:
             cv2.fillPoly(mask, [np.rint(quad * scale).astype(np.int32)], 1)
-        roi = cv2.resize(blind.roi.astype(np.uint8), (out.shape[1], out.shape[0]), interpolation=cv2.INTER_NEAREST)
-        covered = (mask & roi).astype(bool)
+        covered = (mask & blind.roi.astype(np.uint8)).astype(bool)
         out[covered] = (out[covered] * _SHADOW_KEEP).astype(np.uint8)
     centre = tuple(int(v) for v in np.rint(np.array(blind.viewpoint) * scale))
     radius = max(3, int(round(14 * _font_scale(out))))
@@ -220,6 +219,8 @@ def write_bev_video(
     scale = bev_scale((width, height), cfg.max_side_px)
     out_w, out_h = int(round(width * scale)) // 2 * 2, int(round(height * scale)) // 2 * 2   # even sizes for H.264
     base = cv2.resize(background, (out_w, out_h)) if (out_w, out_h) != (width, height) else background
+    if blind is not None and blind.roi.shape != (out_h, out_w):
+        blind = replace(blind, roi=cv2.resize(blind.roi.astype(np.uint8), (out_w, out_h), interpolation=cv2.INTER_NEAREST))
     tail_frames = max(1, int(round(cfg.tail_s * fps)))
     first = int(min(t.frames[0] for t in tracks))
     last = int(max(t.frames[-1] for t in tracks))
