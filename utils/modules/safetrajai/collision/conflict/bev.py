@@ -92,6 +92,29 @@ def _font_scale(image: np.ndarray) -> float:
     return max(0.3, min(image.shape[:2]) / 1800.0)
 
 
+def place_label(
+    origin: Tuple[int, int], size: Tuple[int, int], placed: Sequence[Tuple[int, int, int, int]],
+    image_wh: Tuple[int, int],
+) -> Tuple[int, int]:
+    """Text origin (bottom-left) near `origin` whose box does not overlap any box in `placed`.
+
+    Tries the default position first, then moves up and down in whole text heights; when nothing nearby is
+    free (or fits in the image) the default position is kept.
+    """
+    x, y = origin
+    width, height = size
+    x = max(0, min(x, image_wh[0] - width))
+    step = height + 2
+    for k in range(0, 7):
+        for dy in ((0,) if k == 0 else (k * step, -k * step)):
+            top, bottom = y + dy - height, y + dy
+            if top < 0 or bottom > image_wh[1]:
+                continue
+            if all(x + width <= p[0] or p[2] <= x or bottom <= p[1] or p[3] <= top for p in placed):
+                return x, y + dy
+    return origin
+
+
 def _draw_legend(image: np.ndarray) -> None:
     font = _font_scale(image)
     row = int(30 * font) + 3
@@ -158,6 +181,7 @@ def draw_bev_frame(
                 ends.append(tuple(int(v) for v in np.rint(track.map_xy[at[0]] * scale)))
         if len(ends) == 2:
             cv2.line(out, ends[0], ends[1], _EVENT_LINK_BGR, 1)
+    placed: list = []
     for track in tracks:
         current = np.flatnonzero(track.frames == frame)
         if not len(current):
@@ -170,7 +194,11 @@ def draw_bev_frame(
         cv2.circle(out, (x, y), radius, color, -1)
         speed = track.speed_kmh[current[0]]
         label = f"{track.track_id}" if np.isnan(speed) else f"{track.track_id} {speed:.0f}km/h"
-        cv2.putText(out, label, (x + radius + 3, y - radius), cv2.FONT_HERSHEY_SIMPLEX, font, color, 1, cv2.LINE_AA)
+        (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font, 1)
+        box_h = text_h + baseline
+        label_x, label_y = place_label((x + radius + 3, y - radius), (text_w, box_h), placed, (out.shape[1], out.shape[0]))
+        placed.append((label_x, label_y - box_h, label_x + text_w, label_y))
+        cv2.putText(out, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, font, color, 1, cv2.LINE_AA)
     _draw_legend(out)
     return out
 

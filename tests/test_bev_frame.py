@@ -177,3 +177,48 @@ def test_blind_area_is_scaled_with_the_image() -> None:
 
     assert image[100, 88].max() < 100                     # (175, 200) at half size
     assert tuple(image[100, 62]) == (100, 100, 100)       # (125, 200) is outside the ROI
+
+
+# --- label placement -----------------------------------------------------------------------------------------
+
+def test_a_free_label_stays_at_its_default_position() -> None:
+    from safetrajai.collision.conflict.bev import place_label
+
+    assert place_label((50, 100), (40, 10), [], (300, 300)) == (50, 100)
+
+
+def test_a_label_over_another_moves_away_until_it_is_free() -> None:
+    from safetrajai.collision.conflict.bev import place_label
+
+    placed = []
+    first = place_label((50, 100), (40, 10), placed, (300, 300))
+    placed.append((first[0], first[1] - 10, first[0] + 40, first[1]))
+    second = place_label((50, 100), (40, 10), placed, (300, 300))
+
+    assert second != first
+    assert second[1] - 10 >= first[1] or second[1] <= first[1] - 10      # the two boxes do not overlap vertically
+
+
+def test_many_labels_at_one_spot_never_overlap_and_stay_inside_the_image() -> None:
+    from safetrajai.collision.conflict.bev import place_label
+
+    placed = []
+    for _ in range(5):
+        x, y = place_label((50, 100), (40, 10), placed, (300, 300))
+        box = (x, y - 10, x + 40, y)
+        assert all(box[2] <= p[0] or p[2] <= box[0] or box[3] <= p[1] or p[3] <= box[1] for p in placed)
+        assert 0 <= box[1] and box[3] <= 300
+        placed.append(box)
+
+
+def test_two_vehicles_at_the_same_spot_both_keep_a_readable_label() -> None:
+    def text_pixels(image, class_name):
+        return int(np.count_nonzero(np.all(image[:, 215:] == CLASS_COLORS_BGR[class_name], axis=2)))   # right of the dots
+
+    one = track("car", 1, speed=(36.0,) * 3)
+    two = track("bus", 2, speed=(36.0,) * 3)
+    alone = {c: text_pixels(draw([t], frame=3), c) for c, t in (("car", one), ("bus", two))}
+    both = draw([one, two], frame=3)
+
+    assert text_pixels(both, "car") >= 0.9 * alone["car"]
+    assert text_pixels(both, "bus") >= 0.9 * alone["bus"]
