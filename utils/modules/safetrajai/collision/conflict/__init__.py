@@ -28,12 +28,13 @@ from safetrajai.collision.homography.points import prebuilt_satellite_image_path
 from safetrajai.collision.counting.crossing import find_crossings
 from safetrajai.collision.counting.labels import resolve_labels
 from safetrajai.collision.counting.lines import COUNTING_LINES_DIR, resolve_counting_lines
-from safetrajai.collision.counting.tracks import load_counting_tracks
+from safetrajai.collision.counting.tracks import EVERYWHERE_POLYGON, load_counting_tracks
 from safetrajai.collision.homography.satellite import image_tag
 from safetrajai.evaluation.dataset_layout import camera_id_from_seq_name
 from safetrajai.roi import resolve_roi
 
-from .bev import BevCounting, BevCountingLine, BevEvent, bev_tracks, write_bev_video
+from .blind_area import compute_blind_area, polygon_mask
+from .bev import BevBlindArea, BevCounting, BevCountingLine, BevEvent, bev_tracks, write_bev_video
 from .chains import build_chains
 from .config import ConflictConfig
 from .events import build_events, overlap_at_start_pairs, threshold_counts
@@ -58,7 +59,8 @@ def _side_key(kins: Sequence[Kinematics], side: int, i: int, j: int) -> str:
 
 def _params(cfg: ConflictConfig) -> Dict[str, Any]:
     params = {f.name: getattr(cfg, f.name) for f in fields(cfg)}
-    params.pop("bev_video")  # optional output: not part of the metric parameters, keeps summary.json unchanged
+    for name in ("bev_video", "blind_area", "object_width_m"):
+        params.pop(name)  # optional outputs: not part of the metric parameters, keeps summary.json unchanged
     params["class_pairs"] = [list(p) for p in sorted(cfg.class_pairs)]
     params["angle_types"] = [list(t) for t in cfg.angle_types]
     params["object_length_m"] = dict(sorted(cfg.object_length_m.items()))
@@ -115,8 +117,44 @@ def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndar
     return BevCounting(projected, crossings)
 
 
+def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, fps: float, roi: np.ndarray,
+                H: np.ndarray, mpp: float) -> Tuple[Dict[str, Any], Optional[BevBlindArea]]:
+    """Summary block and, when the bird's-eye video needs it, the shadows to draw."""
+    camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
+    if camera_cfg.camera_view_point is None:
+        return {"written": False, "skipped_reason": "no_camera_view_point"}, None
+    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
+    background = cv2.imread(str(image_path)) if image_path.exists() else None
+    if background is None:
+        return {"written": False, "skipped_reason": "no_satellite_image"}, None
+    viewpoint = (float(camera_cfg.camera_view_point[0]), float(camera_cfg.camera_view_point[1]))
+    # Occluders are every tracked vehicle, not only those inside the ROI: a large vehicle outside it still casts a shadow in.
+    tracks = load_tracks(seq_output_dir, cfg.benchmark_name, cfg.split_name, cfg.tracker_name, EVERYWHERE_POLYGON, H, mpp)
+    all_frames = [int(f) for t in tracks for f in t.frames]
+    frames = range(min(all_frames), max(all_frames) + 1) if all_frames else range(0)
+    occluders = [compute_kinematics(t, fps, ccfg) for t in tracks if t.class_name in ccfg.blind_area.occluder_classes]
+    roi_mask = polygon_mask(project_points(roi, H), background.shape[:2])
+    result = compute_blind_area(
+        occluders, viewpoint, roi_mask, mpp, fps, frames, ccfg.object_length_m, ccfg.object_width_m,
+        keep_shadows=ccfg.bev_video.enabled)
+    write_csv(result.columns, out_dir / "blind_area.csv")
+    ratios = np.array(result.columns["blind_ratio"], dtype=np.float64)
+    drawn = BevBlindArea(viewpoint, roi_mask, result.shadows) if ccfg.bev_video.enabled else None
+    return {
+        "written": True,
+        "viewpoint_px": list(viewpoint),
+        "occluder_classes": list(ccfg.blind_area.occluder_classes),
+        "frames": len(ratios),
+        "mean_blind_ratio": float(np.nanmean(ratios)) if len(ratios) else None,
+        "max_blind_ratio": float(np.nanmax(ratios)) if len(ratios) else None,
+        "viewpoint_inside_skips": result.viewpoint_inside_skips,
+        "occluders_without_heading": result.occluders_without_heading,
+        "frames_without_heading": result.frames_without_heading,
+    }, drawn
+
+
 def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
-               bounds: Tuple[int, int], H: np.ndarray) -> Dict[str, Any]:
+               bounds: Tuple[int, int], H: np.ndarray, blind: Optional[BevBlindArea] = None) -> Dict[str, Any]:
     camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
     image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
     background = cv2.imread(str(image_path)) if image_path.exists() else None
@@ -124,7 +162,7 @@ def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: Con
         return {"written": False, "skipped_reason": "no_satellite_image"}
     links = tuple(BevEvent(e.start_frame, e.end_frame, e.i, e.j) for e in events)
     counting = _bev_counting(cfg, seq_output_dir, bounds, H)
-    return write_bev_video(out_dir / "bev.mp4", background, bev_tracks(kins), ccfg.bev_video, fps, links, counting)
+    return write_bev_video(out_dir / "bev.mp4", background, bev_tracks(kins), ccfg.bev_video, fps, links, counting, blind)
 
 
 def _pair_frame_columns(kins, pairs, ttc, metrics, neighbours, fps, mpp, H_inv) -> Dict[str, Any]:
@@ -332,11 +370,19 @@ def run_conflict_analysis_for_sequence(
         "chain_size_counts": {str(size): n for size, n in sorted(chain_sizes.items())},
         "limitations": _limitations(ccfg, fps, acceleration_available),
     }
+    blind_summary, blind_drawn = (
+        _blind_area(out_dir, cfg, seq_output_dir, ccfg, fps, roi, H, mpp) if ccfg.blind_area.enabled else (None, None))
     if ccfg.bev_video.enabled:
-        summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H)
+        summary["bev_video"] = _bev_video(out_dir, cfg, seq_output_dir, kins, events, ccfg, fps, bounds, H, blind_drawn)
         summary["limitations"].append({
             "code": "bev_video_fps",
             "detail": "bev.mp4 的輸出 fps 固定為 5（既有 VideoWriterWithFfmpeg 行為，未修正）；序列不是 5 fps 時，播放速度與實際時間不同。",
+        })
+    if ccfg.blind_area.enabled:
+        summary["blind_area"] = blind_summary
+        summary["limitations"].append({
+            "code": "blind_area_2d",
+            "detail": "盲區把車輛視為沒有高度的矩形，陰影是從視點投影到地面的平面區域，所以會高估盲區（真實車輛只遮住視線高度以下的範圍）；視點與朝向的誤差也直接影響結果。",
         })
     write_json(summary, out_dir / "summary.json")
     print(

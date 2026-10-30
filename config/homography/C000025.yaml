@@ -15,3 +15,5 @@ latlon: [22.625869256249995, 120.29720087500002]
 latlon_source: osm_overpass
 latlon_date: '2026-10-13'
 scale_check_date: '2026-10-13'
+# 相機在衛星圖上的位置（衛星圖像素，盲區分析用）
+camera_view_point: [1102, 541]

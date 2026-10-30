@@ -1,5 +1,6 @@
 """Command-line surface of the three grid search scripts (snapshot of --help, --dry-run and error exits)."""
 
+import difflib
 import json
 import subprocess
 import sys
@@ -18,6 +19,9 @@ CASES = {
 }
 
 
+STDERR: dict[tuple[str, tuple[str, ...]], str] = {}   # only for the failure message, not part of the snapshot
+
+
 def run_case(script: str, args: list[str]) -> dict:
     result = subprocess.run(
         [sys.executable, str(REPO_ROOT / "scripts" / "grid_search" / f"{script}.py"), *args],
@@ -25,6 +29,7 @@ def run_case(script: str, args: list[str]) -> dict:
     )
     lines = [line for line in result.stdout.replace(str(REPO_ROOT), "<root>").splitlines()
              if not line.startswith("Error importing BURST")]
+    STDERR[(script, tuple(args))] = result.stderr
     return {"returncode": result.returncode, "stdout": "\n".join(lines)}
 
 
@@ -40,4 +45,9 @@ def outputs() -> dict[tuple[str, str], dict]:
 @pytest.mark.parametrize("case", CASES)
 def test_cli_output_matches_snapshot(outputs: dict, script: str, case: str) -> None:
     expected = json.loads((SNAPSHOT_DIR / f"{script}.json").read_text(encoding="utf-8"))[case]
-    assert outputs[(script, case)] == expected
+    actual = outputs[(script, case)]
+    diff = "\n".join(difflib.unified_diff(
+        expected["stdout"].splitlines(), actual["stdout"].splitlines(), "snapshot", "actual", lineterm=""))
+    assert actual == expected, (
+        f"returncode {actual['returncode']} (snapshot {expected['returncode']})\n"
+        f"stdout diff:\n{diff or '(identical)'}\nstderr:\n{STDERR[(script, tuple(CASES[case]))][-2000:]}")

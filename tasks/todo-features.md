@@ -65,18 +65,18 @@
 
 ## 階段 4：F4 盲區分析（分支 `feature/blind-area`）
 
-- [ ] **F4a**（S）`blind_area` 設定（`enabled`、`occluder_classes`）與 `object_width_m`（預設 car 1.8、small_truck 2.0、bus 2.5、truck 2.5）
+- [x] **F4a**（S）`blind_area` 設定（`enabled`、`occluder_classes`）與 `object_width_m`（預設 car 1.8、small_truck 2.0、bus 2.5、truck 2.5）
   - 驗收：預設關閉；類別必須在 6 類內；寬度為 6 類都給值且為正數
-- [ ] **F4b**（M）`conflict/blind_area.py`：矩形＋視點 → 陰影多邊形；與 ROI 相交；面積比例
+- [x] **F4b**（M）`conflict/blind_area.py`：矩形＋視點 → 陰影多邊形；與 ROI 相交；面積比例
   - 驗收：合成矩形與已知視點，面積比例與手算值一致（容許誤差寫進測試）；視點在矩形內等退化情況有明確行為
   - 已決定：不用 `shapely`，以 `cv2` 光柵化
-- [ ] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
+- [x] **F4c**（M）朝向（平滑速度方向，速度太小沿用前一個有效朝向，沒有就跳過）、runner、`blind_area.csv`、`summary.json`
   - 驗收：無 `camera_view_point` 或 m/px 不可用 → `skipped_reason`；`limitations` 含 2D 假設
-- [ ] **F4d**（S）盲區疊進鳥瞰影片
+- [x] **F4d**（S）盲區疊進鳥瞰影片
   - 驗收：F4 關閉時畫面不含盲區
-- [ ] **F4e**（S）文件（幾何假設、`camera_view_point` 取得方式）
+- [x] **F4e**（S）文件（幾何假設、`camera_view_point` 取得方式）｜`Markdown/blind_area/blind-area-guide.md`
 
 ### 檢查點 F4（最終）
-- [ ] SPEC 第 9 節成功標準 1–7 逐項對照；「絕對不做」清單零違反
-- [ ] 交付摘要：新增行數、各功能預設值與開啟方式、已知限制
+- [x] SPEC 第 9 節成功標準 1–7 逐項對照；「絕對不做」清單零違反
+- [x] 交付摘要：新增行數、各功能預設值與開啟方式、已知限制
 - [ ] 使用者核准後合併各分支

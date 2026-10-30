@@ -1,5 +1,6 @@
 """Per-frame drawing of the bird's-eye video (hand-placed tracks on a blank base map)."""
 
+import cv2
 import numpy as np
 
 from safetrajai.collision.conflict.bev import CLASS_COLORS_BGR, BevTrack, bev_scale, draw_bev_frame
@@ -133,3 +134,46 @@ def test_counting_line_is_scaled_with_the_image() -> None:
     image = draw_bev_frame(small, 0.5, 1, [], 10, counting=_counting())
 
     assert tuple(image[50, 100]) == (0, 255, 255)
+
+
+# --- blind area (F4d) --------------------------------------------------------------------------------------------
+
+GRAY = np.full((300, 300, 3), 100, dtype=np.uint8)
+SHADOW = np.array([(100, 150), (200, 150), (200, 250), (100, 250)], dtype=float)
+
+
+def blind(frames_with_shadow=(3,)):
+    from safetrajai.collision.conflict.bev import BevBlindArea
+
+    roi = np.zeros((300, 300), dtype=bool)
+    roi[:, 150:] = True                                   # the ROI is the right half of the map
+    return BevBlindArea(viewpoint=(150.0, 280.0), roi=roi, shadows={f: (SHADOW,) for f in frames_with_shadow})
+
+
+def test_blind_area_darkens_the_shadow_inside_the_roi_only() -> None:
+    image = draw_bev_frame(GRAY, 1.0, 3, [], 10, blind=blind())
+
+    assert image[200, 175].max() < 100                    # shadow and ROI
+    assert tuple(image[200, 125]) == (100, 100, 100)      # shadow outside the ROI
+    assert tuple(image[270, 250]) == (100, 100, 100)      # inside the ROI, no shadow
+
+
+def test_blind_area_marks_the_viewpoint_on_every_frame() -> None:
+    plain = draw_bev_frame(GRAY, 1.0, 9, [], 10)
+    shown = draw_bev_frame(GRAY, 1.0, 9, [], 10, blind=blind())
+
+    assert not np.array_equal(plain, shown)
+    assert not np.array_equal(plain[270:, 140:160], shown[270:, 140:160])
+    assert np.array_equal(plain[:260], shown[:260])       # no shadow at frame 9: only the marker differs
+
+
+def test_without_blind_area_the_frame_is_unchanged() -> None:
+    assert np.array_equal(draw_bev_frame(GRAY, 1.0, 3, [], 10), draw_bev_frame(GRAY, 1.0, 3, [], 10, blind=None))
+
+
+def test_blind_area_is_scaled_with_the_image() -> None:
+    half = cv2.resize(GRAY, (150, 150))
+    image = draw_bev_frame(half, 0.5, 3, [], 10, blind=blind())
+
+    assert image[100, 88].max() < 100                     # (175, 200) at half size
+    assert tuple(image[100, 62]) == (100, 100, 100)       # (125, 200) is outside the ROI
