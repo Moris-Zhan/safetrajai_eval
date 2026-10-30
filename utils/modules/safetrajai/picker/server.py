@@ -34,6 +34,8 @@ def load_or_create_token(path: Path) -> str:
     """The saved access token, or a new random one written with owner-only permissions."""
     path = Path(path)
     if path.exists():
+        if path.stat().st_mode & 0o077:
+            raise PermissionError(f"{path} 的權限過寬，其他使用者可讀取權杖：請執行 chmod 600 {path}")
         return path.read_text(encoding="utf-8").strip()
     path.parent.mkdir(parents=True, exist_ok=True)
     token = secrets.token_urlsafe(24)
@@ -75,16 +77,14 @@ def make_server(
             self.end_headers()
             self.wfile.write(data)
 
-        def _presented_token(self, query: dict) -> str:
-            if "token" in query:
-                return query["token"][0]
+        def _presented_tokens(self, query: dict) -> list:
             jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
-            return jar[COOKIE_NAME].value if COOKIE_NAME in jar else ""
+            return query.get("token", [])[:1] + ([jar[COOKIE_NAME].value] if COOKIE_NAME in jar else [])
 
         def do_GET(self) -> None:
             parts = urlsplit(self.path)
-            presented = self._presented_token(parse_qs(parts.query))
-            if not hmac.compare_digest(presented.encode("utf-8"), token.encode("utf-8")):
+            presented = self._presented_tokens(parse_qs(parts.query))
+            if not any(hmac.compare_digest(value.encode("utf-8"), token.encode("utf-8")) for value in presented):
                 self._send(401, "需要存取權杖：請使用啟動服務時印出的網址。")
                 return
             cookie = f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/"

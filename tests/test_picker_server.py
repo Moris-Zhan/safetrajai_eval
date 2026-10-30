@@ -123,3 +123,21 @@ def test_token_is_created_once_kept_private_and_reused(tmp_path) -> None:
     assert len(first) >= 20 and load_or_create_token(path) == first
     assert path.stat().st_mode & 0o777 == 0o600
     assert redact_token(f"GET /?token={first}&x=1 HTTP/1.1") == "GET /?token=***&x=1 HTTP/1.1"
+
+
+def test_a_wrong_token_in_the_url_does_not_cancel_a_valid_cookie(base_url) -> None:
+    url, _ = base_url
+    cookie = get(f"{url}/?token={TOKEN}")[2]["Set-Cookie"].split(";")[0]
+
+    assert get(f"{url}/page/C000025/homography?token=stale", {"Cookie": cookie})[0] == 200
+
+
+def test_a_token_file_readable_by_others_is_refused(tmp_path) -> None:
+    from safetrajai.picker.server import load_or_create_token
+
+    path = tmp_path / "server_token"
+    path.write_text("abc\n", encoding="utf-8")
+    path.chmod(0o644)
+
+    with pytest.raises(PermissionError, match="chmod 600"):
+        load_or_create_token(path)
