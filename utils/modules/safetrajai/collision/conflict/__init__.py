@@ -117,6 +117,12 @@ def _bev_counting(cfg, seq_output_dir: Path, bounds: Tuple[int, int], H: np.ndar
     return BevCounting(projected, crossings)
 
 
+def _satellite_background(cfg, camera_cfg) -> Optional[np.ndarray]:
+    """The camera's prebuilt satellite image, or None when it has not been downloaded."""
+    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
+    return cv2.imread(str(image_path)) if image_path.exists() else None
+
+
 def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, fps: float, roi: np.ndarray,
                 H: np.ndarray, mpp: float,
                 ) -> Tuple[Dict[str, Any], Optional[BevBlindArea], Optional[Dict[int, float]]]:
@@ -124,8 +130,7 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
     camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
     if camera_cfg.camera_view_point is None:
         return {"written": False, "skipped_reason": "no_camera_view_point"}, None, None
-    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
-    background = cv2.imread(str(image_path)) if image_path.exists() else None
+    background = _satellite_background(cfg, camera_cfg)
     if background is None:
         return {"written": False, "skipped_reason": "no_satellite_image"}, None, None
     viewpoint = (float(camera_cfg.camera_view_point[0]), float(camera_cfg.camera_view_point[1]))
@@ -157,8 +162,7 @@ def _blind_area(out_dir: Path, cfg, seq_output_dir: Path, ccfg: ConflictConfig, 
 def _bev_video(out_dir: Path, cfg, seq_output_dir: Path, kins, events, ccfg: ConflictConfig, fps: float,
                bounds: Tuple[int, int], H: np.ndarray, blind: Optional[BevBlindArea] = None) -> Dict[str, Any]:
     camera_cfg = load_camera_config_for_sequence(cfg.homography_camera_dir, seq_output_dir.name)
-    image_path = prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), image_tag(camera_cfg))
-    background = cv2.imread(str(image_path)) if image_path.exists() else None
+    background = _satellite_background(cfg, camera_cfg)
     if background is None:
         return {"written": False, "skipped_reason": "no_satellite_image"}
     links = tuple(BevEvent(e.start_frame, e.end_frame, e.i, e.j) for e in events)
