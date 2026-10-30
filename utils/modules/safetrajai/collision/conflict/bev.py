@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Sequence, Tuple
+from typing import Any, Dict, Mapping, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -30,6 +30,8 @@ _WHITE = (255, 255, 255)
 _EVENT_LINK_BGR = (0, 0, 255)
 _COUNTING_LINE_BGR = (0, 255, 255)
 _PANEL_BGR = (30, 30, 30)
+_SHADOW_KEEP = 0.5            # share of the base map that stays visible inside a blind-area shadow
+_VIEWPOINT_BGR = (255, 255, 0)
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,13 @@ class BevCounting:
     crossings: Tuple[Crossing, ...]
 
 
+@dataclass(frozen=True)
+class BevBlindArea:
+    viewpoint: Tuple[float, float]                  # satellite-image pixels, unscaled
+    roi: np.ndarray                                 # (H, W) bool at satellite-image resolution; shadows show only inside
+    shadows: Mapping[int, Tuple[np.ndarray, ...]]   # frame -> shadow quads (4, 2), unscaled
+
+
 def cumulative_counts(counting: BevCounting, frame: int) -> Dict[Tuple[str, str], int]:
     """Crossings up to and including `frame`, all classes, for every line and both directions."""
     counts = {(line.name, direction): 0 for line in counting.lines for direction in ("forward", "backward")}
@@ -94,6 +103,21 @@ def _draw_legend(image: np.ndarray) -> None:
         cv2.putText(image, class_name, (8 + row, top + row - 4), cv2.FONT_HERSHEY_SIMPLEX, font, _WHITE, 1, cv2.LINE_AA)
 
 
+def _draw_blind_area(out: np.ndarray, scale: float, frame: int, blind: BevBlindArea) -> None:
+    shadows = blind.shadows.get(frame, ())
+    if shadows:
+        mask = np.zeros(out.shape[:2], dtype=np.uint8)
+        for quad in shadows:
+            cv2.fillPoly(mask, [np.rint(quad * scale).astype(np.int32)], 1)
+        roi = cv2.resize(blind.roi.astype(np.uint8), (out.shape[1], out.shape[0]), interpolation=cv2.INTER_NEAREST)
+        covered = (mask & roi).astype(bool)
+        out[covered] = (out[covered] * _SHADOW_KEEP).astype(np.uint8)
+    centre = tuple(int(v) for v in np.rint(np.array(blind.viewpoint) * scale))
+    radius = max(3, int(round(14 * _font_scale(out))))
+    cv2.circle(out, centre, radius, _VIEWPOINT_BGR, -1)
+    cv2.circle(out, centre, radius, _PANEL_BGR, 1)
+
+
 def _draw_counting(out: np.ndarray, scale: float, frame: int, counting: BevCounting) -> None:
     font = _font_scale(out)
     for line in counting.lines:
@@ -114,12 +138,14 @@ def _draw_counting(out: np.ndarray, scale: float, frame: int, counting: BevCount
 
 def draw_bev_frame(
     image: np.ndarray, scale: float, frame: int, tracks: Sequence[BevTrack], tail_frames: int,
-    *, events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None,
+    *, events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None, blind: "BevBlindArea | None" = None,
 ) -> np.ndarray:
     """A copy of `image` with the tracks present at `frame` (trail of the last `tail_frames` frames, id, speed)."""
     out = image.copy()
     font = _font_scale(out)
     radius = max(2, int(round(10 * font)))
+    if blind is not None:
+        _draw_blind_area(out, scale, frame, blind)
     if counting is not None:
         _draw_counting(out, scale, frame, counting)
     for event in events:
@@ -157,7 +183,7 @@ def bev_tracks(kins: Sequence[Kinematics]) -> Tuple[BevTrack, ...]:
 
 def write_bev_video(
     out_path: Path, background: np.ndarray, tracks: Sequence[BevTrack], cfg: BevVideoConfig, fps: float,
-    events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None,
+    events: Sequence[BevEvent] = (), counting: "BevCounting | None" = None, blind: "BevBlindArea | None" = None,
 ) -> Dict[str, Any]:
     """Write `out_path` from the first to the last frame that has a track; returns what was written."""
     if not tracks:
@@ -172,10 +198,12 @@ def write_bev_video(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     writer = VideoWriterWithFfmpeg(out_path, 5, out_w, out_h)
     for frame in range(first, last + 1):
-        writer.write(draw_bev_frame(base, scale, frame, tracks, tail_frames, events=events, counting=counting))
+        writer.write(draw_bev_frame(base, scale, frame, tracks, tail_frames, events=events, counting=counting, blind=blind))
     writer.close()
     info = {"written": True, "frames": last - first + 1, "size": [out_w, out_h], "scale": scale,
             "tail_frames": tail_frames, "event_links": len(events)}
+    if blind is not None:
+        info["blind_area"] = {"frames_with_shadow": sum(1 for f in range(first, last + 1) if blind.shadows.get(f))}
     if counting is not None:
         final = cumulative_counts(counting, last)
         info["counting"] = {"lines": [l.name for l in counting.lines],

@@ -908,3 +908,44 @@ def test_blind_area_uses_occluders_outside_the_roi(tmp_path, monkeypatch) -> Non
     assert read_summary(out_dir)["num_tracks"] == 0              # the ROI filter keeps no vehicle
     with (out_dir / "blind_area.csv").open(encoding="utf-8") as f:
         assert max(float(r["blind_ratio"]) for r in csv.DictReader(f)) > 0     # but their shadows reach into it
+
+
+def blind_bev_setup(tmp_path, bev: bool = True, blind: bool = True):
+    import dataclasses
+
+    from safetrajai.collision.conflict.config import BevVideoConfig
+
+    seq_dir, cfg, out_dir = blind_setup(tmp_path)
+    cfg.conflict_analysis = dataclasses.replace(
+        cfg.conflict_analysis, bev_video=BevVideoConfig(enabled=bev),
+        blind_area=dataclasses.replace(cfg.conflict_analysis.blind_area, enabled=blind))
+    return seq_dir, cfg, out_dir
+
+
+def test_bev_video_shows_the_blind_area_when_it_is_enabled(tmp_path) -> None:
+    seq_dir, cfg, out_dir = blind_bev_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+
+    summary = read_summary(out_dir)
+    assert summary["bev_video"]["written"] is True
+    assert summary["bev_video"]["blind_area"]["frames_with_shadow"] > 0
+    assert summary["blind_area"]["written"] is True
+
+
+def test_bev_video_has_no_blind_area_when_it_is_disabled(tmp_path) -> None:
+    seq_dir, cfg, out_dir = blind_bev_setup(tmp_path, blind=False)
+    run_entry(seq_dir, cfg)
+
+    summary = read_summary(out_dir)
+    assert summary["bev_video"]["written"] is True and "blind_area" not in summary["bev_video"]
+    assert "blind_area" not in summary and not (out_dir / "blind_area.csv").exists()
+
+
+def test_bev_video_has_no_blind_area_when_it_was_skipped(tmp_path) -> None:
+    seq_dir, cfg, out_dir = blind_bev_setup(tmp_path)
+    (cfg.homography_camera_dir / "C999001.yaml").write_text(GEOREF_CAMERA, encoding="utf-8")     # no viewpoint
+    run_entry(seq_dir, cfg)
+
+    summary = read_summary(out_dir)
+    assert summary["bev_video"]["written"] is True and "blind_area" not in summary["bev_video"]
+    assert summary["blind_area"]["skipped_reason"] == "no_camera_view_point"

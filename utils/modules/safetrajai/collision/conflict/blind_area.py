@@ -98,6 +98,7 @@ class BlindAreaResult:
     viewpoint_inside_skips: int       # body-frames without a shadow because the viewpoint was inside the body
     occluders_without_heading: int    # tracks that never moved fast enough to have a heading
     frames_without_heading: int       # body-frames skipped because no heading was known yet
+    shadows: Mapping[int, Tuple[np.ndarray, ...]]   # frame -> shadow quads, only filled with keep_shadows
 
 
 def _last_valid(values: np.ndarray) -> np.ndarray:
@@ -116,12 +117,14 @@ def compute_blind_area(
     frames: Sequence[int],
     lengths_m: Mapping[str, float],
     widths_m: Mapping[str, float],
+    keep_shadows: bool = False,
 ) -> BlindAreaResult:
     """Blind-area ratio inside `roi` for every frame in `frames`.
 
     Bodies sit on each track's bottom-centre point in map pixels and point along the smoothed velocity
     direction; a vehicle that is (nearly) still keeps its last valid heading, and one that has not had a
-    heading yet is skipped. `num_occluders` counts the bodies that cast a shadow.
+    heading yet is skipped. `num_occluders` counts the bodies that cast a shadow. `keep_shadows` also returns
+    the shadow quads per frame (for the bird's-eye video).
     """
     bodies_by_frame: Dict[int, List[np.ndarray]] = defaultdict(list)
     never_moved = frames_skipped = 0
@@ -144,8 +147,14 @@ def compute_blind_area(
     columns: Dict[str, List[Any]] = {name: [] for name in (
         "frame", "time_s", "num_occluders", "blind_area_m2", "roi_area_m2", "blind_ratio")}
     inside_skips = 0
+    shadows: Dict[int, Tuple[np.ndarray, ...]] = {}
+    reach = 2.0 * math.hypot(*roi.shape)
     for frame in frames:
         bodies = bodies_by_frame.get(int(frame), [])
+        if keep_shadows:
+            quads = tuple(q for q in (shadow_polygon(viewpoint, body, reach) for body in bodies) if q is not None)
+            if quads:
+                shadows[int(frame)] = quads
         blind_px, skipped = blind_area_px(viewpoint, bodies, roi)
         inside_skips += skipped
         columns["frame"].append(int(frame))
@@ -154,4 +163,4 @@ def compute_blind_area(
         columns["blind_area_m2"].append(blind_px * pixel_area)
         columns["roi_area_m2"].append(roi_px * pixel_area)
         columns["blind_ratio"].append(blind_px / roi_px if roi_px > 0 else float("nan"))
-    return BlindAreaResult(columns, inside_skips, never_moved, frames_skipped)
+    return BlindAreaResult(columns, inside_skips, never_moved, frames_skipped, shadows)
