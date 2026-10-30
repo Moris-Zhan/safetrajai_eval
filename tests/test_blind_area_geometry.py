@@ -94,3 +94,29 @@ def test_a_body_with_the_viewpoint_inside_is_skipped_and_counted() -> None:
 
 def test_no_bodies_means_no_blind_area() -> None:
     assert blind_area_px(VIEWPOINT, [], FULL) == (0.0, 0)
+
+
+def test_a_roi_that_is_only_the_body_has_no_blind_area() -> None:
+    corners = body()
+    roi = polygon_mask(corners, SHAPE)
+
+    area, _ = blind_area_px(VIEWPOINT, [corners], roi)
+
+    assert roi.sum() > 0
+    assert area == 0.0
+
+
+def test_a_roi_on_the_viewpoint_side_of_the_body_has_no_blind_area() -> None:
+    roi = polygon_mask(np.array([[0, 0], [130, 0], [130, 399], [0, 399]], dtype=float), SHAPE)
+
+    area, _ = blind_area_px(VIEWPOINT, [body()], roi)
+
+    assert area == 0.0
+
+
+def test_a_roi_beside_the_shadow_has_no_blind_area() -> None:
+    roi = polygon_mask(np.array([[200, 260], [399, 260], [399, 399], [200, 399]], dtype=float), SHAPE)   # shadow is 80 px wide at x=400
+
+    area, _ = blind_area_px(VIEWPOINT, [body()], roi)
+
+    assert area == 0.0
