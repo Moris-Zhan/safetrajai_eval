@@ -74,7 +74,7 @@
   - 驗收：無 `camera_view_point` 或 m/px 不可用 → `skipped_reason`；`limitations` 含 2D 假設
 - [x] **F4d**（S）盲區疊進鳥瞰影片
   - 驗收：F4 關閉時畫面不含盲區
-- [ ] **F4e**（S）文件（幾何假設、`camera_view_point` 取得方式）
+- [x] **F4e**（S）文件（幾何假設、`camera_view_point` 取得方式）｜`Markdown/blind_area/blind-area-guide.md`
 
 ### 檢查點 F4（最終）
 - [ ] SPEC 第 9 節成功標準 1–7 逐項對照；「絕對不做」清單零違反

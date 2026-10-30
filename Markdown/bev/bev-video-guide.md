@@ -28,6 +28,7 @@ conflict_analysis:
 - 軌跡：依類別上色的尾跡、軌跡 ID 與速度（km/h）；畫面左上為類別圖例（深色底）。
 - 衝突事件：事件開始到結束的幀，在配對的兩個物體之間畫紅色連線。
 - 計數線（同時開啟 `counting:` 且該鏡頭有計數線檔時）：黃色線段；右上角面板顯示各線各方向的累計數。`counting:` 關閉時畫面不含這些元素。
+- 盲區（同時開啟 `blind_area` 且鏡頭有 `camera_view_point` 時）：ROI 內被遮住的區域壓暗，並以青色圓點標出相機視點；說明見 [`Markdown/blind_area/blind-area-guide.md`](../blind_area/blind-area-guide.md)。
 - 時間範圍：從第一個到最後一個有軌跡的幀。
 
 ## 4. 限制

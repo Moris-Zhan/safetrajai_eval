@@ -421,6 +421,8 @@ python track_eval.py --config config/collision/conflict_analysis.yaml
 
 鳥瞰影片是 `conflict_analysis.bev_video` 選項（預設關閉）：把軌跡、衝突事件連線與（選用）計數線累計數畫在衛星圖上，輸出 `collision_output/<seq>/conflict/bev.mp4`。說明見 [`Markdown/bev/bev-video-guide.md`](Markdown/bev/bev-video-guide.md)。
 
+盲區分析是 `conflict_analysis.blind_area` 選項（預設關閉）：以大型車輛的矩形與 `config/homography/<camera>.yaml` 的 `camera_view_point`（用選點器 `camera-position` 模式取得）估計 ROI 內被遮住的比例，輸出 `collision_output/<seq>/conflict/blind_area.csv`，並可疊進鳥瞰影片。視為 2D，會高估盲區。說明見 [`Markdown/blind_area/blind-area-guide.md`](Markdown/blind_area/blind-area-guide.md)。
+
 衝突指標只是技術訊號，不能當成正式的安全結論。
 
 **Homography 鏡頭設定**（`config/homography/<camera>.yaml`）依下列順序操作；腳本都在 repo 根目錄執行：
