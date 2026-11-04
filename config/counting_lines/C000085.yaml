@@ -1,0 +1,12 @@
+# config/counting_lines/C000085.yaml — 鏡頭 C000085 的計數線（CCTV 首幀像素座標）
+camera: C000085
+image_size: [704, 480]
+lines:
+  - name: "line_1"
+    points: [[96, 222], [468, 223]]
+  - name: "line_2"
+    points: [[470, 225], [697, 278]]
+  - name: "line_3"
+    points: [[698, 352], [6, 350]]
+  - name: "line_4"
+    points: [[6, 350], [76, 231]]

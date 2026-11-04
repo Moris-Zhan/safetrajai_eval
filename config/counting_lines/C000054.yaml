@@ -1,0 +1,12 @@
+# config/counting_lines/C000054.yaml — 鏡頭 C000054 的計數線（CCTV 首幀像素座標）
+camera: C000054
+image_size: [1280, 720]
+lines:
+  - name: "line_1"
+    points: [[585, 146], [1212, 184]]
+  - name: "line_2"
+    points: [[1209, 190], [1202, 675]]
+  - name: "line_3"
+    points: [[1199, 685], [109, 371]]
+  - name: "line_4"
+    points: [[92, 365], [565, 146]]
