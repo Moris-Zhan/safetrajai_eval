@@ -10,6 +10,8 @@
 
 - [安裝](getting-started/install.md)
 - [資料與目錄慣例](getting-started/data-layout.md)
+- [從 Hugging Face 還原資料與模型](getting-started/hf-restore.md)
+- [評測資料集與追蹤基準分數](validation/baseline-scores.md)
 - [主流程：`track_eval.py`](pipeline/main-flow.md)
 - [各階段說明](pipeline/stages.md)
 - [ROI（關注區域）](roi/roi-guide.md)
