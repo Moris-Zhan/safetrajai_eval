@@ -1,8 +1,8 @@
 # Re-ID 資料工具（`rebuild-reid-dataset` 新流程）
 
-> 這組工具已經寫好並通過單元測試，但**實際裁切蒐集還沒執行**（要等 ROI 1.2、裁切設定 3.3 與 pilot 完成）。舊的 `dataset/reid/` 內容與舊權重都已隔離，不要引用或拿來訓練。`scripts/reid_data/README.md` 目前仍是舊流程的說明（預計在 7.1 更新）。
+> Re-ID 資料已由 change `rebuild-reid-dataset` 重建完成，現行流程多了自動排除與碎片合併，步驟與資料量見 [`scripts/reid_data/README.md`](../../scripts/reid_data/README.md)，指令索引見 README。舊的 `dataset/reid/` 內容與舊權重都已隔離，不要引用或拿來訓練。下面的前半部是最初的流程說明，保留作為各步驟的細節。
 
-新流程：**蒐集 → 標記 → 審查 → 排除 → manifest**
+最初的流程：**蒐集 → 標記 → 審查 → 排除 → manifest**（現行流程另有自動排除與碎片合併）
 
 ```
 stage1（save_reid_crops: true，只限 source 鏡頭且需要 ROI 檔）

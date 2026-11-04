@@ -40,14 +40,13 @@
 | 新鏡頭畫 ROI | `python scripts/picker/make_roi_picker.py --camera <id>` → 本機瀏覽器點選 → 存成 `config/roi/<id>.yaml`（完整步驟見 [ROI 教學](roi/roi-guide.md) 第 2 節） |
 | 調某類別的追蹤參數 | `grid_search_*.py --target-class <cls> --dry-run` → `--max-videos 1` → 正式跑 |
 | 隔離一份有問題的權重 | 先寫 `temp/DO_NOT_USE.md`，再 `mv` 到同目錄的 `temp/` |
-| 確認沒有改壞 | `pytest`；行為可能有變時再跑 golden 並與 `reid1` 比對 |
+| 確認沒有改壞 | `pytest`；行為可能有變時再跑 golden 並與 `conflict1` 比對 |
 
 ---
 
 ## 3. 已知限制
 
-- `track_buffer` 在 BoTSORT 版與 ByteTrack 版的單位不同（秒 vs. 30fps 幀數），兩者實際存活時間差 30 倍。
-- `botsort_reid.yaml` 的 small_truck／scooter Re-ID 權重是暫代方案，要等 `rebuild-reid-dataset` 產出新模型後替換。
-- Homography 目前以序列為鍵（`config/homography_points/<seq>.yaml`），與「Homography 屬於鏡頭」的設計有落差（見 `CONTEXT.md`）。
+- `botsort_reid.yaml` 的 small_truck／scooter Re-ID 權重是暫代方案，要等 `rebuild-reid-dataset` 產出新模型後替換（此條尚未重新查證）。
 - detection 評估目前不套用 ROI（全畫面）。
-- `save_mot_format()` 只 glob `C000025_*` 的問題已在 `rebuild-reid-dataset` 2.3 修正（改為 `*`），但 CLAUDE.md 的「已知限制」段落要到 7.1 才會移除。
+- `track_buffer` 在 BoTSORT 與 ByteTrack 都是正整數保留期限幀數，不依幀率換算；舊的秒數／30fps 換算已取代。
+- Homography 以鏡頭為鍵（`config/homography/<camera>.yaml`）；舊的 `config/homography_points/<seq>.yaml` 不再讀取，存在時報錯。
