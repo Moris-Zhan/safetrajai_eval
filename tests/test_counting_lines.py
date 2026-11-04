@@ -109,6 +109,20 @@ def test_bad_counting_blocks_are_rejected(block, message: str) -> None:
         load_counting_config(block)
 
 
+SHIPPED_LINE_FILES = sorted((Path(__file__).resolve().parents[1] / "config" / "counting_lines").glob("*.yaml"))
+
+
+@pytest.mark.parametrize("path", SHIPPED_LINE_FILES, ids=lambda p: p.name)
+def test_shipped_counting_lines_load_and_stay_inside_their_image(path: Path) -> None:
+    line_set = load_counting_lines(path)
+    width, height = line_set.image_size
+
+    assert line_set.lines
+    for line in line_set.lines:
+        for x, y in (line.p1, line.p2):
+            assert 0 <= x <= width and 0 <= y <= height, (line.name, (x, y))
+
+
 def test_existing_scenario_configs_keep_counting_disabled() -> None:
     from safetrajai.evaluation.config_loader import load_config
     from safetrajai.paths import CONFIG_DIR

@@ -13,6 +13,22 @@ def write_config(tmp_path: Path, extra: str = "") -> Path:
     return path
 
 
+SHIPPED_VIEW_POINT_PATHS = [
+    path for path in sorted((Path(__file__).resolve().parents[1] / "config" / "homography").glob("*.yaml"))
+    if load_camera_config(path).camera_view_point is not None
+]
+
+
+@pytest.mark.parametrize("path", SHIPPED_VIEW_POINT_PATHS, ids=lambda p: p.name)
+def test_shipped_view_points_are_inside_the_satellite_image(path: Path) -> None:
+    cfg = load_camera_config(path)
+    assert cfg.satellite is not None, cfg.camera
+    width, height = cfg.satellite.output_size
+    x, y = cfg.camera_view_point
+
+    assert 0 <= x <= width and 0 <= y <= height, (cfg.camera, (x, y), (width, height))
+
+
 def test_view_point_is_read_as_floats(tmp_path: Path) -> None:
     cfg = load_camera_config(write_config(tmp_path, "camera_view_point: [320.5, 240]\n"))
 
