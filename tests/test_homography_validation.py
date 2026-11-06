@@ -85,3 +85,34 @@ def test_no_checkpoints(dirs: dict) -> None:
     row = run(dirs, camera(dirs))
     assert row["validated"] is False and row["reason"] == "no_checkpoints"
     assert row["train_residual_N"] == 4
+
+
+HEATMAP_FILES = tuple(
+    f"{TAG}{style}_heatmap_{method}.png" for style in ("", "_pretty") for method in ("idw", "linear", "rbf")
+)
+SPREAD_CCTV = [[10, 10], [60, 20], [30, 70], [75, 65], [40, 40], [20, 50], [65, 45], [50, 15]]
+
+
+def write_satellite(dirs: dict) -> None:
+    import cv2
+
+    dirs["sat"].mkdir(exist_ok=True)
+    assert cv2.imwrite(str(dirs["sat"] / f"{TAG}.png"), np.full((300, 300, 3), 128, dtype=np.uint8))
+
+
+def test_error_heatmaps_are_written_for_each_interpolation(dirs: dict, tmp_path: Path) -> None:
+    write_checkpoints(dirs, SPREAD_CCTV, [[2 * x + 3.0, 2 * y + 4.0 + x * 0.05] for x, y in SPREAD_CCTV])
+    write_satellite(dirs)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    validate_camera(camera(dirs), dirs["matrices"], dirs["sat"], dirs["checkpoints"], output_dir=out_dir)
+    assert {path.name for path in out_dir.glob("*heatmap*.png")} == set(HEATMAP_FILES)
+
+
+def test_error_heatmaps_skipped_below_four_checkpoints(dirs: dict, tmp_path: Path) -> None:
+    write_checkpoints(dirs, SPREAD_CCTV[:3], [[2 * x + 3.0, 2 * y + 4.0] for x, y in SPREAD_CCTV[:3]])
+    write_satellite(dirs)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    validate_camera(camera(dirs), dirs["matrices"], dirs["sat"], dirs["checkpoints"], output_dir=out_dir)
+    assert list(out_dir.glob("*heatmap*.png")) == []
