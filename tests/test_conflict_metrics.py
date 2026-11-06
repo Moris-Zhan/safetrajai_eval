@@ -689,6 +689,16 @@ def bev_setup(tmp_path, with_satellite: bool = True, **bev_options):
     return seq_dir, cfg, out_dir
 
 
+def test_satellite_heatmap_is_written_only_with_the_satellite_image(tmp_path) -> None:
+    seq_dir, cfg, out_dir = bev_setup(tmp_path)
+    run_entry(seq_dir, cfg)
+    assert (out_dir / "conflict_heatmap_satellite.png").exists()
+
+    seq_dir, cfg, out_dir = bev_setup(tmp_path / "without_satellite", with_satellite=False)
+    run_entry(seq_dir, cfg)
+    assert not (out_dir / "conflict_heatmap_satellite.png").exists()
+
+
 def test_bev_video_is_not_written_or_mentioned_by_default(tmp_path) -> None:
     import json
 
