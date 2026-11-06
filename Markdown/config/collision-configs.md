@@ -61,7 +61,7 @@ stage3 只讀 stage1 產生的 7 欄 MOT 軌跡，不讀人工 GT。與基準 `b
 | | `ttc_distance_mode` | `fixed` 或 `class_length`（改用兩類別長度一半的和） |
 | | `ttc_horizon_s`、`ttc_step_s` | 外推上限與步進（秒，須 > 0） |
 | 追撞鏈 | `chain_angle_deg`、`chain_dist_m`、`chain_dist_weight`、`chain_eps` | Floyd-Warshall 連通的成本參數（須 ≥ 0）；最短路徑總成本不超過 `chain_eps` 視為同一追撞鏈 |
-| PET | `pet_zone_m` | 衝突區半徑（公尺，須 > 0） |
+| PET | `pet_zone_m` | 衝突區半徑（公尺，須 > 0）；兩條軌跡最近點的距離超過此值時，該配對不產生 PET（見下方說明） |
 | | `pet_max_gap_s` | `0` 表示只算同時出現過的配對；大於 0 時允許的時間間隔（秒） |
 | 衝突事件 | `event_threshold_s` | TTC 或 MTTC 低於此值的幀才構成事件（秒，須 > 0） |
 | | `event_gap_frames` | 幀差不超過此值時合併為同一事件（須 ≥ 0） |
@@ -69,6 +69,13 @@ stage3 只讀 stage1 產生的 7 欄 MOT 軌跡，不讀人工 GT。與基準 `b
 | 類別資料 | `object_length_m`、`object_mass_kg` | 6 類都必須給值且為正數；長度只用於 `ttc_distance_mode: class_length`，質量用於 CI_m |
 
 輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`；點座標有 `_m`、`_map_px`、`_cctv_px` 三組欄位。`summary.json` 的 `limitations` 記錄這次分析的限制。
+
+**PET 的距離篩選（與舊版 `Sub_Module/trajectoryanalyst2` 不同）**：兩條軌跡最近點的距離大於 `pet_zone_m` 時，該配對直接略過，不產生 `pet.csv` 的列。舊版把同樣的篩選註解掉了，所以最近點距離在 `pet_zone_m` 到 2 倍 `pet_zone_m`（預設 2～4 m）之間的配對也會算出 PET：衝突點取兩個最近點的中點，各軌跡離它約一半距離，仍落在進出判定的範圍內。這樣的兩條路徑在 TTC 的標準下不算碰撞（中心距離 > 2 m），卻會被算成 PET 事件。
+
+- 影響：用同一批軌跡比較，現行版本的 PET 事件數會少於用舊工具算出的數量。合成資料中被略過的配對有八成以上，在舊版會被算成 PET < 2.5 秒；真實場景的比例沒有量測過。
+- 邊界：進出衝突區用 `<=`（舊版是 `<`），只影響距離恰好等於 `pet_zone_m` 的點。
+- 測試：`tests/test_conflict_metrics.py::test_no_pet_when_paths_stay_apart`。
+- `summary.json` 的 `limitations` 目前沒有列出這一項；加進去會改變 `conflict` 類別的輸出，需要重建黃金比對基準。
 
 > ⚠️ 未經實測校正的事件數與指標只能當技術訊號，不能當成正式的安全結論。C000025 上的事件多在畫面遠端，那裡投影誤差最大。
 
