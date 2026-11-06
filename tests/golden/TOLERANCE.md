@@ -93,3 +93,10 @@ Homography 改以鏡頭為鍵（`config/homography/<camera>.yaml`）、驗證報
 - 逐項說明見 `openspec/changes/archive/2026-10-14-conflict-metrics/verification.md`。
 
 之後的比對一律使用 `python tests/golden/compare.py conflict1 <run>`。
+
+## 預期差異：衛星圖版熱力圖（2026-11-06，`satmap1`）
+
+stage3 在鏡頭有既有衛星矩陣與衛星底圖時，多輸出 `ttc_collision_heatmap_satellite.png`、`pet_collision_heatmap_satellite.png`（`collision_output/<seq>/`）與 `conflict/conflict_heatmap_satellite.png`。這些檔案只比路徑，所以對 `conflict1` 的比對會出現「只存在於新 run」的路徑，其餘全部不變。
+
+- `compare.py runs/refactor_golden_archive/conflict1 satmap1`：`conflict_events` 多 16 個檔案（`collision_detect` 與 `conflict_analysis` 各 8 個）、`conflict` 多 6 個檔案（每段序列一張 `conflict_heatmap_satellite.png`），共 22 個，沒有只存在於 `conflict1` 的檔案；`mot_tracks`、`yolo_labels`、`trackeval`、`grid_search`、`reid_crops`、`homography`、`other` 的檔案數相同，所有類別的數值差異都是 0。
+- 尚未做 `satmap1` 與 `satmap1b` 的自比；在做之前，`conflict1` 仍是現行基準。
