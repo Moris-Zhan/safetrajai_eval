@@ -150,6 +150,10 @@ def run_collision_detection_for_sequence(
         overlap_threshold=cfg.collision_overlap_threshold, use_homography=use_homography,
     )
 
+    # 反投影前的點仍在衛星圖座標系，衛星圖熱區圖直接用
+    ttc_map_points = [e["collision_point"] for e in ttc_events] if use_homography and tag is not None else []
+    pet_map_points = [e["cross_point"] for e in pet_events] if use_homography and tag is not None else []
+
     # 輸出前一律反投影回原始 CCTV 像素座標（H_inv 為 None 時原樣回傳，等同沒用 homography）
     ttc_events = _reproject_ttc_events(ttc_events, H_inv)
     pet_events = _reproject_pet_events(pet_events, H_inv)
@@ -179,6 +183,18 @@ def run_collision_detection_for_sequence(
         )
     else:
         print(f"  [{seq_name}] 找不到 {first_frame_path}，略過熱區圖輸出")
+
+    if tag is not None:
+        satellite = cv2.imread(str(homography_points.prebuilt_satellite_image_path(cfg.homography_satellite_dir, tag)))
+        if satellite is not None:
+            collision_output.draw_satellite_heatmap(
+                ttc_map_points, satellite, seq_out_dir / "ttc_collision_heatmap_satellite.png",
+                title="TTC Collision Heatmap (satellite)",
+            )
+            collision_output.draw_satellite_heatmap(
+                pet_map_points, satellite, seq_out_dir / "pet_collision_heatmap_satellite.png",
+                title="PET Collision Heatmap (satellite)",
+            )
 
     print(
         f"  [{seq_name}] tracks={len(tracks)}  TTC 事件={len(ttc_events)}  "

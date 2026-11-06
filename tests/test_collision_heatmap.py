@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from safetrajai import collision
-from safetrajai.collision.output import draw_collision_heatmap
+from safetrajai.collision.output import draw_collision_heatmap, draw_satellite_heatmap
 
 
 def background() -> np.ndarray:
@@ -84,3 +84,47 @@ def test_stage3_draws_heatmaps_only_with_first_frame(
     out_dir = cfg.collision_output_dir / seq_dir.name
     assert (out_dir / "ttc_collision_heatmap.png").exists() is with_background
     assert (out_dir / "pet_collision_heatmap.png").exists() is with_background
+
+
+def test_satellite_heatmap_keeps_only_points_inside_the_image(tmp_path: Path) -> None:
+    satellite = np.full((400, 400, 3), 90, dtype=np.uint8)
+    output_path = tmp_path / "satellite.png"
+    assert draw_satellite_heatmap([(200, 200), (500, 100), (100, 450)], satellite, output_path, title="t") is True
+    assert cv2.imread(str(output_path)).shape[:2] == (400, 400)
+    assert draw_satellite_heatmap([(500, 100)], satellite, output_path, title="t") is False
+    assert not output_path.exists()
+
+
+def test_stage3_draws_satellite_heatmaps_when_the_image_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seq_dir = tmp_path / "stage1" / "C000999 sample"
+    seq_dir.mkdir(parents=True)
+    cfg = stage3_config(tmp_path)
+    satellite_dir = tmp_path / "satellite"
+    satellite_dir.mkdir()
+    cv2.imwrite(str(satellite_dir / "tag.png"), np.full((200, 200, 3), 90, dtype=np.uint8))
+    cfg.homography_satellite_dir = satellite_dir
+    monkeypatch.setattr(collision.homography_points, "resolve_camera_homography", lambda *args: (np.eye(3), "tag"))
+    monkeypatch.setattr(collision, "add_homography_fields", lambda *args: None)
+    monkeypatch.setattr(
+        collision, "detection_core", SimpleNamespace(
+            compute_ttc_for_all_pairs=lambda *args, **kwargs: [{"collision_point": (40, 50)}],
+            compute_pet_for_all_pairs=lambda *args, **kwargs: [{"cross_point": (100, 70)}],
+        ),
+    )
+    monkeypatch.setattr(collision, "_reproject_ttc_events", lambda events, H_inv: events)
+    monkeypatch.setattr(collision, "_reproject_pet_events", lambda events, H_inv: events)
+    for writer in ("write_events_json", "write_events_csv", "write_ttc_legacy_log", "write_pet_legacy_log"):
+        monkeypatch.setattr(collision.collision_output, writer, lambda *args, **kwargs: None)
+
+    collision.run_collision_detection_for_sequence(seq_dir, cfg, fps=10.0, bounds=(120, 160))
+    out_dir = cfg.collision_output_dir / seq_dir.name
+    assert (out_dir / "ttc_collision_heatmap_satellite.png").exists()
+    assert (out_dir / "pet_collision_heatmap_satellite.png").exists()
+
+    (satellite_dir / "tag.png").unlink()
+    (out_dir / "ttc_collision_heatmap_satellite.png").unlink()
+    (out_dir / "pet_collision_heatmap_satellite.png").unlink()
+    collision.run_collision_detection_for_sequence(seq_dir, cfg, fps=10.0, bounds=(120, 160))
+    assert not list(out_dir.glob("*_satellite.png"))

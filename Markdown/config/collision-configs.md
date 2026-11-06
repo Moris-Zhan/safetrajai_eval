@@ -25,7 +25,7 @@ stage3 只讀 stage1 產生的 7 欄 MOT 軌跡，不讀人工 GT。與基準 `b
 | `stages.run_stage3` | `true` | 預設是關閉的，要在 config 明確開啟 |
 | `paths.COLLISION_OUT_DIR` | `collision_output` | 輸出在 `OUTPUT_ROOT/<COLLISION_OUT_DIR>/<seq>/` |
 
-`collision_output/<seq>/` 內是：`ttc_events.{json,csv}`、`pet_events.{json,csv}`、`collision_ttc_log.csv`、`collision_pet_log.csv`、`ttc_collision_heatmap.png`、`pet_collision_heatmap.png`。要看事件請讀 `ttc_events`、`pet_events`；熱區圖疊在 stage1 存下的 `first_frame_with_box.jpg` 上，找不到這張圖時會略過熱區圖，沒有事件點時也不會產生圖檔。
+`collision_output/<seq>/` 內是：`ttc_events.{json,csv}`、`pet_events.{json,csv}`、`collision_ttc_log.csv`、`collision_pet_log.csv`、`ttc_collision_heatmap.png`、`pet_collision_heatmap.png`；鏡頭有既有衛星矩陣與衛星底圖時另有 `ttc_collision_heatmap_satellite.png`、`pet_collision_heatmap_satellite.png`。要看事件請讀 `ttc_events`、`pet_events`；熱區圖疊在 stage1 存下的 `first_frame_with_box.jpg` 上，找不到這張圖時會略過熱區圖，沒有事件點時也不會產生圖檔。衛星圖版是把 Homography 投影後的事件點畫在 `models/homography/satellite_images/` 的底圖上，落在底圖外的點不畫，找不到底圖或沒有點時不產生。
 
 ## 3. `collision:` 區塊（TTC／PET）
 
@@ -68,7 +68,7 @@ stage3 只讀 stage1 產生的 7 欄 MOT 軌跡，不讀人工 GT。與基準 `b
 | | `stat_thresholds_s` | 摘要中以事件數統計的門檻（秒） |
 | 類別資料 | `object_length_m`、`object_mass_kg` | 6 類都必須給值且為正數；長度只用於 `ttc_distance_mode: class_length`，質量用於 CI_m |
 
-輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`；點座標有 `_m`、`_map_px`、`_cctv_px` 三組欄位。`summary.json` 的 `limitations` 記錄這次分析的限制。
+輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`，以及有衛星底圖時的 `conflict_heatmap_satellite.png`（用 `_map_px` 座標畫在衛星圖上）；點座標有 `_m`、`_map_px`、`_cctv_px` 三組欄位。`summary.json` 的 `limitations` 記錄這次分析的限制。
 
 **PET 的距離篩選（與舊版 `Sub_Module/trajectoryanalyst2` 不同）**：兩條軌跡最近點的距離大於 `pet_zone_m` 時，該配對直接略過，不產生 `pet.csv` 的列。舊版把同樣的篩選註解掉了，所以最近點距離在 `pet_zone_m` 到 2 倍 `pet_zone_m`（預設 2～4 m）之間的配對也會算出 PET：衝突點取兩個最近點的中點，各軌跡離它約一半距離，仍落在進出判定的範圍內。這樣的兩條路徑在 TTC 的標準下不算碰撞（中心距離 > 2 m），卻會被算成 PET 事件。
 

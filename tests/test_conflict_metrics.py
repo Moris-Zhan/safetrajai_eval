@@ -556,6 +556,7 @@ def sequence_setup(tmp_path, camera_yaml: "str | None", enabled: bool = True):
     cfg = types.SimpleNamespace(
         conflict_analysis=ConflictConfig(enabled=enabled),
         homography_camera_dir=camera_dir, homography_matrices_dir=matrices_dir,
+        homography_satellite_dir=tmp_path / "satellite",
         collision_output_dir=str(tmp_path / "collision"),
         benchmark_name="CCTV", split_name="val", tracker_name="YOLO11x",
     )
@@ -708,7 +709,7 @@ def test_bev_video_is_written_and_recorded(tmp_path) -> None:
     seq_dir, cfg, out_dir = bev_setup(tmp_path)
     run_entry(seq_dir, cfg)
 
-    assert tuple(sorted(p.name for p in out_dir.iterdir())) == tuple(sorted(OUT_FILES + ("bev.mp4",)))
+    assert tuple(sorted(p.name for p in out_dir.iterdir())) == tuple(sorted(OUT_FILES + ("bev.mp4", "conflict_heatmap_satellite.png")))
     assert (out_dir / "bev.mp4").stat().st_size > 0
     capture = cv2.VideoCapture(str(out_dir / "bev.mp4"))
     ok, frame = capture.read()

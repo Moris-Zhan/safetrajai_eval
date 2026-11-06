@@ -219,7 +219,7 @@ def run_conflict_analysis_for_sequence(
 
     Args:
         seq_output_dir: stage1 序列目錄（含 trackers/ 與 first_frame_with_box.jpg）
-        cfg: AppConfig，需要 conflict_analysis、homography_camera_dir、homography_matrices_dir、
+        cfg: AppConfig，需要 conflict_analysis、homography_camera_dir、homography_matrices_dir、homography_satellite_dir、
              collision_output_dir、benchmark_name、split_name、tracker_name
         fps: 序列影片幀率
         bounds: (height, width) 影片解析度，用於 ROI
@@ -280,6 +280,17 @@ def run_conflict_analysis_for_sequence(
         )
     else:
         print(f"  [{seq_name}] 找不到 {first_frame_path}，略過衝突事件熱區圖")
+
+    satellite = cv2.imread(str(homography_points.prebuilt_satellite_image_path(Path(cfg.homography_satellite_dir), tag))) if tag else None
+    if satellite is not None:
+        map_points = [
+            (x, y) for x, y in zip(event_columns["collision_x_map_px"], event_columns["collision_y_map_px"])
+            if np.isfinite(x) and np.isfinite(y)
+        ]
+        collision_output.draw_satellite_heatmap(
+            map_points, satellite, out_dir / "conflict_heatmap_satellite.png",
+            title="Conflict Event Heatmap (satellite)",
+        )
 
     chain_sizes = Counter(Counter(c.chain_id for c in chains).values())
     summary = {

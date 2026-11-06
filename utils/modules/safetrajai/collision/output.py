@@ -188,3 +188,20 @@ def draw_collision_heatmap(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(str(output_path), dpi=dpi, facecolor=fig.get_facecolor())
     return True
+
+
+def draw_satellite_heatmap(
+    points: Sequence[Tuple[float, float]],
+    satellite_bgr: np.ndarray,
+    output_path: Path,
+    title: str,
+) -> bool:
+    """Heat map of points in satellite pixel coordinates (after the homography), drawn on the satellite image.
+
+    Points outside the image are dropped; the blob radius grows with the image so it stays visible
+    on the 1280 px satellite images. Returns False (and removes a stale file) when no point is left.
+    """
+    height, width = satellite_bgr.shape[:2]
+    inside = [(x, y) for x, y in points if 0 <= int(y) < height and 0 <= int(x) < width]
+    radius = max(15, round(min(height, width) / 32))
+    return draw_collision_heatmap(inside, satellite_bgr, output_path, radius=radius, title=title)
