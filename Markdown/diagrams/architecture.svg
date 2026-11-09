@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="safetrajai-arch-title safetrajai-arch-desc" id="architecture-root">
+        <title id="safetrajai-arch-title">safetrajai_eval 架構圖</title>
+        <desc id="safetrajai-arch-desc">track_eval.py 主入口呼叫 stage1（偵測＋追蹤），輸出 MOT 軌跡後分別餵給 stage2 評估（需人工 GT）與 stage3 衝突分析；計數線統計、鳥瞰影片、盲區分析、衝突指標分析是 stage3 的四個選用輸出，目前都未啟用。Re-ID 訓練為選用分支，透過 use_reid 門檻接回追蹤階段，目前 6 類都關閉。</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #architecture-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif TC', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #architecture-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #architecture-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#architecture-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="architecture-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ================= ZONES (bg -> zones -> arrows -> nodes) ================= -->
+
+        <rect x="40" y="52" width="1200" height="400" rx="8" fill="#2d3142" stroke="#2d3142" stroke-width="0.8" fill-opacity="0.02" stroke-opacity="0.10"/>
+        <rect x="48" y="56" width="152" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="124" y="66" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">核心流程（已啟用）</text>
+
+        <rect x="40" y="476" width="1200" height="124" rx="8" fill="#2d3142" stroke="#2d3142" stroke-width="0.8" fill-opacity="0.02" stroke-opacity="0.10"/>
+        <rect x="48" y="480" width="152" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="124" y="490" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">選用分支（未啟用）</text>
+
+        <!-- ================= ARROWS (behind nodes) ================= -->
+
+        <!-- main spine: V -> ENTRY -> DET -> TRACK -> T -->
+        <line x1="176" y1="260" x2="232" y2="260" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+        <line x1="376" y1="260" x2="424" y2="260" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
+        <line x1="544" y1="260" x2="592" y2="260" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+        <line x1="720" y1="260" x2="768" y2="260" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+        <!-- T -> S2 (fan up) -->
+        <path d="M 916,248 H 1082 Q 1090,248 1090,240 V 228" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+        <!-- T -> S3 (fan down) -->
+        <path d="M 916,272 H 1082 Q 1090,272 1090,280 V 360" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+        <!-- GT -> S2 -->
+        <line x1="1090" y1="140" x2="1090" y2="164" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+        <!-- REID -> TRACK (dashed, use_reid gate) -->
+        <path d="M 164,512 V 444 Q 164,436 172,436 H 648 Q 656,436 656,428 V 292" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+        <rect x="372" y="430" width="72" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="408" y="439" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">USE_REID</text>
+
+        <!-- S3 -> four optional outputs (dashed, fanned + staggered lanes) -->
+        <path d="M 1036,424 V 440 Q 1036,448 1028,448 H 416 Q 408,448 408,456 V 512" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+        <path d="M 1072,424 V 456 Q 1072,464 1064,464 H 660 Q 652,464 652,472 V 512" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+        <path d="M 1108,424 V 472 Q 1108,480 1100,480 H 904 Q 896,480 896,488 V 512" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+        <line x1="1140" y1="424" x2="1140" y2="512" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+
+        <!-- ================= NODES ================= -->
+
+        <!-- V: 序列影片 (input) -->
+        <rect x="72" y="228" width="104" height="64" rx="6" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+        <rect x="80" y="236" width="24" height="12" rx="2" fill="none" stroke="#5a6580" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="92" y="245" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IN</text>
+        <text x="124" y="266" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">序列影片</text>
+        <text x="124" y="281" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">cctv video</text>
+
+        <!-- ENTRY: 主入口 (focal) -->
+        <rect x="232" y="228" width="144" height="64" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <rect x="240" y="236" width="44" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="262" y="245" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ENTRY</text>
+        <text x="304" y="266" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">主入口</text>
+        <text x="304" y="281" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">track_eval.py</text>
+
+        <!-- DET: 偵測 (backend) -->
+        <rect x="424" y="228" width="120" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="432" y="236" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="446" y="245" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DET</text>
+        <text x="484" y="266" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">偵測</text>
+        <text x="484" y="281" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">YOLO11x</text>
+
+        <!-- TRACK: 追蹤 (backend) -->
+        <rect x="592" y="228" width="128" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="600" y="236" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="614" y="245" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TRK</text>
+        <text x="656" y="266" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">追蹤</text>
+        <text x="656" y="281" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">class-aware tracker</text>
+
+        <!-- T: MOT 軌跡 (focal, data contract) -->
+        <rect x="768" y="228" width="148" height="64" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <rect x="776" y="236" width="40" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="796" y="245" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DATA</text>
+        <text x="842" y="266" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">MOT 軌跡</text>
+        <text x="842" y="281" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">7-col · per class</text>
+
+        <!-- GT: 人工 GT (store) -->
+        <rect x="1000" y="92" width="180" height="48" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <rect x="1008" y="100" width="24" height="12" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="1020" y="109" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GT</text>
+        <text x="1090" y="122" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">人工 GT</text>
+        <text x="1090" y="135" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">ground truth</text>
+
+        <!-- S2: stage2 評估 (backend) -->
+        <rect x="1000" y="164" width="180" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1008" y="172" width="24" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="1020" y="181" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S2</text>
+        <text x="1090" y="199" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">stage2 評估</text>
+        <text x="1090" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">TrackEval → Excel</text>
+
+        <!-- S3: stage3 衝突分析 (backend) -->
+        <rect x="1000" y="360" width="180" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1008" y="368" width="24" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="1020" y="377" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S3</text>
+        <text x="1090" y="395" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">stage3 衝突分析</text>
+        <text x="1090" y="410" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">TTC/PET → event</text>
+
+        <!-- REID: Re-ID 訓練 (optional, dashed) -->
+        <rect x="76" y="512" width="176" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+        <rect x="84" y="520" width="40" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.35"/>
+        <text x="104" y="529" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TRAIN</text>
+        <text x="164" y="550" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">Re-ID 訓練</text>
+        <text x="164" y="565" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">crops→manifest→DINOv2</text>
+
+        <!-- 計數線統計 (optional, dashed) -->
+        <rect x="320" y="512" width="176" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+        <rect x="328" y="520" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.35"/>
+        <text x="344" y="529" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OUT</text>
+        <text x="408" y="550" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">計數線統計</text>
+        <text x="408" y="565" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">counting_lines → csv</text>
+
+        <!-- 鳥瞰影片 (optional, dashed) -->
+        <rect x="564" y="512" width="176" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+        <rect x="572" y="520" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.35"/>
+        <text x="588" y="529" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OUT</text>
+        <text x="652" y="550" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">鳥瞰影片</text>
+        <text x="652" y="565" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">bev.mp4 · 5fps</text>
+
+        <!-- 盲區分析 (optional, dashed) -->
+        <rect x="808" y="512" width="176" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+        <rect x="816" y="520" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.35"/>
+        <text x="832" y="529" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OUT</text>
+        <text x="896" y="550" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">盲區分析</text>
+        <text x="896" y="565" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">blind_area.csv</text>
+
+        <!-- 衝突指標分析 (optional, dashed) -->
+        <rect x="1052" y="512" width="176" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+        <rect x="1060" y="520" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.35"/>
+        <text x="1076" y="529" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OUT</text>
+        <text x="1140" y="550" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">衝突指標分析</text>
+        <text x="1140" y="565" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">4 鏡頭 · 公尺單位</text>
+
+        <!-- ================= LEGEND ================= -->
+        <line x1="40" y1="660" x2="1240" y2="660" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="40" y="676" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="688" width="14" height="10" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <text x="60" y="697" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">焦點節點（入口／資料契約）</text>
+
+        <rect x="380" y="688" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="697" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">處理模組（偵測／追蹤／stage2/3）</text>
+
+        <rect x="680" y="688" width="14" height="10" rx="2" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <text x="700" y="697" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">資料／人工 GT</text>
+
+        <rect x="940" y="688" width="14" height="10" rx="2" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.30"/>
+        <text x="960" y="697" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">選用（未啟用）</text>
+      </svg>

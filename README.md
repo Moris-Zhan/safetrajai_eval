@@ -21,21 +21,9 @@
 
 一支**序列**（一段影片）進來，stage1 逐幀偵測並依類別追蹤，輸出每類一份 7 欄 MOT **軌跡**。stage2 與 stage3 讀這些軌跡：stage2 用 TrackEval 評估並輸出 Excel，stage3 找出 TTC／PET 低於門檻的**衝突事件**。
 
-```mermaid
-flowchart LR
-    V[序列影片] --> S1["stage1<br/>YOLO11 偵測 + class-aware 追蹤"]
-    S1 --> T[("7 欄 MOT 軌跡<br/>每類一檔")]
-    GT[(人工 GT)] --> S2
-    T --> S2["stage2<br/>TrackEval + ROI 忽略區域"]
-    S2 --> X[Excel 報表]
-    T --> S3["stage3<br/>TTC／PET + Homography"]
-    S3 --> E[衝突事件與熱區圖]
-    S3 -.選用.-> O["計數線 / 鳥瞰影片 / 盲區"]
-    subgraph reid [Re-ID 支線]
-        C[裁切蒐集] --> Q[品質把關] --> M[manifest] --> TR[訓練 DINOv2]
-    end
-    TR -.逐類別 use_reid.-> S1
-```
+![主程式入口、各大模組與 Re-ID 訓練流程](Markdown/diagrams/architecture.svg)
+
+主入口 `track_eval.py` 呼叫 stage1，輸出的 MOT 軌跡分別餵給 stage2（另需人工 GT）與 stage3；計數線／鳥瞰影片／盲區是 stage3 的選用輸出。Re-ID 訓練（裁切→品質把關→manifest→DINOv2）是獨立分支，透過逐類別 `use_reid` 門檻接回 stage1，目前 6 類都關閉（見[結果摘要](#結果摘要)）。
 
 固定 6 類，類別 ID 是跨模組契約（`utils/modules/safetrajai/classes.py`）：`person=0`、`car=1`、`scooter=2`、`small_truck=3`、`bus=4`、`truck=5`。stage1 軌跡**不依 ROI 過濾**，限縮範圍由下游自行套用。
 
@@ -74,6 +62,46 @@ utils/modules/_vendor/trackeval/     修改過的 vendored TrackEval（唯讀）
 ```
 
 `dataset/`、`models/`、`runs/` 不進版控，從 Hugging Face 還原（[還原步驟](Markdown/getting-started/hf-restore.md)）。
+
+## 模組架構
+
+`utils/modules/safetrajai/` 底下內部結構較完整的 5 個模組，以下各自展開成一張圖；簡單的工具模組（`detection/`、`roi.py`、`paths.py` 等）已經在前面兩節用一行說明過，不重複展開。
+
+### pipeline/：stage1-3 調度
+
+`cli/run_pipeline.py` 建立 `TrackingEvalPipeline` 並依序觸發三個 stage；stage1 內部由 `VideoSequenceTracker` 逐序列迴圈，每幀呼叫偵測與追蹤，`save_reid_crops`／`save` 開著時才額外蒐集 Re-ID 裁切或輸出疊圖影片（影片固定 5fps，忽略傳入的 fps 參數）。
+
+![pipeline/ 模組架構圖](Markdown/diagrams/pipeline.svg)
+
+### tracking/：class-aware 三階段匹配
+
+偵測結果先依類別分組，再做三階段匈牙利匹配（Stage1 高信心、Stage2 低信心、Stage3 unconfirmed），每階段都查 `get_params_for_class()` 取得逐類別門檻；`NEW` 標籤標出本專案新增、取代 ultralytics 原生邏輯的部分，未配對的 track 依 confirmed／unconfirmed 走向不同終點（Lost 存活判斷或直接淘汰）。
+
+![tracking/ 模組流程圖](Markdown/diagrams/tracking.svg)
+
+### evaluation/：stage2 雙軌評估
+
+序列探索後分兩條互不相依的鏈：TRK 軌跡評估讀 stage1 輸出，經忽略區域套用後呼叫唯讀的 vendored TrackEval；DET 偵測評估只用人工 GT 重新跑一次 YOLO 驗證，不讀任何追蹤標籤。兩條鏈各自輸出到同一份 Excel 報表。
+
+![evaluation/ 模組流程圖](Markdown/diagrams/evaluation.svg)
+
+### collision/ 核心：TTC／PET 衝突事件偵測
+
+只讀 stage1 的 MOT 軌跡；有既有 Homography 矩陣或人工對應點時先轉換座標再進核心運算，沒有時直接用 CCTV 像素座標，兩條路徑最後都匯入同一個 TTC／PET 核心，事件座標再反投影回 CCTV 像素輸出。
+
+![collision/ 核心架構圖](Markdown/diagrams/collision-core.svg)
+
+### collision/ 選用輸出：計數線統計與衝突指標分析
+
+計數線統計不依賴 Homography；衝突指標分析只在有公尺換算的 4 個鏡頭計算，核心指標完成後才視各自開關產生鳥瞰影片與盲區分析，盲區分析的遮蔽陰影會疊進鳥瞰影片——這兩個選用輸出其實共用同一個入口函式，不是跟計數線平行的獨立分支。
+
+![collision/ 選用輸出架構圖](Markdown/diagrams/collision-optional.svg)
+
+### reid/：推論與訓練
+
+訓練端從資料品質工具把關過的 manifest 出發，打包本機快取、訓練骨幹＋BNNeck，產出的 `model.pt` 被推論端的 `Custom_ReID` 載入，兩端共用同一個 letterbox 裁切工具；另一條 `ReID`（YOLO 當 encoder）路徑與訓練完全獨立。外觀分離度關卡只量測特徵品質，不代表追蹤 IDSW 會改善（目前 6 類 ReID 仍全部關閉）。
+
+![reid/ 模組架構圖](Markdown/diagrams/reid.svg)
 
 ## 安裝
 

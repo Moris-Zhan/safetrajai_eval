@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pipeline/ 模組架構圖</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Serif+TC:wght@400&family=Noto+Sans+TC:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif TC', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1000px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · pipeline/</p>
+    <h1>stage1-3 調度：pipeline/ 套件內部結構</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pipeline-title pipeline-desc">
+        <title id="pipeline-title">pipeline/ 模組架構圖</title>
+        <desc id="pipeline-desc">cli/run_pipeline.py 建立 TrackingEvalPipeline 並呼叫 run()，依序觸發 stage1（VideoSequenceTracker 逐序列迴圈，內部每幀呼叫 Detector 與 class-aware tracker，選用輸出 Re-ID 裁切與疊圖影片）、stage2（evaluation/pipeline.py 入口）、stage3（collision/__init__.py 入口）。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ================= ARROWS (behind nodes) ================= -->
+
+        <!-- CLI -> CORE -->
+        <line x1="208" y1="96" x2="344" y2="96" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- CORE -> VST (stage1) -->
+        <line x1="436" y1="128" x2="436" y2="224" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- VST -> 逐幀偵測＋追蹤 -->
+        <line x1="436" y1="288" x2="436" y2="384" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="444" y="328" width="56" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="472" y="337" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">每幀</text>
+
+        <!-- VST -> ReidCropCollector (dashed) -->
+        <path d="M 344,256 H 136 Q 128,256 128,264 V 384" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- VST -> VideoWriterWithFfmpeg (dashed) -->
+        <path d="M 528,256 H 740 Q 748,256 748,264 V 384" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- CORE -> stage2 -->
+        <line x1="528" y1="84" x2="656" y2="84" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- CORE -> stage3 -->
+        <path d="M 528,108 H 740 Q 748,108 748,116 V 224" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- ================= NODES ================= -->
+
+        <!-- CLI 入口 (input) -->
+        <rect x="48" y="64" width="160" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+        <rect x="56" y="72" width="28" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+        <text x="70" y="81" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CLI</text>
+        <text x="128" y="102" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">CLI 入口</text>
+        <text x="128" y="117" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">run_pipeline.py</text>
+
+        <!-- TrackingEvalPipeline (focal) -->
+        <rect x="344" y="64" width="184" height="64" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <rect x="352" y="72" width="44" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="374" y="81" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+        <text x="436" y="102" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">TrackingEvalPipeline</text>
+        <text x="436" y="117" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tracking_pipeline.py .run()</text>
+
+        <!-- stage2 入口 (backend) -->
+        <rect x="656" y="64" width="184" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="664" y="72" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="676" y="81" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S2</text>
+        <text x="748" y="102" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">stage2 評估入口</text>
+        <text x="748" y="117" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">evaluation/pipeline.py</text>
+
+        <!-- VideoSequenceTracker (backend) -->
+        <rect x="344" y="224" width="184" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="352" y="232" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="364" y="241" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S1</text>
+        <text x="436" y="262" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">VideoSequenceTracker</text>
+        <text x="436" y="277" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sequence_tracker.py</text>
+
+        <!-- stage3 入口 (backend) -->
+        <rect x="656" y="224" width="184" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="664" y="232" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="676" y="241" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S3</text>
+        <text x="748" y="262" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">stage3 衝突分析入口</text>
+        <text x="748" y="277" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">collision/__init__.py</text>
+
+        <!-- Re-ID 裁切蒐集 (optional, dashed) -->
+        <rect x="48" y="384" width="160" height="64" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="56" y="392" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/>
+        <text x="72" y="401" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OPT</text>
+        <text x="128" y="422" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">Re-ID 裁切蒐集</text>
+        <text x="128" y="437" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">save_reid_crops=True</text>
+
+        <!-- 逐幀偵測＋追蹤 (backend) -->
+        <rect x="344" y="384" width="184" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="352" y="392" width="56" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="380" y="401" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DET+TRK</text>
+        <text x="436" y="422" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">逐幀偵測＋追蹤</text>
+        <text x="436" y="437" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Detector → create_tracker()</text>
+
+        <!-- 影片輸出 (optional, dashed) -->
+        <rect x="656" y="384" width="184" height="64" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="664" y="392" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/>
+        <text x="680" y="401" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OPT</text>
+        <text x="748" y="422" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','Noto Sans TC',sans-serif" text-anchor="middle">影片輸出</text>
+        <text x="748" y="437" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">video_io.py · 固定 5fps</text>
+
+        <!-- ================= LEGEND ================= -->
+        <line x1="40" y1="500" x2="920" y2="500" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="516" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="528" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+        <text x="60" y="537" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">入口（CLI）</text>
+
+        <rect x="260" y="528" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <text x="280" y="537" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">焦點（調度核心）</text>
+
+        <rect x="500" y="528" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="520" y="537" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">處理步驟</text>
+
+        <rect x="700" y="528" width="14" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.30)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="720" y="537" fill="#2d3142" font-size="12" font-family="'Geist','Noto Sans TC',sans-serif">選用（開關控制）</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
