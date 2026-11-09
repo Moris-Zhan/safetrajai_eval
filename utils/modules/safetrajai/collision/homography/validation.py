@@ -2,7 +2,7 @@
 Homography 矩陣驗證：拿獨立於訓練點之外的 check points，套用矩陣做 reprojection，
 量測誤差（像素），評估某個路口的 Homography 矩陣準不準。
 
-移植自 Sub_Module/homongraphy_val/homography_validator.py，本專案版本
+移植自 ignore/Sub_Module/homongraphy_val/homography_validator.py，本專案版本
 跟原始程式的差異：
 - 以鏡頭為鍵：check points 從 config/homography_checkpoints/<camera>.yaml 讀，
   矩陣與比例尺資訊取自 config/homography/<camera>.yaml（spec `camera-homography`）。

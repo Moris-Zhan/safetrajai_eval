@@ -70,7 +70,7 @@ stage3 只讀 stage1 產生的 7 欄 MOT 軌跡，不讀人工 GT。與基準 `b
 
 輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`，以及有衛星底圖時的 `conflict_heatmap_satellite.png`（用 `_map_px` 座標畫在衛星圖上）；點座標有 `_m`、`_map_px`、`_cctv_px` 三組欄位。`summary.json` 的 `limitations` 記錄這次分析的限制。
 
-**PET 的距離篩選（與舊版 `Sub_Module/trajectoryanalyst2` 不同）**：兩條軌跡最近點的距離大於 `pet_zone_m` 時，該配對直接略過，不產生 `pet.csv` 的列。舊版把同樣的篩選註解掉了，所以最近點距離在 `pet_zone_m` 到 2 倍 `pet_zone_m`（預設 2～4 m）之間的配對也會算出 PET：衝突點取兩個最近點的中點，各軌跡離它約一半距離，仍落在進出判定的範圍內。這樣的兩條路徑在 TTC 的標準下不算碰撞（中心距離 > 2 m），卻會被算成 PET 事件。
+**PET 的距離篩選（與舊版 `ignore/Sub_Module/trajectoryanalyst2` 不同）**：兩條軌跡最近點的距離大於 `pet_zone_m` 時，該配對直接略過，不產生 `pet.csv` 的列。舊版把同樣的篩選註解掉了，所以最近點距離在 `pet_zone_m` 到 2 倍 `pet_zone_m`（預設 2～4 m）之間的配對也會算出 PET：衝突點取兩個最近點的中點，各軌跡離它約一半距離，仍落在進出判定的範圍內。這樣的兩條路徑在 TTC 的標準下不算碰撞（中心距離 > 2 m），卻會被算成 PET 事件。
 
 - 影響：用同一批軌跡比較，現行版本的 PET 事件數會少於用舊工具算出的數量。合成資料中被略過的配對有八成以上，在舊版會被算成 PET < 2.5 秒；真實場景的比例沒有量測過。
 - 邊界：進出衝突區用 `<=`（舊版是 `<`），只影響距離恰好等於 `pet_zone_m` 的點。

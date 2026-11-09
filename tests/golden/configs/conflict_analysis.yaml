@@ -201,7 +201,7 @@ class_tracking:
 
 
 # -----------------------------------------------------------------------------
-# 衝突指標分析（safetrajai/collision/conflict/，單位一律是公尺、秒；預設值沿用參考實作 Sub_Module/trajectoryanalyst2）
+# 衝突指標分析（safetrajai/collision/conflict/，單位一律是公尺、秒；預設值沿用參考實作 ignore/Sub_Module/trajectoryanalyst2）
 # -----------------------------------------------------------------------------
 conflict_analysis:
   enabled: true

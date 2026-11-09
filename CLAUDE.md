@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 可安裝套件 `safetrajai`（原始碼放在 `utils/modules/`，`pyproject.toml`）。`requirement.txt` 是舊的 pip 安裝腳本，包含許多與本專案無關的套件，**不是依賴的權威來源**；依賴以 `pyproject.toml` 為準（核心為 `ultralytics==8.3.141`、`torch`、`opencv-python`、`numpy`、`scipy`、`openpyxl`、`pyyaml`、`scikit-learn` 等）。
 - `utils/modules/_vendor/trackeval/` 是修改過的 vendored TrackEval（6 類別對照），透過同一份 pyproject 安裝，以 `import trackeval` 使用；視為唯讀，不要修改或格式化：本專案改過它的資料集定義（`datasets/mot_challenge_2d_box.py` 的 6 類別對照與 1-based 類別 ID），升級上游前必須先比對並重新套用這些修改，否則評估會靜默用錯類別。
-- `dataset/`、`models/`、`runs/`、`Sub_Module/`、`ignore/` 被 gitignore（權重、影片、實驗輸出）。
+- `dataset/`、`models/`、`runs/`、`ignore/` 被 gitignore（權重、影片、實驗輸出）；舊參考實作在 `ignore/Sub_Module/`。
 
 ## 安裝
 
@@ -197,6 +197,6 @@ SOURCE 端（序列影片、人工 GT）沿用舊命名 `annotation_<seq>/`、`m
 - 衝突指標分析（change `conflict-metrics`）：`conflict_analysis.enabled` 為 true 時，`run_stage3()` 在既有 TTC／PET 之後另外呼叫 `safetrajai.collision.conflict.run_conflict_analysis_for_sequence()`，既有輸出逐位元不變；沒有這個區塊時視為關閉。
   - 只在 `meters_per_pixel()` 可用的鏡頭計算（目前 C000025、C000043、C000054、C000085），其餘序列只寫 `summary.json` 並記錄 `skipped_reason`（`no_homography`／`no_meters_per_pixel`），不退回像素。位置取框的底邊中點，軌跡鍵為 `(class, track_id)`。
   - 輸出在 `collision_output/<seq>/conflict/`：`pair_frames.csv`、`conflict_events.{csv,json}`、`pet.csv`、`chains.csv`、`summary.json`、`conflict_heatmap.png`，有衛星底圖時另有 `conflict_heatmap_satellite.png`；點座標有 `_m`／`_map_px`／`_cctv_px` 三組欄位。
-  - 指標定義以 `Sub_Module/trajectoryanalyst2` 為準（TTC 碰撞距離為中心距離 2 m、三種衝突類型、DRAC 超限取代 PICUD、CI 取大小、PET 只算同時出現過的配對），唯一例外是 DRAC 接近速度的符號錯誤已修正；限制寫在 `summary.json` 的 `limitations`。
+  - 指標定義以 `ignore/Sub_Module/trajectoryanalyst2` 為準（TTC 碰撞距離為中心距離 2 m、三種衝突類型、DRAC 超限取代 PICUD、CI 取大小、PET 只算同時出現過的配對），唯一例外是 DRAC 接近速度的符號錯誤已修正；限制寫在 `summary.json` 的 `limitations`。
   - fps 低於 `min_fps_for_acceleration`（預設 10）時不計算加速度類指標（MTTC、DR、MaxD、DRAC 超限、CI、CI_m）；C000025 約 5 fps，所以只有速度類指標。C000025 上的事件多在畫面遠端，那裡投影誤差最大；指標只當技術訊號。
 - 外部服務與金鑰：經緯度查詢（`scripts/homography/geocode_cameras.py`，OSM Overpass，查不到時以 Google Geocoding 備援）、比例尺檢查（`scripts/homography/check_homography_scale.py`）與底圖下載（`scripts/homography/download_satellite.py`）都是手動執行，不在 pipeline 中。金鑰從環境變數或 repo 根目錄的 `.env`（git 忽略）讀取：`GOOGLE_MAPS_API_KEY`（billing）、`GOOGLE_MAPS_DEMO_API_KEY`（Maps Demo Key，依條款只能用於測試與原型，只允許 `--purpose verify`，不能下載正式底圖）。程式不得印出金鑰值。Google Static Maps 條款可能限制離線保存與衍生使用，底圖不納入 git。

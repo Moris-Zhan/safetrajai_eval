@@ -4,7 +4,7 @@ Metres per pixel of a camera's top-down (satellite) plane.
 Web Mercator ground resolution of a Google Static Maps image:
     m_per_pixel = 156543.03392 * cos(latitude) / 2**zoom / scale
 156543.03392 = 2 * pi * 6378137 / 256 (WGS84 equatorial radius, 256-px tiles).
-The reference implementation (Sub_Module) omitted cos(latitude), which overstates
+The reference implementation (ignore/Sub_Module) omitted cos(latitude), which overstates
 distances by about 8% in Kaohsiung.
 """
 
