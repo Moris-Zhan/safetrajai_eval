@@ -37,3 +37,8 @@ build/
 # Secrets (API keys, NAS credentials)
 .env
 .env.*
+
+# 個人工作區雜項 — 非專案內容
+NEW_Module/
+graphify-out/
+tools/favorites install.v18.sh
