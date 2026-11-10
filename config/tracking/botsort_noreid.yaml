@@ -77,11 +77,11 @@ class_tracking:
     car:
       center_dist_weight: 0.4
       fuse_score: true
-      match_thresh: 0.7
+      match_thresh: 0.8
       new_track_thresh: 0.25
       norm_factor: 80.0
-      second_match_thresh: 0.6
-      unconfirmed_match_thresh: 0.9
+      second_match_thresh: 0.5
+      unconfirmed_match_thresh: 0.85
       use_reid: false
       proximity_thresh: 0.5
       appearance_thresh: 0.1
@@ -103,11 +103,11 @@ class_tracking:
     small_truck:
       center_dist_weight: 0.2
       fuse_score: true
-      match_thresh: 0.6
+      match_thresh: 0.8
       norm_factor: 100.0
       new_track_thresh: 0.15
       second_match_thresh: 0.45
-      unconfirmed_match_thresh: 0.9
+      unconfirmed_match_thresh: 0.85
       use_reid: false
       proximity_thresh: 0.3
       appearance_thresh: 0.1
@@ -116,11 +116,11 @@ class_tracking:
     truck:
       center_dist_weight: 0.2
       fuse_score: false
-      match_thresh: 0.6
+      match_thresh: 0.7
       norm_factor: 100.0
       new_track_thresh: 0.15
       second_match_thresh: 0.45
-      unconfirmed_match_thresh: 0.9
+      unconfirmed_match_thresh: 0.85
       use_reid: false
       proximity_thresh: 0.6
       appearance_thresh: 0.1

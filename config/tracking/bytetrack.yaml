@@ -125,11 +125,11 @@ class_tracking:
       track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2
       fuse_score: true
-      match_thresh: 0.6
+      match_thresh: 0.7
       norm_factor: 100.0
       new_track_thresh: 0.15
       second_match_thresh: 0.45
-      unconfirmed_match_thresh: 0.9
+      unconfirmed_match_thresh: 0.85
     truck:
       track_buffer: 120  # 幀；原 fallback 120 × 30/30
       center_dist_weight: 0.2

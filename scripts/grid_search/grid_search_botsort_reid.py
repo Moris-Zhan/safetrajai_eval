@@ -49,10 +49,10 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
 
     # Grid search 參數直接與 config_BotSort_0413.py (固定值, 非候選列表) 完全一致設定:
     "car": {
-        "match_thresh":             [0.7],
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
         "new_track_thresh":         [0.25],
-        "second_match_thresh":      [0.6],
-        "unconfirmed_match_thresh": [0.9],
+        "second_match_thresh":      [0.50, 0.60, 0.70],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
         "center_dist_weight":       [0.4],
         "norm_factor":              [80.0],
         "fuse_score":               [True],
@@ -65,10 +65,10 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     },
 
     "bus": {
-        "match_thresh":             [0.7],
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
         "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.55],
-        "unconfirmed_match_thresh": [0.95],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
         "center_dist_weight":       [0.25],
         "norm_factor":              [200.0],
         "fuse_score":               [False],
@@ -81,10 +81,10 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     },
 
     "small_truck": {
-        "match_thresh":             [0.6],
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
         "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.45],
-        "unconfirmed_match_thresh": [0.9],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
         "center_dist_weight":       [0.2],
         "norm_factor":              [100.0],
         "fuse_score":               [True],
@@ -97,10 +97,10 @@ PARAM_GRIDS: dict[str, dict[str, list]] = {
     },
 
     "truck": {
-        "match_thresh":             [0.6],
+        "match_thresh":             [0.6, 0.7, 0.80, 0.85, 0.90],
         "new_track_thresh":         [0.15],
-        "second_match_thresh":      [0.45],
-        "unconfirmed_match_thresh": [0.9],
+        "second_match_thresh":      [0.45, 0.50, 0.55],
+        "unconfirmed_match_thresh": [0.85, 0.90, 0.95],
         "center_dist_weight":       [0.2],
         "norm_factor":              [100.0],
         "fuse_score":               [False],

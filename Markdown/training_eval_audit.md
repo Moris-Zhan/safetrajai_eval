@@ -50,6 +50,66 @@
 | person | 網格有設計，無留存執行證據 | 網格有設計，無留存執行證據 | 網格有設計，無留存執行證據 |
 | car／bus／truck／small_truck | 網格有設計，無留存執行證據 | 核心參數未設計成搜尋（固定值＋只搜 ReID 參數） | 完全未設計成搜尋（全固定值＝沿用舊 config） |
 
+### 補齊進度（2026-11-09 起，優先順序第 2 項執行中）
+
+**ByteTrack 階段：已完成**（全部 6 類別、完整 6 段 `cctv_all8` 序列，`--params-subset match_thresh,second_match_thresh,unconfirmed_match_thresh`，搜尋範圍沿用各類別既有的真實網格）。詳細逐序列數據與兩種分數的完整比較見獨立報告：`Markdown/grid_search/bytetrack_all6_rerun/bytetrack_all6_report.md`（腳本與設定備份在同一資料夾）。
+
+**⚠️ 重要更正**：grid search 回傳的分數（`safetrajai/grid_search/core.py::score_params()`）是「排除 0 分序列後取第 25 百分位數」，**不是平均值**；實際用逐序列算術平均重新驗算後，person／scooter 兩類在 grid search 分數上打平或進步，但平均準確率反而下降——這兩類最終**不採用** grid search 找到的參數。
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 建議新參數 (match/second/unconfirmed) | 結論 |
+|---|---|---|---|---|
+| small_truck | 0.7180→0.8115 | 0.8268→0.8836 | 0.7 / 0.45 / 0.85 | 兩指標都明顯改善，**建議更新** |
+| car | 0.7947→0.7966 | 0.8144→0.8152 | 0.7 / 0.5 / 0.85 | 改善幅度極小，可不改 |
+| truck | 0.8373→0.8373 | 0.7208→0.7208 | 現值已最佳 | 不用改 |
+| bus | 0.8369→0.8369 | 0.8409→0.8409 | 現值已最佳 | 不用改（僅 1 段序列有 GT） |
+| person | 0.7444→0.7444 | 0.8563→**0.7907** | — | GS 打平但平均準確率變差，**不採用** |
+| scooter | 0.6756→0.6856 | 0.7789→**0.7597** | — | GS 進步但平均準確率變差（指標矛盾），**不採用** |
+
+**資料覆蓋度的重要發現**：`cctv_all8` 只有單一鏡頭（C000025）共 6 段序列，**沒有任何一段同時包含全部 6 個類別**。逐序列 × 逐類別 ROI 內可評估 GT 統計（6 段合計）：person 234、car 2084、scooter 1324、small_truck 146（4/6 段有）、truck 81（3/6 段有）、**bus 僅 21 個，且全部來自單一段序列**（`152639_15s_2`）。這代表 bus／truck／small_truck 的調參結論統計強度明顯弱於 person／car／scooter，是資料集本身的結構性限制，不是切分或程式的問題。
+
+**BoTSORT（no ReID）階段：已完成**（同樣全 6 段序列，`scripts/grid_search/grid_search_botsort.py` 的 car/bus/truck/small_truck 已從固定單值改成真實候選範圍）。詳細報告：`Markdown/grid_search/botsort_noreid_all6_rerun/botsort_noreid_all6_report.md`。
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 建議新參數 (match/second/unconfirmed) | 結論 |
+|---|---|---|---|---|
+| car | 0.8317→0.8641 | 0.8603→0.8942 | 0.8 / 0.5 / 0.85 | 兩指標都改善，**建議更新** |
+| small_truck | 0.7871→0.9106 | 0.8598→0.9252 | 0.8 / 0.45 / 0.85 | 兩指標都明顯改善，**建議更新** |
+| truck | 0.8352→0.8490 | 0.8790→0.8882 | 0.7 / 0.45 / 0.85 | 兩指標都改善，**建議更新** |
+| bus | 0.9497→0.9497 | 0.9514→0.9514 | 現值已最佳 | 不用改（僅 1 段序列有 GT） |
+| person | N/A（基準參數不在原 ReID 導向網格內） | 0.8856→0.8856 | — | 逐序列分數與基準逐位元相同，完全不敏感，不用改 |
+| scooter | N/A（同上） | 0.7945→**0.7815** | — | ⚠️ 平均準確率反而下降，**不採用** |
+
+**BoTSORT＋ReID 階段：已完成**（同樣全 6 段序列，`scripts/grid_search/grid_search_botsort_reid.py` 的 car/bus/truck/small_truck 已從固定單值改成真實候選範圍；ReID 權重沿用 `models/class_reid_weights/dinov2s_v3/model.pt`）。詳細報告：`Markdown/grid_search/botsort_reid_all6_rerun/botsort_reid_all6_report.md`。
+
+門檻參數（match/second/unconfirmed）的 grid search 結論：
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 結論 |
+|---|---|---|---|
+| person | N/A→0.756847 | 0.8856→0.8856 | 打平／不敏感，不採用 |
+| car | 0.834227→0.835340 | 0.8941→**0.8789** | ⚠️ GS 分數微幅改善但平均準確率反而下降，**不採用** |
+| scooter | N/A→0.689818 | 0.7933→**0.7771** | ⚠️ 平均準確率反而下降，**不採用新門檻**（ReID 開關見下） |
+| small_truck | 0.869323→0.869323 | 0.9252→0.9252 | 打平，不用改 |
+| bus | 0.903620→0.903620 | 0.9514→0.9514 | 打平（僅 1 段序列有 GT），不用改 |
+| truck | 0.846728→0.846728 | 0.8882→0.8882 | 與基準完全相同，不用改 |
+
+門檻參數沿用 BoTSORT（no ReID）已驗收值即可，grid search 沒有找到任何真正更優的新組合。
+
+**ReID 開關驗收**（CLAUDE.md `spec reid-model`：與驗收基準比較不變差，且 IDSW 減少或 IDP 上升）：
+
+| 類別 | ΔAssA | IDSW(基準→ReID) | IDP(基準→ReID) | 判定 |
+|---|---|---|---|---|
+| person | 0 | 0→0 | 0.9902→0.9902 | 無差異，不啟用 |
+| car | -0.0001 | 3→3 | 0.9935→0.9935 | 無差異，不啟用 |
+| scooter | **+0.0118** | 6→8 | 0.8997→**0.9480** | AssA 升、IDP 升 → **符合啟用條件** |
+| small_truck | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+| bus | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+| truck | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+
+**結論：僅 scooter 符合 ReID 啟用條件**（使用原始基準門檻 0.9/0.4/0.8，非本次 grid search 找到的門檐），其餘 5 類維持 `use_reid: false`——這是本專案目前為止第一次有類別通過 ReID 驗收。scooter 的 IDSW 增加量不大（6→8，個位數差異）但仍建議視為初步結果，待未來有新資料或新 Re-ID 模型時重新確認。
+
+至此 ByteTrack／BoTSORT(no ReID)／BoTSORT(+ReID) 三個 tracker 的全 6 類別 grid search 覆蓋度補齊工作已完成。ByteTrack（small_truck）與 BoTSORT(no ReID)（car／small_truck／truck）驗收通過的參數已寫回 `config/tracking/bytetrack.yaml`、`config/tracking/botsort_noreid.yaml`。
+
+**`config/tracking/botsort_reid_timm.yaml` 已依其檔頭要求，用 `scripts/reid_train/acceptance_grid.py` 以它自己的 R1 參數（`center_dist_weight` 四輪車加重、`track_buffer` 15/15/15/15/10/10、`gmc_method: sparseOptFlow`、`frame_rate: auto`）正式重新驗收完畢（2026-11-10，`cctv_all8` 全 6 序列，tune/holdout 兩子集涵蓋全部）**：baseline（6 類全關）對逐類別開啟 ReID（`model: models/class_reid_weights/dinov2s_v3/model.pt`）共 14 次 `track_eval.py` 執行，結果**沒有任何類別**符合 spec `reid-model` 的啟用條件——person／scooter／small_truck／truck 的 IDSW、IDP、AssA、HOTA、CLEAR TP 全部與基準逐位元相同；car 的 AssA 只在 tune 子集微升、IDSW／IDP 未變，holdout 子集 AssA 反而下降；bus／truck 分別在 tune／holdout 子集沒有 GT。依「沒有類別符合時全部關閉」，`botsort_reid_timm.yaml` **維持現狀不需改動**（6 類 `use_reid: false`）。上方「僅 scooter 符合 ReID 啟用條件」的結論，驗證的是 `botsort_noreid.yaml` 結構的基準（`track_buffer` 60～90 幀），與 `botsort_reid_timm.yaml` 的 R1 基準（`track_buffer` 僅 10～15 幀）不同，`track_buffer` 愈短，軌跡愈少進入需要外觀比對的「遺失中」狀態，可能是兩者結論不同的主因；兩者的結論互不適用於對方的設定檔。完整方法與逐類別數據見 `Markdown/grid_search/botsort_reid_timm_acceptance/botsort_reid_timm_acceptance_report.md`。
+
 ## 現成訓練／評估資料集盤點（已在 repo 下）
 
 補充調查日期：2026-11-09。
