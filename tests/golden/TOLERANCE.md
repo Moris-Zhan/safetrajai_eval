@@ -99,4 +99,12 @@ Homography 改以鏡頭為鍵（`config/homography/<camera>.yaml`）、驗證報
 stage3 在鏡頭有既有衛星矩陣與衛星底圖時，多輸出 `ttc_collision_heatmap_satellite.png`、`pet_collision_heatmap_satellite.png`（`collision_output/<seq>/`）與 `conflict/conflict_heatmap_satellite.png`。這些檔案只比路徑，所以對 `conflict1` 的比對會出現「只存在於新 run」的路徑，其餘全部不變。
 
 - `compare.py runs/refactor_golden_archive/conflict1 satmap1`：`conflict_events` 多 16 個檔案（`collision_detect` 與 `conflict_analysis` 各 8 個）、`conflict` 多 6 個檔案（每段序列一張 `conflict_heatmap_satellite.png`），共 22 個，沒有只存在於 `conflict1` 的檔案；`mot_tracks`、`yolo_labels`、`trackeval`、`grid_search`、`reid_crops`、`homography`、`other` 的檔案數相同，所有類別的數值差異都是 0。
-- 尚未做 `satmap1` 與 `satmap1b` 的自比；在做之前，`conflict1` 仍是現行基準。
+
+## 基準內容更新：`conflict1` 併入衛星圖版熱力圖（2026-11-10）
+
+上一節的差異屬於既有基準缺漏，而非行為改變：舊 `conflict1` 建立時，有衛星矩陣的鏡頭還沒有衛星底圖，所以沒有這批檔案；之後鏡頭設定補上衛星底圖後，同一套程式碼理所當然會多輸出它們，但基準一直沒有更新，導致之後每次比對都要額外核對這 22 個「只存在於新 run」的檔案是否正好等於這份清單。為避免每次都要人工核對，直接把這批檔案併入基準內容。
+
+- 做法：`runs/refactor_golden/reid_grid_coverage_20261110`（2026-11-10 跑的全量 golden run，與舊 `conflict1` 比對後唯一差異就是上一節列出的 22 個衛星熱力圖檔案，其餘全部 0 差異）直接搬移成為新的 `runs/refactor_golden_archive/conflict1`；舊版保留在 `runs/refactor_golden_archive/conflict1_pre_satellite_heatmap/`，未刪除。
+- 檔案數：舊 6013 → 新 6035（+22，與上一節記錄的 16+6 完全一致）。
+- 未另外重跑 `conflict1`／`conflict1b` 自比：衛星熱力圖只比路徑、不比內容，且上一節已證明這批檔案在既有程式碼下是確定性輸出（不是隨機差異），故沿用上一節的比對結果作為依據，視為 0 容忍度仍成立。
+- 之後的比對一律使用 `python tests/golden/compare.py runs/refactor_golden_archive/conflict1 <run>`，應回報全部 0 差異（除非之後又有新的刻意變更）。
