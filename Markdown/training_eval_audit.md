@@ -133,14 +133,16 @@
 
 補充調查日期：2026-11-09。判斷依據：**成本**＝要補齊這個缺口需要新建多少東西（資料／程式碼／人力),**效益**＝補齊後實際影響的範圍與重要性。排序由「最划算」到「最不划算」。
 
-| 順序 | 缺口 | 成本 | 效益 | 為什麼是這個排序 |
-|---|---|---|---|---|
-| 1 | **隔離孤立模型權重**（`models/yolo-cls/`、`models/yolo-reid/` 除 `temp/`） | 近乎零——只是 `mv` 到 `temp/` 並記錄 `DO_NOT_USE.md`，不用新建任何資料或程式碼 | 小但立即——避免之後誤用零引用的權重、減少混淆 | 成本幾乎是 0，沒有理由不先做，屬於「順手清理」 |
-| 2 | **補齊 `tracking/` grid search 覆蓋**（person／car／bus／truck／small_truck × 3 個 tracker） | 低～中——`scripts/grid_search/` 三支腳本、`config/tracking/*.yaml`、`dataset/eval/cctv_all8_subsets/{tune,holdout}/` 全部已經存在，只差：(a) 把 `grid_search_botsort.py`／`grid_search_botsort_reid.py` 裡 car/bus/truck/small_truck 的固定單值網格改回真正的候選範圍，(b) 實際執行並留存 `--result-csv` | 高——tracking 是整條管線的核心，目前 5/6 類別的參數是直接沿用 refactor 前的舊設定，從未驗證是否最佳；影響 HOTA/AssA，也間接影響下游 collision／counting 的輸入品質 | 基礎設施（腳本＋資料＋設定）已經 100% 到位，缺的只是執行與一處小改動，是目前投入產出比最高的一項 |
-| 3 | **建立基本 CI 自動化**（至少跑 `pytest tests/test_smoke.py`） | 中——需要新建 CI workflow，但不需要新資料；要注意 golden 比對依賴掛載磁碟上的 `dataset/`／`models/`，不易搬進一般 CI runner，實際能自動化的範圍可能只到 smoke test | 中～高——跨所有模組的回歸防護網，目前完全靠人工記得要跑 pytest/golden | 單次建置成本中等，但長期每次改動都受益，優先度次於「資料和腳本已齊備只缺執行」的 tracking 缺口 |
-| 4 | **將 `collision/`／homography 驗證正式化成驗收 spec** | 中～高——`validate_homography.py`／`check_homography_scale.py` 已存在，但要仿照 reid 的 `acceptance_grid.py` 設計正式門檻與報表；而且現有 check points 只覆蓋 `C000025`／`C000297` 兩支鏡頭，範圍本來就窄 | 中——只影響有 homography 的 4 支鏡頭（C000025/C000043/C000054/C000085）的衝突指標可信度 | 影響範圍比 tracking 窄，且要先有更多鏡頭的 check points 才能把 spec 做紮實，成本效益不如前兩項 |
-| 5 | **`detection/` 建立微調訓練資料與流程** | 高——repo 內完全沒有偵測訓練用標註資料，必須從頭標註或另外取得資料集，還要新建訓練/驗收腳本 | 不確定——目前沒有證據顯示預訓練 YOLO（`yolo11x_dennis.pt`）在 `cctv_all8` 評估 GT 上的表現不足，微調的必要性未被證實 | 成本最高、效益卻還沒被證實有需求，應該等有具體證據顯示偵測品質不足後才投入 |
-| 6 | **`collision/` 建立衝突事件人工標註 GT** | 最高——需要人工在影片上標註真實的近距離接近/衝突事件，主觀且耗時，且目前只有 4 支鏡頭有 homography 可用公尺單位 | 低～中——CLAUDE.md 已明確定位這些指標「只能當技術訊號，不能當正式安全結論」，代表專案本身對形式化驗證的需求程度還不高 | 成本最高，而且專案自身的定位已經限縮了這份資料能帶來的效益上限，目前最不划算 |
+| 順序 | 狀態 | 缺口 | 成本 | 效益 | 為什麼是這個排序 |
+|---|---|---|---|---|---|
+| 1 | ✅ 已完成（2026-11-09） | **隔離孤立模型權重**（`models/yolo-cls/`、`models/yolo-reid/` 除 `temp/`） | 近乎零——只是 `mv` 到 `temp/` 並記錄 `DO_NOT_USE.md`，不用新建任何資料或程式碼 | 小但立即——避免之後誤用零引用的權重、減少混淆 | 成本幾乎是 0，沒有理由不先做，屬於「順手清理」 |
+| 2 | ✅ 已完成（2026-11-10） | **補齊 `tracking/` grid search 覆蓋**（person／car／bus／truck／small_truck × 3 個 tracker） | 低～中——`scripts/grid_search/` 三支腳本、`config/tracking/*.yaml`、`dataset/eval/cctv_all8_subsets/{tune,holdout}/` 全部已經存在，只差：(a) 把 `grid_search_botsort.py`／`grid_search_botsort_reid.py` 裡 car/bus/truck/small_truck 的固定單值網格改回真正的候選範圍，(b) 實際執行並留存 `--result-csv` | 高——tracking 是整條管線的核心，目前 5/6 類別的參數是直接沿用 refactor 前的舊設定，從未驗證是否最佳；影響 HOTA/AssA，也間接影響下游 collision／counting 的輸入品質 | 基礎設施（腳本＋資料＋設定）已經 100% 到位，缺的只是執行與一處小改動，是目前投入產出比最高的一項 |
+| 3 | 🟡 已實作，待首次 CI 執行驗證（2026-11-11） | **建立基本 CI 自動化**（至少跑 `pytest tests/test_smoke.py`） | 中——需要新建 CI workflow，但不需要新資料；要注意 golden 比對依賴掛載磁碟上的 `dataset/`／`models/`，不易搬進一般 CI runner，實際能自動化的範圍可能只到 smoke test | 中～高——跨所有模組的回歸防護網，目前完全靠人工記得要跑 pytest/golden | 單次建置成本中等，但長期每次改動都受益，優先度次於「資料和腳本已齊備只缺執行」的 tracking 缺口 |
+| 4 | ⬜ 未開始 | **將 `collision/`／homography 驗證正式化成驗收 spec** | 中～高——`validate_homography.py`／`check_homography_scale.py` 已存在，但要仿照 reid 的 `acceptance_grid.py` 設計正式門檻與報表；而且現有 check points 只覆蓋 `C000025`／`C000297` 兩支鏡頭，範圍本來就窄 | 中——只影響有 homography 的 4 支鏡頭（C000025/C000043/C000054/C000085）的衝突指標可信度 | 影響範圍比 tracking 窄，且要先有更多鏡頭的 check points 才能把 spec 做紮實，成本效益不如前兩項 |
+| 5 | ⬜ 未開始（規劃已於 2026-11-09 定案，見下方「未來計畫」） | **`detection/` 建立微調訓練資料與流程** | 高——repo 內完全沒有偵測訓練用標註資料，必須從頭標註或另外取得資料集，還要新建訓練/驗收腳本 | 不確定——目前沒有證據顯示預訓練 YOLO（`yolo11x_dennis.pt`）在 `cctv_all8` 評估 GT 上的表現不足，微調的必要性未被證實 | 成本最高、效益卻還沒被證實有需求，應該等有具體證據顯示偵測品質不足後才投入 |
+| 6 | ⬜ 未開始 | **`collision/` 建立衝突事件人工標註 GT** | 最高——需要人工在影片上標註真實的近距離接近/衝突事件，主觀且耗時，且目前只有 4 支鏡頭有 homography 可用公尺單位 | 低～中——CLAUDE.md 已明確定位這些指標「只能當技術訊號，不能當正式安全結論」，代表專案本身對形式化驗證的需求程度還不高 | 成本最高，而且專案自身的定位已經限縮了這份資料能帶來的效益上限，目前最不划算 |
+
+**#3 執行說明（2026-11-11）**：新增 `.github/workflows/smoke-test.yml`，push／PR 時自動跑 `pytest tests/test_smoke.py`；golden 比對因依賴掛載磁碟上的 `dataset/`／`models/`，維持手動執行不變。沿用這次補強計畫的 Markdown 報告慣例、不重建已被 commit `68523d8` 移除的 `openspec/`。詳細做法與範圍見 `Markdown/ci/smoke_test_ci_setup.md`。
 
 ## 目前實際使用的 Re-ID 權重
 
