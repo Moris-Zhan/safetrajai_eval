@@ -25,6 +25,7 @@ dependencies = [
     "requests",
     "torchinfo",
     "scikit-learn",
+    "timm",
 ]
 
 [project.optional-dependencies]

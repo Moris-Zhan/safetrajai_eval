@@ -1,0 +1,5 @@
+camera,check_N,rmse_m,verdict
+C000025,2,4.455791828671015,too_few_checkpoints
+C000043,3,9.946014118662646,too_few_checkpoints
+C000054,4,2.6417677415482754,threshold_tbd
+C000085,6,20.21729020771389,threshold_tbd
