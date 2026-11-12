@@ -26,3 +26,13 @@ datasets:
     cameras: [C000011, C000012, C000033, C000043, C000048, C000054, C000056, C000085, C000256]
     run_det_eval_dir: annotations_video
     run_track_eval_dir: mot_annotations_video
+  detection_source:
+    root: "./dataset/raw/videos/"
+    role: source
+    layout: raw
+    # 鏡頭跟 reid_sources 重疊，但故意另開一個獨立項目，不直接共用同一個 dataset id，
+    # 讓偵測與 Re-ID 兩條資料管線各自獨立演化（2026-11-09 使用者決定，見
+    # Markdown/training_eval_audit.md「未來計畫：以 yolo11x_dennis.pt 為起始模型精煉並製作偵測資料集」）。
+    cameras: [C000011, C000012, C000033, C000043, C000048, C000054, C000056, C000085, C000256]
+    run_det_eval_dir: annotations_video
+    run_track_eval_dir: mot_annotations_video
