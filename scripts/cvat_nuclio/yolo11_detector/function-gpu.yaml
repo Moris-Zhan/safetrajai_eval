@@ -1,0 +1,64 @@
+metadata:
+  name: pth-safetrajai-yolo11-detector
+  namespace: cvat
+  annotations:
+    name: SafeTrajAI YOLO11 Detector
+    type: detector
+    spec: |
+      [
+        { "id": 0, "name": "person", "type": "rectangle" },
+        { "id": 1, "name": "car", "type": "rectangle" },
+        { "id": 2, "name": "scooter", "type": "rectangle" },
+        { "id": 3, "name": "small_truck", "type": "rectangle" },
+        { "id": 4, "name": "bus", "type": "rectangle" },
+        { "id": 5, "name": "truck", "type": "rectangle" }
+      ]
+
+spec:
+  description: SafeTrajAI YOLO11x detector (6-class CCTV traffic classes, same weights/params as config/tracking/botsort_reid_timm.yaml)
+  runtime: 'python:3.10'
+  handler: main:handler
+  eventTimeout: 30s
+
+  build:
+    image: cvat.pth.safetrajai.yolo11.detector:latest-gpu
+    baseImage: ubuntu:22.04
+
+    directives:
+      preCopy:
+        # set NVIDIA container runtime settings
+        - kind: ENV
+          value: NVIDIA_VISIBLE_DEVICES=all
+        - kind: ENV
+          value: NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        - kind: ENV
+          value: DEBIAN_FRONTEND=noninteractive
+        - kind: WORKDIR
+          value: /opt/nuclio/safetrajai_yolo11
+        - kind: RUN
+          value: apt-get update && apt-get -y install --no-install-recommends python3 python3-pip python-is-python3 libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+        # RTX 5090 (Blackwell, compute capability 12.0) needs torch built with cu128; the
+        # default PyPI index resolves an older/CPU wheel, so pin the exact wheel index
+        # (matches the cu128 build already verified against this GPU in conda env track_eval).
+        - kind: RUN
+          value: pip3 install --no-cache-dir torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128
+        - kind: RUN
+          value: pip3 install --no-cache-dir ultralytics==8.3.141 opencv-python-headless numpy
+
+  triggers:
+    myHttpTrigger:
+      numWorkers: 1
+      kind: 'http'
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432 # 32MB
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume

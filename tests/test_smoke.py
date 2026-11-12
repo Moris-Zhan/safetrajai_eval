@@ -20,7 +20,13 @@ import safetrajai
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIRS = ("", "tracking", "grid_search", "reid", "collision")
 CONFIG_PATHS = sorted(p for d in CONFIG_DIRS for p in (REPO_ROOT / "config" / d).glob("*.yaml"))
-SCRIPTS = sorted((REPO_ROOT / "scripts").rglob("*.py"))
+# scripts/cvat_nuclio/ holds nuclio function code (CVAT automatic-annotation handler):
+# it runs inside its own nuclio Docker container with its own sys.path/runtime, not in
+# this project's Python env, so importing it in-process (as a project CLI script) fails
+# on its local `from model_handler import ...` and isn't a meaningful check anyway.
+SCRIPTS = sorted(
+    p for p in (REPO_ROOT / "scripts").rglob("*.py") if "cvat_nuclio" not in p.parts
+)
 BASE_COMMIT = (REPO_ROOT / "tests" / "golden" / "BASE_COMMIT").read_text().strip()
 
 # Legacy literals from BASE_COMMIT (evaluation/mot_format.py, evaluation/trackeval_runner.py,
