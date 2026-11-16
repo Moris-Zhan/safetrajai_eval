@@ -24,8 +24,17 @@ CONFIG_PATHS = sorted(p for d in CONFIG_DIRS for p in (REPO_ROOT / "config" / d)
 # it runs inside its own nuclio Docker container with its own sys.path/runtime, not in
 # this project's Python env, so importing it in-process (as a project CLI script) fails
 # on its local `from model_handler import ...` and isn't a meaningful check anyway.
+# scripts/cvat_review/fetch_task_annotations.py and apply_corrections.py both need
+# `cvat_sdk`, which only exists in ignore/cvat_deploy/cvat_client_venv (not the project's
+# track_eval env), by design (see each script's docstring); the other scripts in that
+# folder only need cv2/safetrajai/timm/sklearn and stay in the sweep.
+EXCLUDED_SCRIPTS = {
+    REPO_ROOT / "scripts" / "cvat_review" / "fetch_task_annotations.py",
+    REPO_ROOT / "scripts" / "cvat_review" / "apply_corrections.py",
+}
 SCRIPTS = sorted(
-    p for p in (REPO_ROOT / "scripts").rglob("*.py") if "cvat_nuclio" not in p.parts
+    p for p in (REPO_ROOT / "scripts").rglob("*.py")
+    if "cvat_nuclio" not in p.parts and p not in EXCLUDED_SCRIPTS
 )
 BASE_COMMIT = (REPO_ROOT / "tests" / "golden" / "BASE_COMMIT").read_text().strip()
 
