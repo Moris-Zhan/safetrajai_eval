@@ -23,7 +23,7 @@ _Avoid_: video、clip、seq（僅限程式碼縮寫）
 _Avoid_: 物件、object、target、實體
 
 **類別（Class）**：
-固定 6 種道路使用者：person、car、scooter、small_truck、bus、truck，各有固定編號，是跨模組契約。
+固定 6 種道路使用者：person、car、scooter、small_truck、bus、truck，各有固定編號，是跨模組契約。各類別的邊界（哪種車算哪一類）見 `Markdown/detection/labeling-guide.md`。
 _Avoid_: category、label
 
 **關注區域（ROI, Region of Interest）**：
