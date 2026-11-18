@@ -90,10 +90,15 @@ def main() -> None:
     parser.add_argument("--sample", type=int, default=None, help="random subset size of the remaining pool")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--review-dir", type=Path, default=REVIEW_DIR)
+    parser.add_argument("--exclude-index", type=Path, default=None,
+                        help="index.json of an earlier run; its track ids are left out of the pool")
     args = parser.parse_args()
 
     tracks = json.loads((args.review_dir / "pilot_v1_annotations.json").read_text(encoding="utf-8"))["tracks"]
     seen = reviewed_ids(args.review_dir)
+    if args.exclude_index is not None:
+        earlier = json.loads(args.exclude_index.read_text(encoding="utf-8"))
+        seen |= {str(track_id) for ids in earlier.values() for track_id in ids}
     pool = sorted((t for t in tracks if t["label"] == args.label and str(t["track_id"]) not in seen),
                   key=lambda t: t["track_id"])
     sample: Optional[int] = args.sample
