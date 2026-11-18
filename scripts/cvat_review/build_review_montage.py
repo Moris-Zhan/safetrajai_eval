@@ -47,6 +47,10 @@ def reviewed_ids(review_dir: Path) -> Set[str]:
             seen |= {row["representative_track_id"] for row in csv.DictReader(handle)}
     sample = json.loads((review_dir / "audit_sample.json").read_text(encoding="utf-8"))
     seen |= {str(item["track_id"]) for item in sample["items"]}
+    kept_path = review_dir / "reviewed_kept.csv"
+    if kept_path.exists():
+        with kept_path.open(newline="", encoding="utf-8") as handle:
+            seen |= {row["track_id"] for row in csv.DictReader(handle)}
     return seen
 
 
@@ -92,6 +96,9 @@ def main() -> None:
     parser.add_argument("--review-dir", type=Path, default=REVIEW_DIR)
     parser.add_argument("--exclude-index", type=Path, default=None,
                         help="index.json of an earlier run; its track ids are left out of the pool")
+    parser.add_argument("--rank-csv", type=Path, default=None,
+                        help="suspicion_<label>.csv from rank_suspicion.py; use together with --batch")
+    parser.add_argument("--batch", type=int, default=0, help="0-based batch of --rank-csv to render")
     args = parser.parse_args()
 
     tracks = json.loads((args.review_dir / "pilot_v1_annotations.json").read_text(encoding="utf-8"))["tracks"]
@@ -105,6 +112,14 @@ def main() -> None:
     if sample is not None and sample < len(pool):
         pool = sorted(random.Random(args.seed).sample(pool, sample), key=lambda t: t["track_id"])
 
+    prefix = args.label
+    if args.rank_csv is not None:
+        with args.rank_csv.open(newline="", encoding="utf-8") as handle:
+            batch_ids = [int(row["track_id"]) for row in csv.DictReader(handle) if int(row["batch"]) == args.batch]
+        by_id = {track["track_id"]: track for track in tracks}
+        pool = [by_id[track_id] for track_id in batch_ids if track_id in by_id]
+        prefix = f"{args.label}_rank{args.batch:02d}"
+
     with MANIFEST.open(newline="", encoding="utf-8") as handle:
         manifest = list(csv.DictReader(handle))
     out_dir = args.review_dir / "review_batches" / args.label
@@ -117,10 +132,11 @@ def main() -> None:
         cells = [render_cell(track, i, manifest) for i, track in enumerate(chunk)]
         cells += [np.zeros((CELL_H, CELL_W, 3), np.uint8)] * (per_montage - len(cells))
         grid = np.vstack([np.hstack(cells[r * COLUMNS:(r + 1) * COLUMNS]) for r in range(ROWS)])
-        name = f"{args.label}_{start // per_montage:02d}.jpg"
+        name = f"{prefix}_{start // per_montage:02d}.jpg"
         cv2.imwrite(str(out_dir / name), grid, [cv2.IMWRITE_JPEG_QUALITY, 82])
         index[name] = [track["track_id"] for track in chunk]
-    (out_dir / "index.json").write_text(json.dumps(index, indent=1), encoding="utf-8")
+    index_name = "index.json" if args.rank_csv is None else f"index_{prefix}.json"
+    (out_dir / index_name).write_text(json.dumps(index, indent=1), encoding="utf-8")
     print(f"{args.label}: {len(pool)} tracks -> {len(index)} montages in {out_dir}")
 
 
