@@ -114,6 +114,8 @@ flowchart LR
     APPLY --> CVAT
 ```
 
+Two measurement scripts cover missed objects (phase 2): `phase2_frames.py` samples whole frames per sequence and draws every current box for by-eye counting, and `recover_candidates.py` re-runs the detector on whole frames plus tiles to list detections that no current box covers. Both only read the CVAT export and write candidate files under `runs/cvat_review/phase2/`; nothing is written back to CVAT.
+
 Two limits are worth knowing. Appearance sampling picks one representative track per group, and that verdict cannot be applied safely to the rest of the group, which stays an unknown risk. The static-cluster check is valid for scooters only: parked cars are real and must not be flagged. The CVAT client (`cvat_sdk`) lives in its own venv (`ignore/cvat_deploy/cvat_client_venv`), separate from `track_eval`.
 
 ## Quick start
