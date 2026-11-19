@@ -117,6 +117,8 @@ flowchart LR
 
 Two measurement scripts cover missed objects (phase 2): `phase2_frames.py` samples whole frames per sequence and draws every current box for by-eye counting, and `recover_candidates.py` re-runs the detector on whole frames plus tiles to list detections that no current box covers. Both only read the CVAT export and write candidate files under `runs/cvat_review/phase2/`; nothing is written back to CVAT. Because the candidates are only about 55% precise, they are not added as boxes; instead `suggest_masks.py` turns the candidate density into suggested mask polygons per camera, and `serve_masks.py` lets a human confirm them.
 
+`scripts/detection_data/export_training_set.py` turns the CVAT snapshot into a YOLO fine-tuning dataset under `dataset/detection/exports/<version>/`: group-deleted frames from `box_issues.csv` are excluded whole, the confirmed mask polygons in `config/detection_masks/` are painted gray (boxes at least 50% inside a mask are dropped, kept boxes are never painted over), and the split is by sequence (validation: C000012 and the 20250629 sequence of C000054; the evaluation camera C000025 is refused). Each version stores `data.yaml`, `export_record.json` (per-class box counts, dropped boxes) and a copy of the annotation snapshot, and is never overwritten once trained.
+
 Two limits are worth knowing. Appearance sampling picks one representative track per group, and that verdict cannot be applied safely to the rest of the group, which stays an unknown risk. The static-cluster check is valid for scooters only: parked cars are real and must not be flagged. The CVAT client (`cvat_sdk`) lives in its own venv (`ignore/cvat_deploy/cvat_client_venv`), separate from `track_eval`.
 
 ## Quick start
