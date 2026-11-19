@@ -2,7 +2,7 @@
 
 Offline CCTV traffic-monitoring pipeline: YOLO11 detection, class-aware BoTSORT / ByteTrack tracking, TrackEval evaluation (HOTA / CLEAR / Identity), and conflict-event analysis (TTC / PET with Homography), with Excel reports.
 
-> **Status: runnable, but evaluated on a single camera (C000025). The pipeline (stage1 to stage3) and the test suite run in the conda env `track_eval`; the evaluation set is 6 sequences of 15 seconds from one camera, so every score below describes that camera only. Counting lines, the bird's-eye video and the blind-area analysis are optional stage3 outputs and are all disabled by default. Re-ID is trained locally (DINOv2 ViT-S/14, val mAP 0.783) but is switched off for all 6 classes: on the `botsort_reid_timm.yaml` baseline no class passed the tracking acceptance rule, and the appearance-separability improvement did not turn into fewer ID switches. The only positive Re-ID signal, a preliminary one for scooters on a different tracker baseline, is documented in [Results](#results) and not used. The conflict indicators (TTC, PET, DRAC and the others) are technical signals, not safety conclusions: only cameras with a passed scale check are converted to meters, and the metrics were not calibrated against field measurements. CI runs the smoke tests on every push; the golden regression comparison (about 16 minutes, needs the full data and weights) is a manual step and is not in CI. A detection-dataset refinement effort (pseudo-labels reviewed in a self-hosted CVAT) is in progress: person, small_truck, bus and truck are reviewed, car and scooter are being reviewed, and no dataset split or retraining has been done yet.** Domain terms are defined in [`CONTEXT.md`](CONTEXT.md), development rules and the full command table are in [`CLAUDE.md`](CLAUDE.md), the command index is [`Markdown/command-index.md`](Markdown/command-index.md), and per-topic guides start at [`Markdown/USAGE.md`](Markdown/USAGE.md) (these guides are written in Traditional Chinese).
+> **Status: runnable, but evaluated on a single camera (C000025). The pipeline (stage1 to stage3) and the test suite run in the conda env `track_eval`; the evaluation set is 6 sequences of 15 seconds from one camera, so every score below describes that camera only. Counting lines, the bird's-eye video and the blind-area analysis are optional stage3 outputs and are all disabled by default. Re-ID is trained locally (DINOv2 ViT-S/14, val mAP 0.783) but is switched off for all 6 classes: on the `botsort_reid_timm.yaml` baseline no class passed the tracking acceptance rule, and the appearance-separability improvement did not turn into fewer ID switches. The only positive Re-ID signal, a preliminary one for scooters on a different tracker baseline, is documented in [Results](#results) and not used. The conflict indicators (TTC, PET, DRAC and the others) are technical signals, not safety conclusions: only cameras with a passed scale check are converted to meters, and the metrics were not calibrated against field measurements. CI runs the smoke tests on every push; the golden regression comparison (about 16 minutes, needs the full data and weights) is a manual step and is not in CI. A detection-dataset refinement effort (pseudo-labels reviewed in a self-hosted CVAT) is in progress: person, small_truck, bus and truck are fully reviewed, car and scooter went through ranked review plus acceptance sampling with measured residual error rates (see [Known gaps](#known-gaps-to-reinforce)), the phase-2 measurement found many missed (unlabeled) objects, and no dataset split or retraining has been done yet.** Domain terms are defined in [`CONTEXT.md`](CONTEXT.md), development rules and the full command table are in [`CLAUDE.md`](CLAUDE.md), the command index is [`Markdown/command-index.md`](Markdown/command-index.md), and per-topic guides start at [`Markdown/USAGE.md`](Markdown/USAGE.md) (these guides are written in Traditional Chinese).
 
 ## What this project demonstrates
 
@@ -320,7 +320,16 @@ Mean AssA over the sequences that have ground truth, baseline to best grid-searc
 | bus | 0.841 to 0.841, tie | 0.951 to 0.951, tie | 0.951 to 0.951, tie |
 | truck | 0.721 to 0.721, tie | 0.879 to 0.888, **adopted** | 0.888 to 0.888, tie |
 
-Accepted values were written back to `config/tracking/bytetrack.yaml` and `config/tracking/botsort_noreid.yaml`. Reports: [`bytetrack_all6_report.md`](Markdown/grid_search/bytetrack_all6_rerun/bytetrack_all6_report.md), [`botsort_noreid_all6_report.md`](Markdown/grid_search/botsort_noreid_all6_rerun/botsort_noreid_all6_report.md), [`botsort_reid_all6_report.md`](Markdown/grid_search/botsort_reid_all6_rerun/botsort_reid_all6_report.md).
+Adopted settings (4 of the 18 class-by-tracker cells; thresholds are `match_thresh / second_match_thresh / unconfirmed_match_thresh`, values read from the config files):
+
+| Class | Tracker | Adopted thresholds | Written to | Best-parameter file of the search | Report |
+|---|---|---|---|---|---|
+| small_truck | ByteTrack | 0.7 / 0.45 / 0.85 | [`config/tracking/bytetrack.yaml`](config/tracking/bytetrack.yaml) | none saved; search setup in [`gs_bytetrack_all6.yaml`](Markdown/grid_search/bytetrack_all6_rerun/gs_bytetrack_all6.yaml) | [`bytetrack_all6_report.md`](Markdown/grid_search/bytetrack_all6_rerun/bytetrack_all6_report.md) |
+| car | BoTSORT (no Re-ID) | 0.8 / 0.5 / 0.85 | [`config/tracking/botsort_noreid.yaml`](config/tracking/botsort_noreid.yaml) | [`gs_botsort_noreid_all6_best.yaml`](Markdown/grid_search/botsort_noreid_all6_rerun/gs_botsort_noreid_all6_best.yaml) | [`botsort_noreid_all6_report.md`](Markdown/grid_search/botsort_noreid_all6_rerun/botsort_noreid_all6_report.md) |
+| small_truck | BoTSORT (no Re-ID) | 0.8 / 0.45 / 0.85 | same file | same file | same report |
+| truck | BoTSORT (no Re-ID) | 0.7 / 0.45 / 0.85 | same file | same file | same report |
+
+The raw per-trial CSV files are under `runs/` (not in git), so they are not linked. The BoTSORT + Re-ID search found no better thresholds (best-parameter file [`gs_botsort_reid_all6_best.yaml`](Markdown/grid_search/botsort_reid_all6_rerun/gs_botsort_reid_all6_best.yaml) is kept for reference only and was not adopted). Reports: [`bytetrack_all6_report.md`](Markdown/grid_search/bytetrack_all6_rerun/bytetrack_all6_report.md), [`botsort_noreid_all6_report.md`](Markdown/grid_search/botsort_noreid_all6_rerun/botsort_noreid_all6_report.md), [`botsort_reid_all6_report.md`](Markdown/grid_search/botsort_reid_all6_rerun/botsort_reid_all6_report.md).
 
 ### Dashboards
 
@@ -354,8 +363,22 @@ None. The project produces Excel reports (stage2) and CSV / JSON / PNG outputs (
 - [x] Pseudo-labels on a 10-video pilot set, CVAT deployment, Nuclio auto-annotation
 - [x] Scripted triage and web review and audit tools
 - [x] Review of person, small_truck, bus and truck
-- [ ] Review of car and scooter (suspicion ranking done, acceptance sampling pending)
+- [x] Review of car and scooter (suspicion ranking and acceptance sampling done; residual error rates recorded, not driven to the 3% target)
 - [ ] Dataset split and retraining of the detector
+
+### Known gaps (to reinforce)
+
+Measured shortfalls that are known today. The reinforcement priorities and execution notes are in [`Markdown/training_eval_audit.md`](Markdown/training_eval_audit.md); the earlier inventory is in [`Markdown/training_eval_inventory.md`](Markdown/training_eval_inventory.md).
+
+| Area | Gap | Measured state |
+|---|---|---|
+| Detection data: missed objects | Pseudo-labels miss many objects (shaded cars under overpasses, far queues, scooter groups at stop lines); phase-2 gate is 5% | Rough by-eye estimate on 32 of 100 sampled frames: about 5% (C000043) to 45% (C000033) missed per camera; no clearly shifted boxes seen. Re-detecting with tiles recovers them only at about 55% precision (confidence >= 0.5), so the planned fix is masking unreliable regions, not auto-adding boxes |
+| Detection data: car and scooter labels | Residual class and group-box errors after ranked review | Acceptance sampling of 200 tracks: car 6.5%, scooter about 7-8% (target was 3%, now recorded as measured); person 5.5%, small_truck 5.0%, truck fully reviewed, bus 1.0% |
+| Detection data: open items | Second web audit (240 items), 18 uncertain identity-dedup clusters, box fixes for logged loose boxes, exclusion of frames with deleted group boxes from the training split | Not started |
+| Evaluation | One camera (C000025), 6 sequences; bus and truck scores rest on very few ground-truth objects | Scores describe this camera only |
+| Regression | Golden comparison is manual (about 16 minutes) | Only smoke tests run in CI |
+| Conflict analysis | Homography acceptance threshold is unset; indicators not calibrated against field data | `ACCEPTANCE_RMSE_M` is `None` |
+| Re-ID | Better appearance separability did not reduce ID switches | 40 acceptance configurations, no class passed; all 6 classes off |
 
 ## Data
 

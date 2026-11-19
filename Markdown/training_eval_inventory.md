@@ -1,0 +1,159 @@
+# 盤點與現況紀錄（各模組訓練／評估流程）
+
+本檔由 `training_eval_audit.md` 搬出的盤點、Grid Search 覆蓋度歷史、資料集盤點與現用權重現況，內容原樣保留、不改寫。補強優先順序與未來計畫留在 [`training_eval_audit.md`](training_eval_audit.md)。
+
+盤點日期：2026-11-09
+
+盤點範圍：`utils/modules/safetrajai/` 下的功能子套件，以及對應的 `scripts/` 操作腳本（兩者合併視為一條完整的訓練/評估管道）。
+
+定義採廣義：
+- 「訓練」包含有可學習參數的模型訓練，也包含沒有可學習參數但需要「調參」或「人工校準」的流程（例如 tracking 的 grid search、collision 的 homography 人工對應點）。
+- 「評估」包含正式的驗收流程，也包含手動執行的驗證/比對腳本。
+
+本次盤點只列現況與缺口，不包含補強建議或實作規劃。
+
+
+## 盤點結果
+
+| 模組（含對應腳本） | 訓練（廣義） | 評估（廣義） | 明顯缺口 |
+|---|---|---|---|
+| **`detection/`**（YOLO11） | **無**——只用外部預訓練權重（`yolo11n.pt`／`yolo11x.pt`／`yolo11x_dennis.pt`），repo 內無微調腳本 | 間接——靠 stage2 `evaluation/` 的 det_eval 驗證下游指標，非自身驗收 | 換權重後沒有固定驗收流程；`models/yolo-cls/yolo26m-cls.pt` 與 `models/yolo-reid/`（除 `temp/`）已用 grep 確認零程式碼引用，疑似孤立/待淘汰檔案 |
+| **`tracking/`**＋`scripts/grid_search/`＋`tests/golden/` | 有（調參＝廣義訓練）——3 支腳本逐類別調 `match_thresh` 等 | 有——grid search 以 `HOTA.AssA_mean` 評分＋golden 零容忍回歸比對 | 見下方「Grid Search 實際執行覆蓋度」小節——只有 scooter 有留存的真實執行結果，其餘 5 類別×3 個 tracker 組合都找不到已執行證據，部分組合（BoTSORT+ReID 的 car/bus/truck/small_truck）甚至未被設計成可搜尋 |
+| **`reid/`**＋`scripts/reid_train/`＋`scripts/reid_data/` | **完整**——manifest → `pack_manifest.py` → `train_reid.py`（PK sampler＋CE+triplet） | **完整分層**——`eval_reid.py`（參考用）→ `fusion_distance_stats.py`（外觀分離度關卡）→ `acceptance_grid.py`（追蹤驗收）；`reid_data/` 的資料品質把關也算上游評估 | 整個 repo 沒有 CI 自動化（無 `.github/workflows`，全靠人工跑 pytest/golden）；模型版本靠手動資料夾命名（`dinov2s_v3` 等），無正式 model registry |
+| **`evaluation/`** | — | **本身就是評估引擎** | 不適用（它是評估工具，不是被評估對象） |
+| **`collision/`**＋`scripts/homography/` | 無資料驅動調參——homography 矩陣/衝突門檻靠既有矩陣或人工對應點，沿用 `ignore/Sub_Module/trajectoryanalyst2` 固定定義 | 有，但手動——`validate_homography.py`／`check_homography_scale.py`／`geocode_cameras.py` 都是手動執行，無像 reid 那樣的正式驗收 spec | 沒有系統性的跨鏡頭驗收報表；指標本身也明記「只能當技術訊號」 |
+| `roi.py`／`secrets.py`／`paths.py`／`classes.py`／`pipeline/`／`visualization/` | 不適用 | 不適用 | 確認完全不需要（純工具/編排，已逐一核實非假設） |
+
+## 結構性缺口彙總
+
+1. `detection/` 完全沒有微調/驗收流程。
+2. 整個 repo 沒有任何 CI 自動化，驗證全靠人工執行。
+3. `collision/`／homography 的驗證偏手動，沒有正式驗收 spec（相較 reid 的 `acceptance_grid.py`）。
+4. `tracking/` 的 grid search 覆蓋度已追查（見下方小節）：6 類別×3 個 tracker 中，只有 scooter 有留存的真實執行結果，其餘組合缺乏執行證據，部分甚至未被設計成可搜尋。
+5. `yolo-cls`、`yolo-reid` 兩個模型權重已確認零程式碼引用，疑似孤立檔案。
+
+## Grid Search 實際執行覆蓋度
+
+補充調查日期：2026-11-09。repo 沒有逐次執行紀錄（`runs/`／`ignore/runs/` 被 gitignore，三支腳本歷史上都沒有留存 `--result-csv`），以下是由間接證據推論出的覆蓋度。
+
+**唯一有留存真實執行結果的組合：`scooter`**
+
+`ignore/runs/grid_search/best_params_scooter.txt`（2026-07-24，score = `HOTA.AssA_mean` 0.4737）記錄了一次完整跑完的結果，`use_reid: True`、`norm_factor: 200.0`。`norm_factor=200` 只出現在 BoTSORT／BoTSORT+ReID 的搜尋網格（`[150, 200, 250]`），不在 ByteTrack 的網格（`[80, 100, 120]`）裡，可確定這次是對 **scooter × BoTSORT(+ReID)** 跑的。三份情境設定檔（`bytetrack.yaml`／`botsort_noreid.yaml`／`botsort_reid.yaml`）的 `scooter` 參數完全一致，且與這份結果檔一致——代表這組參數只被真正搜尋過一次，之後手動複製到另外兩份情境設定，並非三個 tracker 各自獨立調參的結果。
+
+**其他 5 個類別（person／car／bus／truck／small_truck）：找不到任何已執行證據**
+
+- 三份情境設定檔裡這 5 個類別的參數三份完全一致，且 `grid_search_botsort_reid.py` 的程式碼註解明寫：這些數值「與 `config_BotSort_0413.py`（refactor 前的舊版設定）固定值完全一致」——即沿用舊設定，不是調參產物。
+- `grid_search_botsort_reid.py` 裡 `car`／`bus`／`small_truck`／`truck` 的 `PARAM_GRIDS` 全部是單一值（例如 `"match_thresh": [0.7]`），沒有候選範圍可搜——這幾個組合在這支腳本裡連「設計上要搜」都不成立。
+- `grid_search_botsort.py` 對這 4 個類別也只有 ReID 相關的 `proximity_thresh`／`appearance_thresh` 有真正多值範圍，核心匹配參數（`match_thresh` 等）同樣是固定單值。
+- `grid_search_bytetrack.py` 是唯一一支「6 類別都有真正多值搜尋網格」的腳本，但沒有任何留存結果能證明它對 person/car/bus/truck/small_truck 真的被執行過並套用結果。
+
+| 類別 | ByteTrack | BoTSORT（無 ReID） | BoTSORT + ReID |
+|---|---|---|---|
+| scooter | 網格有設計；配置值＝BoTSORT+ReID 結果複製 | 網格有設計；同上複製 | **有留存執行證據**（2026-07-24） |
+| person | 網格有設計，無留存執行證據 | 網格有設計，無留存執行證據 | 網格有設計，無留存執行證據 |
+| car／bus／truck／small_truck | 網格有設計，無留存執行證據 | 核心參數未設計成搜尋（固定值＋只搜 ReID 參數） | 完全未設計成搜尋（全固定值＝沿用舊 config） |
+
+### 補齊進度（2026-11-09 起，優先順序第 2 項執行中）
+
+**ByteTrack 階段：已完成**（全部 6 類別、完整 6 段 `cctv_all8` 序列，`--params-subset match_thresh,second_match_thresh,unconfirmed_match_thresh`，搜尋範圍沿用各類別既有的真實網格）。詳細逐序列數據與兩種分數的完整比較見獨立報告：`Markdown/grid_search/bytetrack_all6_rerun/bytetrack_all6_report.md`（腳本與設定備份在同一資料夾）。
+
+**⚠️ 重要更正**：grid search 回傳的分數（`safetrajai/grid_search/core.py::score_params()`）是「排除 0 分序列後取第 25 百分位數」，**不是平均值**；實際用逐序列算術平均重新驗算後，person／scooter 兩類在 grid search 分數上打平或進步，但平均準確率反而下降——這兩類最終**不採用** grid search 找到的參數。
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 建議新參數 (match/second/unconfirmed) | 結論 |
+|---|---|---|---|---|
+| small_truck | 0.7180→0.8115 | 0.8268→0.8836 | 0.7 / 0.45 / 0.85 | 兩指標都明顯改善，**建議更新** |
+| car | 0.7947→0.7966 | 0.8144→0.8152 | 0.7 / 0.5 / 0.85 | 改善幅度極小，可不改 |
+| truck | 0.8373→0.8373 | 0.7208→0.7208 | 現值已最佳 | 不用改 |
+| bus | 0.8369→0.8369 | 0.8409→0.8409 | 現值已最佳 | 不用改（僅 1 段序列有 GT） |
+| person | 0.7444→0.7444 | 0.8563→**0.7907** | — | GS 打平但平均準確率變差，**不採用** |
+| scooter | 0.6756→0.6856 | 0.7789→**0.7597** | — | GS 進步但平均準確率變差（指標矛盾），**不採用** |
+
+**資料覆蓋度的重要發現**：`cctv_all8` 只有單一鏡頭（C000025）共 6 段序列，**沒有任何一段同時包含全部 6 個類別**。逐序列 × 逐類別 ROI 內可評估 GT 統計（6 段合計）：person 234、car 2084、scooter 1324、small_truck 146（4/6 段有）、truck 81（3/6 段有）、**bus 僅 21 個，且全部來自單一段序列**（`152639_15s_2`）。這代表 bus／truck／small_truck 的調參結論統計強度明顯弱於 person／car／scooter，是資料集本身的結構性限制，不是切分或程式的問題。
+
+**BoTSORT（no ReID）階段：已完成**（同樣全 6 段序列，`scripts/grid_search/grid_search_botsort.py` 的 car/bus/truck/small_truck 已從固定單值改成真實候選範圍）。詳細報告：`Markdown/grid_search/botsort_noreid_all6_rerun/botsort_noreid_all6_report.md`。
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 建議新參數 (match/second/unconfirmed) | 結論 |
+|---|---|---|---|---|
+| car | 0.8317→0.8641 | 0.8603→0.8942 | 0.8 / 0.5 / 0.85 | 兩指標都改善，**建議更新** |
+| small_truck | 0.7871→0.9106 | 0.8598→0.9252 | 0.8 / 0.45 / 0.85 | 兩指標都明顯改善，**建議更新** |
+| truck | 0.8352→0.8490 | 0.8790→0.8882 | 0.7 / 0.45 / 0.85 | 兩指標都改善，**建議更新** |
+| bus | 0.9497→0.9497 | 0.9514→0.9514 | 現值已最佳 | 不用改（僅 1 段序列有 GT） |
+| person | N/A（基準參數不在原 ReID 導向網格內） | 0.8856→0.8856 | — | 逐序列分數與基準逐位元相同，完全不敏感，不用改 |
+| scooter | N/A（同上） | 0.7945→**0.7815** | — | ⚠️ 平均準確率反而下降，**不採用** |
+
+**BoTSORT＋ReID 階段：已完成**（同樣全 6 段序列，`scripts/grid_search/grid_search_botsort_reid.py` 的 car/bus/truck/small_truck 已從固定單值改成真實候選範圍；ReID 權重沿用 `models/class_reid_weights/dinov2s_v3/model.pt`）。詳細報告：`Markdown/grid_search/botsort_reid_all6_rerun/botsort_reid_all6_report.md`。
+
+門檻參數（match/second/unconfirmed）的 grid search 結論：
+
+| 類別 | GS分數(基準→最佳) | 平均準確率(基準→最佳) | 結論 |
+|---|---|---|---|
+| person | N/A→0.756847 | 0.8856→0.8856 | 打平／不敏感，不採用 |
+| car | 0.834227→0.835340 | 0.8941→**0.8789** | ⚠️ GS 分數微幅改善但平均準確率反而下降，**不採用** |
+| scooter | N/A→0.689818 | 0.7933→**0.7771** | ⚠️ 平均準確率反而下降，**不採用新門檻**（ReID 開關見下） |
+| small_truck | 0.869323→0.869323 | 0.9252→0.9252 | 打平，不用改 |
+| bus | 0.903620→0.903620 | 0.9514→0.9514 | 打平（僅 1 段序列有 GT），不用改 |
+| truck | 0.846728→0.846728 | 0.8882→0.8882 | 與基準完全相同，不用改 |
+
+門檻參數沿用 BoTSORT（no ReID）已驗收值即可，grid search 沒有找到任何真正更優的新組合。
+
+**ReID 開關驗收**（CLAUDE.md `spec reid-model`：與驗收基準比較不變差，且 IDSW 減少或 IDP 上升）：
+
+| 類別 | ΔAssA | IDSW(基準→ReID) | IDP(基準→ReID) | 判定 |
+|---|---|---|---|---|
+| person | 0 | 0→0 | 0.9902→0.9902 | 無差異，不啟用 |
+| car | -0.0001 | 3→3 | 0.9935→0.9935 | 無差異，不啟用 |
+| scooter | **+0.0118** | 6→8 | 0.8997→**0.9480** | AssA 升、IDP 升 → **符合啟用條件** |
+| small_truck | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+| bus | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+| truck | 0 | 0→0 | 1.0000→1.0000 | 無差異，不啟用 |
+
+**結論：僅 scooter 符合 ReID 啟用條件**（使用原始基準門檻 0.9/0.4/0.8，非本次 grid search 找到的門檐），其餘 5 類維持 `use_reid: false`——這是本專案目前為止第一次有類別通過 ReID 驗收。scooter 的 IDSW 增加量不大（6→8，個位數差異）但仍建議視為初步結果，待未來有新資料或新 Re-ID 模型時重新確認。
+
+至此 ByteTrack／BoTSORT(no ReID)／BoTSORT(+ReID) 三個 tracker 的全 6 類別 grid search 覆蓋度補齊工作已完成。ByteTrack（small_truck）與 BoTSORT(no ReID)（car／small_truck／truck）驗收通過的參數已寫回 `config/tracking/bytetrack.yaml`、`config/tracking/botsort_noreid.yaml`。
+
+**`config/tracking/botsort_reid_timm.yaml` 已依其檔頭要求，用 `scripts/reid_train/acceptance_grid.py` 以它自己的 R1 參數（`center_dist_weight` 四輪車加重、`track_buffer` 15/15/15/15/10/10、`gmc_method: sparseOptFlow`、`frame_rate: auto`）正式重新驗收完畢（2026-11-10，`cctv_all8` 全 6 序列，tune/holdout 兩子集涵蓋全部）**：baseline（6 類全關）對逐類別開啟 ReID（`model: models/class_reid_weights/dinov2s_v3/model.pt`）共 14 次 `track_eval.py` 執行，結果**沒有任何類別**符合 spec `reid-model` 的啟用條件——person／scooter／small_truck／truck 的 IDSW、IDP、AssA、HOTA、CLEAR TP 全部與基準逐位元相同；car 的 AssA 只在 tune 子集微升、IDSW／IDP 未變，holdout 子集 AssA 反而下降；bus／truck 分別在 tune／holdout 子集沒有 GT。依「沒有類別符合時全部關閉」，`botsort_reid_timm.yaml` **維持現狀不需改動**（6 類 `use_reid: false`）。上方「僅 scooter 符合 ReID 啟用條件」的結論，驗證的是 `botsort_noreid.yaml` 結構的基準（`track_buffer` 60～90 幀），與 `botsort_reid_timm.yaml` 的 R1 基準（`track_buffer` 僅 10～15 幀）不同，`track_buffer` 愈短，軌跡愈少進入需要外觀比對的「遺失中」狀態，可能是兩者結論不同的主因；兩者的結論互不適用於對方的設定檔。完整方法與逐類別數據見 `Markdown/grid_search/botsort_reid_timm_acceptance/botsort_reid_timm_acceptance_report.md`。
+
+## 現成訓練／評估資料集盤點（已在 repo 下）
+
+補充調查日期：2026-11-09。
+
+| 模組 | 現成訓練資料集 | 現成評估資料集 | 備註 |
+|---|---|---|---|
+| **`reid/`** | **完整**——`dataset/reid/crops/{6類}/`（逐 track 裁切）＋`dataset/reid/splits/{v1,v2,v3}/manifest.csv`（v3 共 156,187 筆）＋品質把關清單（`exclusions.csv`／`auto_exclusions.csv`／`fragment_merges.csv`） | **完整**——`dataset/reports/reid/`（`contamination_crops.csv`／`class_consistency.csv`／`appearance_outliers.csv`／`motion_flags.csv`／`fragment_features.npz` 等稽核報表，供資料品質與分離度評估） | 唯一訓練＋評估資料都齊全、且版本化（v1/v2/v3）的模組 |
+| **`detection/`** | **無**——repo 內沒有任何偵測訓練用標註資料集，只找到預訓練/外部權重 | 有（間接）——與 tracking 共用 `dataset/eval/cctv_all8/annotations_all8/`（6 段人工標註影片的偵測 GT） | 這份是「評估」GT，不是訓練資料；YOLO 權重若要微調，目前沒有現成資料可用 |
+| **`tracking/`** | 不適用（無可學習參數） | **有，且分兩用途**——`dataset/eval/cctv_all8/mot_annotations_all8/`（MOT GT，stage2 評估用）＋`dataset/eval/cctv_all8_subsets/{tune,holdout}/`（grid search 調參用 tune、驗收用 holdout，各自內含 annotations_all8/mot_annotations_all8） | tune/holdout 子集的存在，表示當初確實規劃了「調參–驗收」資料切分，但多數類別×tracker 沒有留下已執行證據（見上方小節） |
+| **`evaluation/`** | 不適用 | 本身即消費上面 `cctv_all8` 的 GT，不是獨立資料集 | — |
+| **`collision/`**（homography／conflict） | 無 | **只有校準素材，非正式資料集**：`models/homography/matrices/`（既有矩陣）、`models/homography/checkpoints/`（僅 `C000297` 一組 check points）、`config/homography_checkpoints/`（僅 `C000025`／`C000297` 兩支鏡頭有設定）、`dataset/raw/homography_videos/{C000043,C000054,C000085}/`（校準用影片） | **沒有「衝突事件」的人工標註 GT**——TTC/PET/衝突指標本身沒有現成資料可驗證對錯，這點與 CLAUDE.md「只能當技術訊號」的限制一致 |
+| `roi.py`／`secrets.py`／`paths.py`／`classes.py`／`pipeline/`／`visualization/` | 不適用 | 不適用 | 純工具/編排模組，無對應資料集 |
+
+**重點發現**：
+1. `reid/` 是唯一訓練與評估資料都完整齊全的模組。
+2. `detection/` 完全沒有訓練資料集（只有評估 GT），呼應前面「完全沒有微調流程」的缺口——沒資料，所以也沒流程。
+3. `tracking/` 有 tune/holdout 資料切分，但目前的 grid search 執行覆蓋度很低，代表資料備好了、流程卻沒真正跑滿。
+4. `collision/`（衝突事件分析）沒有任何人工標註的事件級 GT，只有幾何校準用的素材，這是比「流程缺口」更根本的「資料缺口」。
+
+## 目前實際使用的 Re-ID 權重
+
+補充調查日期：2026-11-09。
+
+**目前實際有在運作的流程裡沒有任何 Re-ID 權重真的被啟用**，分三層：
+
+1. **預設流程**（`track_eval.py` 不帶 `--config`）走 `config/tracking/bytetrack.yaml` → ByteTrack，完全沒有 Re-ID 能力。
+2. **目前的驗收基準情境**（`config/tracking/botsort_reid_timm.yaml`，R1 參數）——6 個類別的 `use_reid` 全部是 `false`（檔頭註解：「追蹤結果等同驗收基準」）。檔案裡提到唯一的候選訓練權重是 `models/class_reid_weights/dinov2s_v3/model.pt`（DINOv2 ViT-S/14，資料集版本 v3，由 `Custom_ReID` 載入），但它沒有通過追蹤驗收——在 car、scooter 上會讓 IDSW 明顯變差，40 組（閘門／否決／原融合 × 5 類）實驗沒有任何類別通過 spec `reid-model` 的啟用條件，所以目前停用。
+3. **舊的 `config/tracking/botsort_reid.yaml`**（情境 4，非目前主線）——6 類 `use_reid: true`，但 `model` 欄位指向單純的 YOLO 偵測權重（`models/yolo/yolo11x.pt`／`yolo11x_dennis.pt`），走的是 `ReID`（YOLO backbone 當 encoder）這條舊路徑，不是本地訓練的 `dinov2s_v3`。這份設定還能跑，但不是目前建議使用的版本。
+
+**結論**：目前沒有正式在用的 Re-ID 權重；唯一存在且訓練完整的自訂權重是 `dinov2s_v3`，但因未通過追蹤驗收而關閉。
+
+## 目前實際使用的偵測權重
+
+補充調查日期：2026-11-09。已用 `grep -rn "det_model_path" config/` 逐一確認全部 11 份情境設定檔（`tracking/`、`grid_search/`、`collision/`、`reid/reid_crops.yaml` 等）。
+
+**結論**：目前所有情境都指向同一個偵測權重：
+
+```
+models/yolo/yolo11x_dennis.pt
+```
+
+- 這個權重**不在本專案任何訓練流程的產出範圍內**——README 標註「不在 HF，向專案維護者取得」，屬於外部提供的權重，repo 裡沒有對應的訓練腳本或訓練紀錄。
+- `models/yolo/yolo11x.pt`（標準版）只出現在少數舊情境（`botsort_reid.yaml`／`botsort_noreid.yaml`）的 `class_tracking_params.<class>.model` 欄位，但那是 **Re-ID 融合的 backbone 來源**（`ReID` 類別把 YOLO 當 encoder），不是偵測模型；真正負責偵測推論的 `det_model_path` 一律是 `yolo11x_dennis.pt`。
+- 與前面「盤點結果」一致：`detection/` 模組本身完全沒有微調訓練流程，目前用的就是這顆外部取得、未在 repo 內訓練過的權重。
