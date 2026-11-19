@@ -60,6 +60,8 @@ GROUP_NAMES = {
     "applied_correction": "已套用修正",
     "unchanged_representative": "判為『真』的代表（未修正）",
     "ambiguous_representative": "不確定／疑似標錯的代表（待你裁決）",
+    **{f"acceptance_{name}": f"驗收複核：{name}" for name in
+       ("person", "car", "scooter", "small_truck", "bus", "truck")},
 }
 ADJUDICATION_KINDS = {"ambiguous_representative"}
 
@@ -128,10 +130,11 @@ def summarize(items: List[dict], answers: Dict[str, str]) -> Dict[str, dict]:
         answered = [item for item in group if item["item_id"] in answers]
         decided = [item for item in answered if answers[item["item_id"]] != "unsure"]
         disagreed = [item for item in decided if answers[item["item_id"]] != item["claimed_final"]]
+        decided_weight = sum(item.get("weight", 1) for item in decided)
         summary[kind] = {
             "total": len(group), "answered": len(answered), "unsure": len(answered) - len(decided),
             "disagreed": len(disagreed),
-            "rate": (len(disagreed) / len(decided)) if decided else None,
+            "rate": (sum(item.get("weight", 1) for item in disagreed) / decided_weight) if decided_weight else None,
         }
     return summary
 
@@ -143,6 +146,8 @@ def _item_html(item: dict, index: int, current: Optional[str]) -> str:
         claim = f'原標籤 {html.escape(item["old_label"])} → <b>{html.escape(item["claimed_final"])}</b>'
     elif item["kind"] == "ambiguous_representative":
         claim = f'目前標籤 <b>{html.escape(item["claimed_final"])}</b>（我不確定：{html.escape(item["reason"])}）'
+    elif item["kind"].startswith("acceptance_"):
+        claim = f'目前標籤 <b>{html.escape(item["claimed_final"])}</b>'
     else:
         claim = f'目前標籤 <b>{html.escape(item["claimed_final"])}</b>（未修正）'
     options = "".join(
@@ -164,7 +169,7 @@ def _page_html(data: AuditData, answers: Dict[str, str]) -> str:
         'section{border-top:2px solid #888;padding:8px 0}.imgs img{height:200px;margin:2px;border:1px solid #ccc}'
         '.imgs img.ctx{height:240px}.opts label{display:inline-block;margin:4px 12px 4px 0}'
         '#bar{position:sticky;top:0;background:#fff;padding:6px;border-bottom:1px solid #aaa}</style></head><body>'
-        f'<div id="bar">已答 <span id="n">{len(answers)}</span> / {len(data.items)} ｜ <a href="/summary">結果摘要</a></div>'
+        f'<div id="bar">已答 <span id="n">{sum(1 for item in data.items if item["item_id"] in answers)}</span> / {len(data.items)} ｜ <a href="/summary">結果摘要</a></div>'
         '<h1>標註稽核</h1><p>每題請依你自己的判斷，選出<b>這個紅框現在應該是什麼</b>。看不清楚就選「看不出來」。'
         '標題的標籤是我（Claude）的判斷，請不要被它影響。前三張是同一條軌跡的放大裁切，最後一張是整幀。</p>'
         + sections +
@@ -190,7 +195,7 @@ def _summary_html(data: AuditData, answers: Dict[str, str]) -> str:
     return (
         '<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>稽核結果</title></head><body>'
         '<p><a href="/">« 回題目</a></p><h1>稽核結果</h1>'
-        '<table border="1" cellpadding="6"><tr><th>群組</th><th>已答</th><th>看不出來</th><th>與我不同</th><th>不同意率（不含看不出來）</th></tr>'
+        '<table border="1" cellpadding="6"><tr><th>群組</th><th>已答</th><th>看不出來</th><th>與我不同</th><th>不同意率（不含看不出來；驗收複核按群大小加權）</th></tr>'
         + "".join(rows) + '</table></body></html>'
     )
 
@@ -257,7 +262,7 @@ def make_server(host: str, port: int, token: str, data: AuditData, responses_pat
                 return
             with responses_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps({"item_id": item_id, "answer": answer, "ts": time.time()}, ensure_ascii=False) + "\n")
-            body = json.dumps({"answered": len(load_latest_answers(responses_path))}).encode("utf-8")
+            body = json.dumps({"answered": sum(1 for item_id in load_latest_answers(responses_path) if item_id in data.items_by_id)}).encode("utf-8")
             self._send(200, body, "application/json")
 
         def log_message(self, format: str, *args) -> None:

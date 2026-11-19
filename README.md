@@ -119,6 +119,8 @@ Two measurement scripts cover missed objects (phase 2): `phase2_frames.py` sampl
 
 `scripts/detection_data/export_training_set.py` turns the CVAT snapshot into a YOLO fine-tuning dataset under `dataset/detection/exports/<version>/`: group-deleted frames from `box_issues.csv` are excluded whole, the confirmed mask polygons in `config/detection_masks/` are painted gray (boxes at least 50% inside a mask are dropped, kept boxes are never painted over), and the split is by sequence (validation: C000012 and the 20250629 sequence of C000054; the evaluation camera C000025 is refused). Each version stores `data.yaml`, `export_record.json` (per-class box counts, dropped boxes) and a copy of the annotation snapshot, and is never overwritten once trained.
 
+The second web task (acceptance review) is built by `scripts/cvat_review/build_acceptance_sample.py`: per class every track is embedded with DINOv2 and split into 20 appearance clusters, one random member per cluster becomes a question, and `serve_audit.py --sample runs/cvat_review/acceptance_sample.json` reports a cluster-size-weighted disagreement rate per class.
+
 Two limits are worth knowing. Appearance sampling picks one representative track per group, and that verdict cannot be applied safely to the rest of the group, which stays an unknown risk. The static-cluster check is valid for scooters only: parked cars are real and must not be flagged. The CVAT client (`cvat_sdk`) lives in its own venv (`ignore/cvat_deploy/cvat_client_venv`), separate from `track_eval`.
 
 ## Quick start
