@@ -96,13 +96,16 @@ def main() -> None:
     parser.add_argument("--review-dir", type=Path, default=REVIEW_DIR)
     parser.add_argument("--exclude-index", type=Path, default=None,
                         help="index.json of an earlier run; its track ids are left out of the pool")
+    parser.add_argument("--include-reviewed", action="store_true",
+                        help="draw from every current track of the class, reviewed ones included (acceptance sampling)")
+    parser.add_argument("--tag", default="", help="suffix for the output names, e.g. accept")
     parser.add_argument("--rank-csv", type=Path, default=None,
                         help="suspicion_<label>.csv from rank_suspicion.py; use together with --batch")
     parser.add_argument("--batch", type=int, default=0, help="0-based batch of --rank-csv to render")
     args = parser.parse_args()
 
     tracks = json.loads((args.review_dir / "pilot_v1_annotations.json").read_text(encoding="utf-8"))["tracks"]
-    seen = reviewed_ids(args.review_dir)
+    seen = set() if args.include_reviewed else reviewed_ids(args.review_dir)
     if args.exclude_index is not None:
         earlier = json.loads(args.exclude_index.read_text(encoding="utf-8"))
         seen |= {str(track_id) for ids in earlier.values() for track_id in ids}
@@ -112,7 +115,7 @@ def main() -> None:
     if sample is not None and sample < len(pool):
         pool = sorted(random.Random(args.seed).sample(pool, sample), key=lambda t: t["track_id"])
 
-    prefix = args.label
+    prefix = f"{args.label}_{args.tag}" if args.tag else args.label
     if args.rank_csv is not None:
         with args.rank_csv.open(newline="", encoding="utf-8") as handle:
             batch_ids = [int(row["track_id"]) for row in csv.DictReader(handle) if int(row["batch"]) == args.batch]
@@ -135,7 +138,7 @@ def main() -> None:
         name = f"{prefix}_{start // per_montage:02d}.jpg"
         cv2.imwrite(str(out_dir / name), grid, [cv2.IMWRITE_JPEG_QUALITY, 82])
         index[name] = [track["track_id"] for track in chunk]
-    index_name = "index.json" if args.rank_csv is None else f"index_{prefix}.json"
+    index_name = "index.json" if args.rank_csv is None and not args.tag else f"index_{prefix}.json"
     (out_dir / index_name).write_text(json.dumps(index, indent=1), encoding="utf-8")
     print(f"{args.label}: {len(pool)} tracks -> {len(index)} montages in {out_dir}")
 

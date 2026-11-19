@@ -66,6 +66,8 @@ def main() -> None:
     parser.add_argument("--label", required=True, choices=["car", "scooter"])
     parser.add_argument("--review-dir", type=Path, default=REVIEW_DIR)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--max-area", type=float, default=None,
+                        help="only rank tracks whose median box area is below this many px^2 (small-box sweep)")
     args = parser.parse_args()
 
     tracks = json.loads((args.review_dir / "pilot_v1_annotations.json").read_text(encoding="utf-8"))["tracks"]
@@ -103,6 +105,8 @@ def main() -> None:
     ranked: List[Dict] = []
     for track_id, info in track_info.items():
         if info["label"] != args.label or str(track_id) in seen:
+            continue
+        if args.max_area is not None and info["median_area"] >= args.max_area:
             continue
         group_count = 0
         for shape in info["shapes"]:
