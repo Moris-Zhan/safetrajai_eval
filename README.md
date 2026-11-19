@@ -88,13 +88,14 @@ CI runs only `tests/test_smoke.py` (`.github/workflows/smoke-test.yml`): module 
 
 ## Web services
 
-Three small web services exist for human-in-the-loop work. All of them require an access token, build pages on request and keep images on the host. They speak plain HTTP, so use them only on a trusted network, through an SSH tunnel, or with `kubectl port-forward`.
+Four small web services exist for human-in-the-loop work. All of them require an access token, build pages on request and keep images on the host. They speak plain HTTP, so use them only on a trusted network, through an SSH tunnel, or with `kubectl port-forward`.
 
 | Service | Script | Default port | Purpose |
 |---|---|---|---|
 | Picker | `scripts/picker/serve_picker.py` | 8765 | Serves the web pickers for camera configuration ([`picker-guide.md`](Markdown/picker/picker-guide.md)) |
 | Review | `scripts/cvat_review/serve_review.py` | 8766 | Per-track review of the CVAT pseudo-labels, one class at a time |
 | Audit | `scripts/cvat_review/serve_audit.py` | 8767 | Audit of Claude's own review judgments; `/summary` reports the disagreement rate per sample group against a 5% threshold |
+| Masks | `scripts/cvat_review/serve_masks.py` | 8768 | Confirm and edit the suggested "unreliable annotation" mask polygons per camera (drag vertices, add or delete polygons); saves to `runs/cvat_review/phase2/masks_confirmed/` and never touches CVAT |
 
 CVAT itself runs locally on port 8080; start, stop and check commands are in [`Markdown/detection/cvat-operations.md`](Markdown/detection/cvat-operations.md).
 
@@ -114,7 +115,7 @@ flowchart LR
     APPLY --> CVAT
 ```
 
-Two measurement scripts cover missed objects (phase 2): `phase2_frames.py` samples whole frames per sequence and draws every current box for by-eye counting, and `recover_candidates.py` re-runs the detector on whole frames plus tiles to list detections that no current box covers. Both only read the CVAT export and write candidate files under `runs/cvat_review/phase2/`; nothing is written back to CVAT.
+Two measurement scripts cover missed objects (phase 2): `phase2_frames.py` samples whole frames per sequence and draws every current box for by-eye counting, and `recover_candidates.py` re-runs the detector on whole frames plus tiles to list detections that no current box covers. Both only read the CVAT export and write candidate files under `runs/cvat_review/phase2/`; nothing is written back to CVAT. Because the candidates are only about 55% precise, they are not added as boxes; instead `suggest_masks.py` turns the candidate density into suggested mask polygons per camera, and `serve_masks.py` lets a human confirm them.
 
 Two limits are worth knowing. Appearance sampling picks one representative track per group, and that verdict cannot be applied safely to the rest of the group, which stays an unknown risk. The static-cluster check is valid for scooters only: parked cars are real and must not be flagged. The CVAT client (`cvat_sdk`) lives in its own venv (`ignore/cvat_deploy/cvat_client_venv`), separate from `track_eval`.
 
