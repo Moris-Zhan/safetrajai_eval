@@ -8,6 +8,7 @@
 
 ## 1. 文件目錄
 
+- [指令索引](command-index.md)
 - [安裝](getting-started/install.md)
 - [資料與目錄慣例](getting-started/data-layout.md)
 - [從 Hugging Face 還原資料與模型](getting-started/hf-restore.md)

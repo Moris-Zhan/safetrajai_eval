@@ -1,6 +1,7 @@
-"""README must mention every script and scenario config (spec readme-command-coverage).
+"""README and the command index must mention every script and scenario config (spec readme-command-coverage).
 
-Only reads README.md and the file names under scripts/ and config/; never touches dataset/, models/, runs/.
+Only reads README.md, Markdown/command-index.md and the file names under scripts/ and config/;
+never touches dataset/, models/, runs/.
 """
 
 from __future__ import annotations
@@ -11,10 +12,14 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-README_TEXT = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+DOCUMENTED_FILES = ("README.md", "Markdown/command-index.md")
+README_TEXT = "\n".join((REPO_ROOT / name).read_text(encoding="utf-8") for name in DOCUMENTED_FILES)
 
-# file name -> reason it is intentionally not documented in README.
-EXEMPT: Mapping[str, str] = {}
+# file name -> reason it is intentionally not documented in README or the command index.
+EXEMPT: Mapping[str, str] = {
+    "main.py": "Nuclio function entry point for CVAT auto-annotation, not a CLI",
+    "model_handler.py": "Nuclio function helper for CVAT auto-annotation, not a CLI",
+}
 
 
 def entry_point_names() -> list[str]:

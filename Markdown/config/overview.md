@@ -69,7 +69,7 @@
 | 我想要… | 做法 |
 |---|---|
 | 跑基準評估 | `python track_eval.py --config config/tracking/bytetrack.yaml` |
-| 做新實驗 | 複製一份基準檔到同資料夾並改名，只改要試的鍵；**不要覆寫基準情境**。新增的 yaml 還要在 `README.md` 提到檔名，否則 `tests/test_readme_coverage.py` 會失敗 |
+| 做新實驗 | 複製一份基準檔到同資料夾並改名，只改要試的鍵；**不要覆寫基準情境**。新增的 yaml 還要在 `README.md` 或 `Markdown/command-index.md` 提到檔名，否則 `tests/test_readme_coverage.py` 會失敗 |
 | 只重算 stage2 | `python scripts/pipeline/run_evaluation.py --config <config>`，或在 config 設 `stages.run_stage1: false` |
 | 只跑某幾支鏡頭 | `paths.cameras: [<camera>, ...]` |
 | 縮小評估範圍 | 調整 `eval_flags.run_det_eval`、`eval_flags.run_track_eval`；或讓 `paths.SOURCE_VIDEO_DIR` 指向只放該序列的資料夾 |

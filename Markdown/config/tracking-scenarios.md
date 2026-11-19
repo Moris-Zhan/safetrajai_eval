@@ -80,7 +80,7 @@ class_tracking:
 
 1. 複製最接近的基準檔到同資料夾並改名，例如 `config/tracking/my_experiment.yaml`。
 2. 只改要試的鍵；改 `class_tracking_params` 時，每個類別都要有合法的 `track_buffer`。
-3. 在 `README.md` 提到新檔名（`tests/test_readme_coverage.py` 會檢查）。
+3. 在 `README.md` 或 `Markdown/command-index.md` 提到新檔名（`tests/test_readme_coverage.py` 會檢查）。
 4. 驗證載入：
 
    ```bash
