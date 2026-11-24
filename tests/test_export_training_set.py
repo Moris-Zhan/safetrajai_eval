@@ -57,3 +57,54 @@ def test_boxes_by_frame_skips_outside_shapes() -> None:
 
 def test_frame_stem_uses_camera_timestamp_and_frame() -> None:
     assert export.frame_stem("C000012", "C000012 中正路_20250512065724", 21) == "C000012_20250512065724_000021"
+
+
+def test_group_boxes_are_taken_only_on_the_listed_frames_and_skip_outside_shapes(tmp_path: Path) -> None:
+    ledger = tmp_path / "box_issues.csv"
+    ledger.write_text(
+        "track_id,kind,old_label,manifest_frames,note\n"
+        "7,group_deleted,bus,10;12,x\n"
+        "8,loose_box,car,10,y\n", encoding="utf-8")
+    snapshot = {"tracks": [
+        {"track_id": 7, "shapes": [
+            {"frame": 10, "points": [0, 0, 5, 5], "outside": False},
+            {"frame": 11, "points": [1, 1, 6, 6], "outside": False},
+            {"frame": 12, "points": [2, 2, 7, 7], "outside": True}]},
+        {"track_id": 8, "shapes": [{"frame": 10, "points": [9, 9, 10, 10], "outside": False}]}]}
+    assert export.group_boxes_by_frame(snapshot, ledger) == {10: [(0, 0.0, 0.0, 5.0, 5.0)]}
+
+
+def test_restored_group_frame_paints_group_region_gray_but_keeps_labeled_boxes() -> None:
+    image = np.full((20, 20, 3), 200, np.uint8)
+    canvas = export.mask_canvas([], 20, 20)
+    group = [(0, 0.0, 0.0, 10.0, 10.0)]
+    kept = [(1, 2.0, 2.0, 4.0, 4.0)]
+    painted = export.apply_mask(image, export.add_boxes_to_canvas(canvas, group), kept)
+    assert painted[8, 8, 0] == export.GRAY       # inside the group box, outside any kept box
+    assert painted[3, 3, 0] == 200               # kept box is never painted over
+    assert painted[15, 15, 0] == 200             # elsewhere untouched
+
+
+PERSONS = [[0, 0, 10, 20, 0.9], [20, 0, 30, 20, 0.8], [40, 0, 50, 20, 0.7], [60, 0, 70, 20, 0.6], [80, 0, 90, 20, 0.5]]
+
+
+def test_review_answers_become_labels_gray_regions_and_frame_exclusion() -> None:
+    answer = {"boxes": {"0": "person", "1": "none", "2": "unsure", "3": "partial:scooter", "4": "bus"},
+              "missed": False, "corrections": {"3": [58.0, 0.0, 72.0, 22.0]}}
+    kept, gray, reason = export.resolve_review(PERSONS, answer)
+    assert reason == ""
+    assert kept == [(0, 0.0, 0.0, 10.0, 20.0), (2, 58.0, 0.0, 72.0, 22.0), (4, 80.0, 0.0, 90.0, 20.0)]
+    assert gray == [(0, 40.0, 0.0, 50.0, 20.0)]
+
+
+def test_uncorrected_partial_box_or_missed_person_excludes_the_frame() -> None:
+    partial = {"boxes": {"0": "partial:car"}, "missed": False, "corrections": {}}
+    assert export.resolve_review(PERSONS, partial)[2] == "partial_uncorrected"
+    assert export.resolve_review(PERSONS, {"boxes": {"0": "partial"}, "missed": False})[2] == "partial_uncorrected"
+    assert export.resolve_review(PERSONS, {"boxes": {"0": "person"}, "missed": True})[2] == "missed_person"
+
+
+def test_dennis_other_class_boxes_are_dropped_when_they_overlap_a_reviewed_box() -> None:
+    reviewed = [(2, 0.0, 0.0, 10.0, 20.0)]
+    detections = [(2, 1.0, 1.0, 10.0, 20.0), (1, 100.0, 0.0, 120.0, 20.0)]
+    assert export.fill_other_boxes(detections, reviewed) == [(1, 100.0, 0.0, 120.0, 20.0)]

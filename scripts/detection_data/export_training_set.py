@@ -12,6 +12,14 @@ Rules (agreed in the export-design review):
     kept are never painted over.
   * Split by sequence: --val takes "camera" or "camera:text-in-sequence-name" entries; every other
     sequence is train. The evaluation camera C000025 must not appear in the manifest.
+  * --pseudo-labels exports the same frames, masks and split with the original pseudo-labels (control run).
+  * --restore-group-deleted SNAPSHOT keeps those frames: each deleted group box is painted gray (ignore region)
+    using its original coordinates from the pre-correction snapshot; labeled boxes inside it are not painted over.
+  * --mined-person-frames adds frames mined from raw videos (mine_person_frames.py) after the person review
+    (serve_person_review.py): reviewed person boxes keep their class (or the corrected box), false detections are
+    dropped, "can't tell" boxes are painted gray, frames with an uncorrected partial box or a missed person are
+    excluded (listed in partial_pending.json), other classes come from dennis at --other-class-conf. Mined frames
+    are train only; frames of a validation sequence are skipped.
   * No resampling here; per-class box counts are written to export_record.json.
 
 Output: dataset/detection/exports/<version>/{images,labels}/{train,val}/, data.yaml,
@@ -44,8 +52,10 @@ IMAGES = DETECTION_ROOT / "images"
 MASK_DIR = PROJECT_ROOT / "config" / "detection_masks"
 REVIEW_DIR = PROJECT_ROOT / "runs" / "cvat_review"
 EVAL_CAMERA = "C000025"
+WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+VIDEOS = PROJECT_ROOT / "dataset" / "raw" / "videos"
 GRAY = 114
-DEFAULT_VAL = ("C000012", "C000054:20250629")
+DEFAULT_VAL = ("C000012", "C000056")
 CLASS_IDS: Dict[str, int] = {name: class_id for class_id, name in CLASS_NAMES.items()}
 
 Box = Tuple[int, float, float, float, float]  # class_id, x1, y1, x2, y2
@@ -58,6 +68,33 @@ def parse_excluded_frames(box_issues_csv: Path) -> Set[int]:
             if row["kind"] == "group_deleted":
                 excluded.update(int(frame) for frame in row["manifest_frames"].split(";") if frame)
     return excluded
+
+
+def group_boxes_by_frame(snapshot: dict, box_issues_csv: Path) -> Dict[int, List[Box]]:
+    """Boxes of the group_deleted tracks, only on the manifest frames the ledger lists for each track."""
+    wanted: Dict[int, Set[int]] = {}
+    with box_issues_csv.open(encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row["kind"] == "group_deleted":
+                wanted[int(row["track_id"])] = {int(frame) for frame in row["manifest_frames"].split(";") if frame}
+    result: Dict[int, List[Box]] = defaultdict(list)
+    for track in snapshot["tracks"]:
+        frames = wanted.get(track["track_id"])
+        if frames is None:
+            continue
+        for shape in track["shapes"]:
+            if not shape["outside"] and shape["frame"] in frames:
+                x1, y1, x2, y2 = shape["points"]
+                result[shape["frame"]].append((0, float(x1), float(y1), float(x2), float(y2)))
+    return dict(result)
+
+
+def add_boxes_to_canvas(canvas: np.ndarray, boxes: Sequence[Box]) -> np.ndarray:
+    merged = canvas.copy()
+    height, width = merged.shape
+    for _, x1, y1, x2, y2 in boxes:
+        merged[max(0, int(np.floor(y1))):min(height, int(np.ceil(y2))), max(0, int(np.floor(x1))):min(width, int(np.ceil(x2)))] = 1
+    return merged
 
 
 def is_validation(camera: str, sequence: str, val_specs: Sequence[str]) -> bool:
@@ -114,6 +151,80 @@ def boxes_by_frame(annotations: dict) -> Dict[int, List[Box]]:
     return result
 
 
+def pseudo_boxes(label_file: Path, width: int, height: int) -> List[Box]:
+    boxes: List[Box] = []
+    if label_file.exists():
+        for line in label_file.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                class_id, cx, cy, w, h = line.split()[:5]
+                cx, cy, w, h = float(cx) * width, float(cy) * height, float(w) * width, float(h) * height
+                boxes.append((int(class_id), cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
+    return boxes
+
+
+def parse_verdict(value: str) -> Tuple[str, str]:
+    value = {"not_person": "none"}.get(value, value)
+    if value in ("none", "unsure"):
+        return value, "person"
+    if value == "partial":
+        return "partial", "person"
+    if value.startswith("partial:"):
+        return "partial", value.split(":", 1)[1]
+    return "normal", value
+
+
+def resolve_review(persons: Sequence[Sequence[float]], answer: dict) -> Tuple[List[Box], List[Box], str]:
+    """Reviewed labels, boxes to paint gray, and the reason the frame is unusable ('' when it is usable)."""
+    verdicts, corrections = answer.get("boxes", {}), answer.get("corrections", {})
+    kept: List[Box] = []
+    gray: List[Box] = []
+    reason = "missed_person" if answer.get("missed") else ""
+    for index, person in enumerate(persons):
+        status, name = parse_verdict(verdicts.get(str(index), "person"))
+        x1, y1, x2, y2 = (float(v) for v in corrections.get(str(index), person[:4]))
+        if status == "none":
+            continue
+        if status == "unsure":
+            gray.append((0, x1, y1, x2, y2))
+        elif status == "partial" and str(index) not in corrections:
+            reason = reason or "partial_uncorrected"
+        else:
+            kept.append((CLASS_IDS[name], x1, y1, x2, y2))
+    return kept, gray, reason
+
+
+def box_iou(a: Box, b: Box) -> float:
+    width = min(a[3], b[3]) - max(a[1], b[1])
+    height = min(a[4], b[4]) - max(a[2], b[2])
+    if width <= 0 or height <= 0:
+        return 0.0
+    inter = width * height
+    return inter / ((a[3] - a[1]) * (a[4] - a[2]) + (b[3] - b[1]) * (b[4] - b[2]) - inter)
+
+
+def fill_other_boxes(detections: Sequence[Box], reviewed: Sequence[Box], iou_threshold: float = 0.5) -> List[Box]:
+    return [box for box in detections if all(box_iou(box, kept) < iou_threshold for kept in reviewed)]
+
+
+def latest_answers(responses: Path) -> Dict[str, dict]:
+    latest: Dict[str, dict] = {}
+    for line in responses.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            record = json.loads(line)
+            latest[record["frame_id"]] = record
+    return latest
+
+
+def read_video_frame(camera: str, video: str, frame_idx: int) -> np.ndarray:
+    capture = cv2.VideoCapture(str(VIDEOS / camera / video))
+    capture.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    ok, image = capture.read()
+    capture.release()
+    if not ok:
+        sys.exit(f"cannot read frame {frame_idx} of {video}")
+    return image
+
+
 def frame_stem(camera: str, sequence: str, frame_idx: int) -> str:
     return f"{camera}_{sequence.rsplit('_', 1)[-1]}_{frame_idx:06d}"
 
@@ -129,6 +240,17 @@ def main() -> None:
     parser.add_argument("--box-issues", type=Path, default=REVIEW_DIR / "box_issues.csv")
     parser.add_argument("--val", nargs="+", default=list(DEFAULT_VAL))
     parser.add_argument("--mask-drop-ratio", type=float, default=0.5)
+    parser.add_argument("--pseudo-labels", action="store_true",
+                        help="control export: use the original pseudo-label txts instead of the CVAT-corrected boxes")
+    parser.add_argument("--restore-group-deleted", type=Path, default=None, metavar="SNAPSHOT",
+                        help="keep the group_deleted frames: their original group boxes (taken from this pre-correction "
+                             "snapshot) are painted gray as ignore regions instead of excluding the frame")
+    parser.add_argument("--mined-person-frames", action="store_true",
+                        help="add the reviewed person frames mined from raw videos (see the docstring)")
+    parser.add_argument("--mined-candidates", type=Path, default=REVIEW_DIR / "person_candidates.json")
+    parser.add_argument("--mined-responses", type=Path, default=REVIEW_DIR / "person_review_responses.jsonl")
+    parser.add_argument("--other-class-conf", type=float, default=0.5,
+                        help="dennis confidence for the non-person boxes of mined frames")
     parser.add_argument("--no-masks", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -146,24 +268,18 @@ def main() -> None:
     annotations = json.loads(args.annotations.read_text(encoding="utf-8"))
     frame_boxes = boxes_by_frame(annotations)
     excluded = parse_excluded_frames(args.box_issues)
+    group_boxes: Dict[int, List[Box]] = {}
+    if args.restore_group_deleted:
+        group_boxes = group_boxes_by_frame(json.loads(args.restore_group_deleted.read_text(encoding="utf-8")), args.box_issues)
     masks = {} if args.no_masks else load_masks(MASK_DIR)
 
     canvases: Dict[str, np.ndarray] = {}
     counts = {"train": Counter(), "val": Counter()}
     frames: Counter = Counter()
     dropped_by_mask: Counter = Counter()
-    skipped_excluded = 0
-    for row_index, row in enumerate(manifest):
-        if row_index in excluded:
-            skipped_excluded += 1
-            continue
-        camera, sequence, frame_idx = row["camera"], row["seq"], int(row["frame_idx"])
-        split = "val" if is_validation(camera, sequence, args.val) else "train"
-        image = cv2.imread(str(IMAGES / row["image_path"]))
-        if image is None:
-            sys.exit(f"cannot read {row['image_path']}")
-        height, width = image.shape[:2]
 
+    def emit(camera: str, stem: str, split: str, image: np.ndarray, source_boxes: Sequence[Box], gray_boxes: Sequence[Box]) -> None:
+        height, width = image.shape[:2]
         mask = masks.get(camera)
         if mask is not None:
             if mask["image_size"] != [width, height]:
@@ -171,15 +287,17 @@ def main() -> None:
             if camera not in canvases:
                 canvases[camera] = mask_canvas(mask["polygons"], width, height)
         kept: List[Box] = []
-        for box in frame_boxes.get(row_index, []):
+        for box in source_boxes:
             if camera in canvases and masked_fraction(canvases[camera], box) >= args.mask_drop_ratio:
                 dropped_by_mask[CLASS_NAMES[box[0]]] += 1
             else:
                 kept.append(box)
-        if camera in canvases:
-            image = apply_mask(image, canvases[camera], kept)
-
-        stem = frame_stem(camera, sequence, frame_idx)
+        painted_canvas = canvases.get(camera)
+        if gray_boxes:
+            painted_canvas = add_boxes_to_canvas(
+                painted_canvas if painted_canvas is not None else mask_canvas([], width, height), gray_boxes)
+        if painted_canvas is not None:
+            image = apply_mask(image, painted_canvas, kept)
         for kind in ("images", "labels"):
             (out_root / kind / split).mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(out_root / "images" / split / f"{stem}.jpg"), image, [cv2.IMWRITE_JPEG_QUALITY, 95])
@@ -188,16 +306,79 @@ def main() -> None:
         frames[split] += 1
         counts[split].update(CLASS_NAMES[box[0]] for box in kept)
 
+    skipped_excluded = 0
+    restored_frames = 0
+    for row_index, row in enumerate(manifest):
+        if row_index in excluded and not args.restore_group_deleted:
+            skipped_excluded += 1
+            continue
+        camera, sequence, frame_idx = row["camera"], row["seq"], int(row["frame_idx"])
+        image = cv2.imread(str(IMAGES / row["image_path"]))
+        if image is None:
+            sys.exit(f"cannot read {row['image_path']}")
+        height, width = image.shape[:2]
+        source_boxes = (pseudo_boxes(DETECTION_ROOT / "labels" / row["label_path"], width, height)
+                        if args.pseudo_labels else frame_boxes.get(row_index, []))
+        restored_frames += row_index in group_boxes
+        emit(camera, frame_stem(camera, sequence, frame_idx), "val" if is_validation(camera, sequence, args.val) else "train",
+             image, source_boxes, group_boxes.get(row_index, []))
+
+    mined_record: Dict[str, object] = {}
+    if args.mined_person_frames:
+        from ultralytics import YOLO
+
+        model = YOLO(str(WEIGHTS))
+        candidates = json.loads(args.mined_candidates.read_text(encoding="utf-8"))
+        answers = latest_answers(args.mined_responses)
+        excluded_reasons: Counter = Counter()
+        reviewed_counts: Counter = Counter()
+        filled_counts: Counter = Counter()
+        partial_pending: List[dict] = []
+        used = skipped_val = unanswered = 0
+        for number, candidate in enumerate(candidates):
+            answer = answers.get(f"f{number}")
+            camera, video, frame_idx = candidate["camera"], candidate["video"], candidate["frame_idx"]
+            sequence = Path(video).stem
+            if answer is None:
+                unanswered += 1
+                continue
+            if is_validation(camera, sequence, args.val):
+                skipped_val += 1
+                continue
+            reviewed, gray, reason = resolve_review(candidate["persons"], answer)
+            stem = "m_" + frame_stem(camera, sequence, frame_idx)
+            if reason:
+                excluded_reasons[reason] += 1
+                if reason == "partial_uncorrected":
+                    partial_pending.append({"frame": stem, "camera": camera, "video": video, "frame_idx": frame_idx,
+                                            "boxes": {k: v for k, v in answer["boxes"].items() if v.startswith("partial")}})
+                continue
+            image = read_video_frame(camera, video, frame_idx)
+            result = model.predict(image, imgsz=640, conf=args.other_class_conf, verbose=False)[0]
+            detections = [(int(cls), *map(float, xyxy)) for cls, xyxy in zip(result.boxes.cls.tolist(), result.boxes.xyxy.tolist()) if int(cls) != 0]
+            filled = fill_other_boxes(detections, reviewed)
+            reviewed_counts.update(CLASS_NAMES[box[0]] for box in reviewed)
+            filled_counts.update(CLASS_NAMES[box[0]] for box in filled)
+            emit(camera, stem, "train", image, reviewed + filled, gray)
+            used += 1
+        (out_root / "partial_pending.json").write_text(json.dumps(partial_pending, indent=1, ensure_ascii=False), encoding="utf-8")
+        mined_record = {"frames_used": used, "excluded": dict(excluded_reasons), "skipped_validation_sequence": skipped_val,
+                        "unanswered": unanswered, "boxes_reviewed": dict(reviewed_counts), "boxes_dennis_filled": dict(filled_counts),
+                        "other_class_conf": args.other_class_conf, "responses": str(args.mined_responses)}
+
     shutil.copy2(args.annotations, out_root / "annotations_snapshot.json")
     (out_root / "data.yaml").write_text(yaml.safe_dump({
         "path": str(out_root), "train": "images/train", "val": "images/val",
         "names": dict(CLASS_NAMES)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
     record = {
         "version": args.version, "frames": dict(frames), "excluded_group_deleted_frames": skipped_excluded,
+        "restored_group_deleted_frames": restored_frames,
+        "group_deleted_snapshot": str(args.restore_group_deleted) if args.restore_group_deleted else None,
         "boxes_per_class": {split: dict(counts[split]) for split in counts},
         "boxes_dropped_by_mask": dict(dropped_by_mask), "mask_drop_ratio": args.mask_drop_ratio,
         "masked_cameras": sorted(canvases), "val": list(args.val),
-        "annotations_source": str(args.annotations), "box_issues": str(args.box_issues),
+        "mined_person_frames": mined_record or None,
+        "pseudo_labels": args.pseudo_labels, "annotations_source": str(args.annotations), "box_issues": str(args.box_issues),
     }
     (out_root / "export_record.json").write_text(json.dumps(record, indent=1, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(record, indent=1, ensure_ascii=False))
