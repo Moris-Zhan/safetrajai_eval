@@ -206,6 +206,23 @@ def fill_other_boxes(detections: Sequence[Box], reviewed: Sequence[Box], iou_thr
     return [box for box in detections if all(box_iou(box, kept) < iou_threshold for kept in reviewed)]
 
 
+def effective_height(box: Box, width: int, height: int) -> float:
+    return (box[4] - box[2]) * 640 / max(width, height)
+
+
+def tiny_person_boxes(detections: Sequence[Box], occupied: Sequence[Box], width: int, height: int,
+                      max_height: float) -> List[Box]:
+    small = [box for box in detections if box[0] == 0 and effective_height(box, width, height) <= max_height]
+    return fill_other_boxes(small, occupied)
+
+
+def repeated_train_list(image_paths: Sequence[str], has_person: Sequence[bool], repeat: int) -> List[str]:
+    lines: List[str] = []
+    for path, person in zip(image_paths, has_person):
+        lines.extend([path] * (repeat if person else 1))
+    return lines
+
+
 def latest_answers(responses: Path) -> Dict[str, dict]:
     latest: Dict[str, dict] = {}
     for line in responses.read_text(encoding="utf-8").splitlines():
@@ -251,6 +268,13 @@ def main() -> None:
     parser.add_argument("--mined-responses", type=Path, default=REVIEW_DIR / "person_review_responses.jsonl")
     parser.add_argument("--other-class-conf", type=float, default=0.5,
                         help="dennis confidence for the non-person boxes of mined frames")
+    parser.add_argument("--person-repeat", type=int, default=1,
+                        help="list train frames that contain a person this many times in train_repeat.txt (data.yaml train)")
+    parser.add_argument("--tiny-person-pseudo", action="store_true",
+                        help="add dennis person boxes (unreviewed pseudo-labels) to pilot train frames when small enough")
+    parser.add_argument("--tiny-person-conf", type=float, default=0.25)
+    parser.add_argument("--tiny-person-max-height", type=float, default=32.0,
+                        help="effective height (box height scaled to a 640 long side) at or below which a person counts as tiny")
     parser.add_argument("--no-masks", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -308,6 +332,8 @@ def main() -> None:
 
     skipped_excluded = 0
     restored_frames = 0
+    tiny_model = None
+    tiny_added = 0
     for row_index, row in enumerate(manifest):
         if row_index in excluded and not args.restore_group_deleted:
             skipped_excluded += 1
@@ -320,8 +346,19 @@ def main() -> None:
         source_boxes = (pseudo_boxes(DETECTION_ROOT / "labels" / row["label_path"], width, height)
                         if args.pseudo_labels else frame_boxes.get(row_index, []))
         restored_frames += row_index in group_boxes
-        emit(camera, frame_stem(camera, sequence, frame_idx), "val" if is_validation(camera, sequence, args.val) else "train",
-             image, source_boxes, group_boxes.get(row_index, []))
+        split = "val" if is_validation(camera, sequence, args.val) else "train"
+        if args.tiny_person_pseudo and split == "train":
+            if tiny_model is None:
+                from ultralytics import YOLO
+
+                tiny_model = YOLO(str(WEIGHTS))
+            result = tiny_model.predict(image, imgsz=640, conf=args.tiny_person_conf, verbose=False)[0]
+            detections = [(int(cls), *map(float, xyxy)) for cls, xyxy in zip(result.boxes.cls.tolist(), result.boxes.xyxy.tolist())]
+            added = tiny_person_boxes(detections, list(source_boxes) + group_boxes.get(row_index, []), width, height,
+                                      args.tiny_person_max_height)
+            tiny_added += len(added)
+            source_boxes = list(source_boxes) + added
+        emit(camera, frame_stem(camera, sequence, frame_idx), split, image, source_boxes, group_boxes.get(row_index, []))
 
     mined_record: Dict[str, object] = {}
     if args.mined_person_frames:
@@ -367,8 +404,18 @@ def main() -> None:
                         "other_class_conf": args.other_class_conf, "responses": str(args.mined_responses)}
 
     shutil.copy2(args.annotations, out_root / "annotations_snapshot.json")
+    train_entry = "images/train"
+    if args.person_repeat > 1:
+        train_images = sorted((out_root / "images" / "train").glob("*.jpg"))
+        has_person = [any(line.startswith("0 ") for line in
+                          (out_root / "labels" / "train" / f"{path.stem}.txt").read_text(encoding="utf-8").splitlines())
+                      for path in train_images]
+        (out_root / "train_repeat.txt").write_text(
+            "\n".join(repeated_train_list([str(path) for path in train_images], has_person, args.person_repeat)) + "\n",
+            encoding="utf-8")
+        train_entry = str(out_root / "train_repeat.txt")
     (out_root / "data.yaml").write_text(yaml.safe_dump({
-        "path": str(out_root), "train": "images/train", "val": "images/val",
+        "path": str(out_root), "train": train_entry, "val": "images/val",
         "names": dict(CLASS_NAMES)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
     record = {
         "version": args.version, "frames": dict(frames), "excluded_group_deleted_frames": skipped_excluded,
@@ -378,6 +425,10 @@ def main() -> None:
         "boxes_dropped_by_mask": dict(dropped_by_mask), "mask_drop_ratio": args.mask_drop_ratio,
         "masked_cameras": sorted(canvases), "val": list(args.val),
         "mined_person_frames": mined_record or None,
+        "person_repeat": args.person_repeat,
+        "tiny_person_pseudo": ({"boxes_added": tiny_added, "conf": args.tiny_person_conf,
+                                "max_effective_height": args.tiny_person_max_height}
+                               if args.tiny_person_pseudo else None),
         "pseudo_labels": args.pseudo_labels, "annotations_source": str(args.annotations), "box_issues": str(args.box_issues),
     }
     (out_root / "export_record.json").write_text(json.dumps(record, indent=1, ensure_ascii=False), encoding="utf-8")

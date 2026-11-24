@@ -108,3 +108,14 @@ def test_dennis_other_class_boxes_are_dropped_when_they_overlap_a_reviewed_box()
     reviewed = [(2, 0.0, 0.0, 10.0, 20.0)]
     detections = [(2, 1.0, 1.0, 10.0, 20.0), (1, 100.0, 0.0, 120.0, 20.0)]
     assert export.fill_other_boxes(detections, reviewed) == [(1, 100.0, 0.0, 120.0, 20.0)]
+
+
+def test_tiny_person_pseudo_boxes_keep_only_small_unoccupied_persons() -> None:
+    detections = [(0, 0.0, 0.0, 10.0, 20.0), (0, 100.0, 0.0, 140.0, 80.0), (1, 200.0, 0.0, 210.0, 20.0),
+                  (0, 300.0, 0.0, 310.0, 20.0)]
+    occupied = [(1, 299.0, 0.0, 310.0, 20.0)]
+    assert export.tiny_person_boxes(detections, occupied, 1280, 720, 32.0) == [(0, 0.0, 0.0, 10.0, 20.0)]
+
+
+def test_person_repeat_list_repeats_only_person_frames() -> None:
+    assert export.repeated_train_list(["a", "b", "c"], [True, False, True], 3) == ["a", "a", "a", "b", "c", "c", "c"]

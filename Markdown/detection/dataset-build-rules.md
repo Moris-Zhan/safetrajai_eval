@@ -67,6 +67,12 @@
 
 挖掘幀只審查了 person 候選框。其他類別用 dennis 預測補上：信心 ≥ 0.5，且與已審查保留的框 IoU ≥ 0.5 的丟掉（人工審查優先）。這是偽標籤，信心低於 0.5 的物體在這些幀會被當成背景。挖掘幀只進訓練集，不進驗證集；驗證序列的影格一律跳過。
 
+### 防止 person 遺忘的匯出選項（v3 資料上的實驗，預設都關閉）
+
+- `--person-repeat N`：在版本資料夾寫 `train_repeat.txt`，含 person 框的訓練幀列 N 次，`data.yaml` 的 `train` 改指向它（絕對路徑）。影像檔本身不複製。
+- `--tiny-person-pseudo`：在 pilot 訓練幀補上 dennis 的 person 偽標籤（信心 ≥ `--tiny-person-conf`，預設 0.25；有效高度 ≤ `--tiny-person-max-height`，預設 32 像素）。與已保留的框或塗灰區域 IoU ≥ 0.5 的丟掉。這些框沒有人工審查，CVAT 審查時被刪掉的誤檢可能被加回來，所以只當實驗，結果要與 person 誤報數一起看。挖掘幀不套用（那些幀的 person 已人工審查）。
+- 兩者的設定都記在 `export_record.json`（`person_repeat`、`tiny_person_pseudo`）。
+
 ## 8. 切分與評估公平性
 
 - 以鏡頭／序列切分，不以影格隨機切：驗證 = C000012 + C000056（`export_training_set.py` 的預設）。
