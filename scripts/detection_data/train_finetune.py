@@ -63,6 +63,13 @@ def main() -> None:
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True).stdout.strip()
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     if args.resume:
+        import yaml
+
+        # The run's real options live in its args.yaml; the argparse defaults above do not apply.
+        run_args = yaml.safe_load((RUNS / args.name / "args.yaml").read_text(encoding="utf-8"))
+        options = {key: run_args.get(key) for key in ("data", "epochs", "imgsz", "batch", "patience", "seed",
+                                                       "project", "name", "workers", "optimizer", "lr0", "freeze")}
+        options["resumed"] = True
         YOLO(str(RUNS / args.name / "weights" / "last.pt")).train(resume=True)
     else:
         YOLO(str(args.weights)).train(**options)
