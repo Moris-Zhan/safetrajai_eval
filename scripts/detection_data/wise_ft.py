@@ -18,7 +18,7 @@ from pathlib import Path
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BASE = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+DEFAULT_BASE = PROJECT_ROOT / "models" / "yolo" / "yolo11x_base.pt"
 
 
 def blend_state(base: dict, tuned: dict, alpha: float) -> dict:

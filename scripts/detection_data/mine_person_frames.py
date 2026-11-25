@@ -2,7 +2,7 @@
 """
 Mine raw videos for frames that contain people, as candidates for extra person training labels.
 
-dennis is run on every --stride-th frame of each source camera's videos (sequential decode only).
+The base model is run on every --stride-th frame of each source camera's videos (sequential decode only).
 Frames already in the pilot_v1 manifest are skipped. Held-out evaluation cameras are never read
 (C000025 plus --exclude, default C000012 and C000056 which stay a fair evaluation set).
 
@@ -25,7 +25,7 @@ import cv2
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VIDEOS = PROJECT_ROOT / "dataset" / "raw" / "videos"
 MANIFEST = PROJECT_ROOT / "dataset" / "detection" / "splits" / "pilot_v1" / "manifest.csv"
-WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_base.pt"
 SOURCE_CAMERAS = ("C000011", "C000033", "C000043", "C000048", "C000054", "C000085", "C000256")
 BATCH = 16
 

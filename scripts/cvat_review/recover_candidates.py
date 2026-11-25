@@ -27,7 +27,7 @@ from ultralytics import YOLO
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REVIEW_DIR = PROJECT_ROOT / "runs" / "cvat_review"
 IMAGES = PROJECT_ROOT / "dataset" / "detection" / "images"
-WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_base.pt"
 CLASS_NAMES = ["person", "car", "scooter", "small_truck", "bus", "truck"]
 COLORS = {"person": (0, 255, 255), "car": (0, 255, 0), "scooter": (255, 0, 255),
           "small_truck": (255, 128, 0), "bus": (0, 128, 255), "truck": (0, 0, 255)}

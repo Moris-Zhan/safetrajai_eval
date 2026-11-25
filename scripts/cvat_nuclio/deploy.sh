@@ -21,6 +21,6 @@ if ! command -v nuctl >/dev/null 2>&1; then
 fi
 
 # 權重檔不進版控（*.pt 已在 .gitignore），每次部署前從 models/ 複製一份進函式目錄。
-cp "$REPO_ROOT/models/yolo/yolo11x_dennis.pt" "$SCRIPT_DIR/yolo11_detector/model/yolo11x_dennis.pt"
+cp "$REPO_ROOT/models/yolo/yolo11x_base.pt" "$SCRIPT_DIR/yolo11_detector/model/yolo11x_base.pt"
 
 "$CVAT_SERVERLESS_DIR/deploy_gpu.sh" "$SCRIPT_DIR"

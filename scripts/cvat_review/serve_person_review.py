@@ -2,7 +2,7 @@
 """
 Token-protected web page to review person candidates mined from raw videos (mine_person_frames.py).
 
-Each frame shows a zoomed crop around dennis' person boxes (numbered) and asks, per box: class buttons plus a status dropdown (normal / false detection / can't tell / partial box), plus one checkbox for "a person in this frame has no box".
+Each frame shows a zoomed crop around the base model's person boxes (numbered) and asks, per box: class buttons plus a status dropdown (normal / false detection / can't tell / partial box), plus one checkbox for "a person in this frame has no box".
 A box can be corrected by dragging a new rectangle (stored as `corrections`, original image pixels).
 Answers are appended to runs/cvat_review/person_review_responses.jsonl (latest answer per frame wins).
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from ultralytics import YOLO
 
-MODEL_PATH = Path(__file__).parent / "model" / "yolo11x_dennis.pt"
+MODEL_PATH = Path(__file__).parent / "model" / "yolo11x_base.pt"
 
 # 數值來源：config/tracking/botsort_reid_timm.yaml 的 tracking_params.iou/imgsz 與
 # class_tracking.class_conf_thresh；該 config 改動時要手動同步這裡。

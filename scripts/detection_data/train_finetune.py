@@ -22,7 +22,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPORTS = PROJECT_ROOT / "dataset" / "detection" / "exports"
 RUNS = PROJECT_ROOT / "runs" / "finetune"
-DEFAULT_WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+DEFAULT_WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_base.pt"
 
 
 def main() -> None:

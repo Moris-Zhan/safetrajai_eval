@@ -15,7 +15,7 @@ Output: <out>/errors.json {"<name>/<camera or combined>/<conf>": {"<class>": {"t
 
 Usage (conda env track_eval):
     python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 \\
-        dennis=models/yolo/yolo11x_dennis.pt v3_tiny=runs/finetune/ft_v3_tiny_e0/weights/last.pt
+        base=models/yolo/yolo11x_base.pt v3_tiny=runs/finetune/ft_v3_tiny_e0/weights/last.pt
 """
 from __future__ import annotations
 

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 Pilot 階段：對 `detection_source`（`config/datasets.yaml`）9 支鏡頭裡挑出的 10 個檔案，
-依固定秒數間隔取樣畫面，用目前在用的偵測權重（`models/yolo/yolo11x_dennis.pt`）產生偽標籤，
-供之後人工覆核用。對應 `training_eval_audit.md`「未來計畫：以 yolo11x_dennis.pt 為起始模型
-精煉並製作偵測資料集」（2026-11-09 `/grill-me` 定案的 10 點共識）第 1、4、5 點。
+依固定秒數間隔取樣畫面，用基準模型（`models/yolo/yolo11x_base.pt`）產生偽標籤，
+供之後人工覆核用。對應 `training_eval_audit.md`「未來計畫」（2026-11-09 `/grill-me` 定案的 10 點共識）第 1、4、5 點。
 
 這支腳本只做「取樣＋偽標籤」，不做人工覆核、不做資料集切分（切分留到真正要訓練時再決定）。
 

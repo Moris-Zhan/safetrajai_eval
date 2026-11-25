@@ -11,7 +11,7 @@ Output: <out>/results.json ({"<subset>/<name>": {"frames", "map50", "map50_95", 
 
 Usage (conda env track_eval):
     python scripts/detection_data/eval_finetune.py --export ft_v3 --out runs/finetune/eval_v3c \\
-        dennis=models/yolo/yolo11x_dennis.pt v3=runs/finetune/ft_v3_e0/weights/last.pt
+        base=models/yolo/yolo11x_base.pt v3=runs/finetune/ft_v3_e0/weights/last.pt
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("weights", nargs="+", help="name=path pairs, e.g. dennis=models/yolo/yolo11x_dennis.pt")
+    parser.add_argument("weights", nargs="+", help="name=path pairs, e.g. base=models/yolo/yolo11x_base.pt")
     args = parser.parse_args()
 
     pairs = []

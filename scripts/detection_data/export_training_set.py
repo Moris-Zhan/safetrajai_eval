@@ -18,8 +18,15 @@ Rules (agreed in the export-design review):
   * --mined-person-frames adds frames mined from raw videos (mine_person_frames.py) after the person review
     (serve_person_review.py): reviewed person boxes keep their class (or the corrected box), false detections are
     dropped, "can't tell" boxes are painted gray, frames with an uncorrected partial box or a missed person are
-    excluded (listed in partial_pending.json), other classes come from dennis at --other-class-conf. Mined frames
+    excluded (listed in partial_pending.json), other classes come from the base model at --other-class-conf. Mined frames
     are train only; frames of a validation sequence are skipped.
+  * --base-labels THRESHOLDS_JSON (control E0 of Markdown/detection/finetune-plan.md): every train frame
+    (pilot and mined) is labeled with base-model single-frame predictions, kept per class at the confidence thresholds
+    in the json ({"thresholds": {"person": 0.3, ...}, "ignore_conf": 0.1}); a prediction with
+    ignore_conf <= conf < its class threshold is painted gray (ignore region; kept labels are never painted over).
+    ignore_conf defaults to --base-ignore-conf. No human corrections are applied to train (no group/unsure gray
+    boxes). Validation keeps the CVAT labels, so the fair-camera evaluation is unchanged. Camera masks still apply
+    unless --no-masks.
   * No resampling here; per-class box counts are written to export_record.json.
 
 Output: dataset/detection/exports/<version>/{images,labels}/{train,val}/, data.yaml,
@@ -52,7 +59,7 @@ IMAGES = DETECTION_ROOT / "images"
 MASK_DIR = PROJECT_ROOT / "config" / "detection_masks"
 REVIEW_DIR = PROJECT_ROOT / "runs" / "cvat_review"
 EVAL_CAMERA = "C000025"
-WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_dennis.pt"
+WEIGHTS = PROJECT_ROOT / "models" / "yolo" / "yolo11x_base.pt"
 VIDEOS = PROJECT_ROOT / "dataset" / "raw" / "videos"
 GRAY = 114
 DEFAULT_VAL = ("C000012", "C000056")
@@ -267,14 +274,18 @@ def main() -> None:
     parser.add_argument("--mined-candidates", type=Path, default=REVIEW_DIR / "person_candidates.json")
     parser.add_argument("--mined-responses", type=Path, default=REVIEW_DIR / "person_review_responses.jsonl")
     parser.add_argument("--other-class-conf", type=float, default=0.5,
-                        help="dennis confidence for the non-person boxes of mined frames")
+                        help="base-model confidence for the non-person boxes of mined frames")
     parser.add_argument("--person-repeat", type=int, default=1,
                         help="list train frames that contain a person this many times in train_repeat.txt (data.yaml train)")
     parser.add_argument("--tiny-person-pseudo", action="store_true",
-                        help="add dennis person boxes (unreviewed pseudo-labels) to pilot train frames when small enough")
+                        help="add base-model person boxes (unreviewed pseudo-labels) to pilot train frames when small enough")
     parser.add_argument("--tiny-person-conf", type=float, default=0.25)
     parser.add_argument("--tiny-person-max-height", type=float, default=32.0,
                         help="effective height (box height scaled to a 640 long side) at or below which a person counts as tiny")
+    parser.add_argument("--base-labels", type=Path, default=None, metavar="THRESHOLDS_JSON",
+                        help="label train frames with base-model predictions at these per-class thresholds (see the docstring)")
+    parser.add_argument("--base-ignore-conf", type=float, default=0.1,
+                        help="with --base-labels: lowest confidence painted gray when the json has no ignore_conf")
     parser.add_argument("--no-masks", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -296,6 +307,37 @@ def main() -> None:
     if args.restore_group_deleted:
         group_boxes = group_boxes_by_frame(json.loads(args.restore_group_deleted.read_text(encoding="utf-8")), args.box_issues)
     masks = {} if args.no_masks else load_masks(MASK_DIR)
+    if args.base_labels and (args.pseudo_labels or args.tiny_person_pseudo):
+        sys.exit("--base-labels replaces the train labels; it cannot be combined with --pseudo-labels/--tiny-person-pseudo")
+    base_thresholds: Dict[int, float] = {}
+    base_ignore_conf = args.base_ignore_conf
+    if args.base_labels:
+        raw = json.loads(args.base_labels.read_text(encoding="utf-8"))["thresholds"]
+        base_thresholds = {CLASS_IDS[name]: float(value) for name, value in raw.items()}
+        if set(base_thresholds) != set(CLASS_NAMES):
+            sys.exit(f"{args.base_labels}: thresholds must cover all classes {sorted(CLASS_IDS)}")
+        base_ignore_conf = float(json.loads(args.base_labels.read_text(encoding="utf-8")).get("ignore_conf", args.base_ignore_conf))
+        if base_ignore_conf > min(base_thresholds.values()):
+            sys.exit(f"ignore_conf {base_ignore_conf} is above the lowest class threshold")
+    base_model = None
+    base_counts: Counter = Counter()
+    base_gray_counts: Counter = Counter()
+
+    def base_boxes(image: np.ndarray) -> Tuple[List[Box], List[Box]]:
+        """Base-model labels (conf >= class threshold) and gray boxes (ignore_conf <= conf < class threshold)."""
+        nonlocal base_model
+        if base_model is None:
+            from ultralytics import YOLO
+
+            base_model = YOLO(str(WEIGHTS))
+        result = base_model.predict(image, imgsz=640, conf=base_ignore_conf, verbose=False)[0]
+        labels: List[Box] = []
+        gray: List[Box] = []
+        for cls, conf, xyxy in zip(result.boxes.cls.tolist(), result.boxes.conf.tolist(), result.boxes.xyxy.tolist()):
+            (labels if conf >= base_thresholds[int(cls)] else gray).append((int(cls), *map(float, xyxy)))
+        base_counts.update(CLASS_NAMES[box[0]] for box in labels)
+        base_gray_counts.update(CLASS_NAMES[box[0]] for box in gray)
+        return labels, gray
 
     canvases: Dict[str, np.ndarray] = {}
     counts = {"train": Counter(), "val": Counter()}
@@ -347,6 +389,9 @@ def main() -> None:
                         if args.pseudo_labels else frame_boxes.get(row_index, []))
         restored_frames += row_index in group_boxes
         split = "val" if is_validation(camera, sequence, args.val) else "train"
+        if args.base_labels and split == "train":
+            emit(camera, frame_stem(camera, sequence, frame_idx), split, image, *base_boxes(image))
+            continue
         if args.tiny_person_pseudo and split == "train":
             if tiny_model is None:
                 from ultralytics import YOLO
@@ -391,6 +436,10 @@ def main() -> None:
                                             "boxes": {k: v for k, v in answer["boxes"].items() if v.startswith("partial")}})
                 continue
             image = read_video_frame(camera, video, frame_idx)
+            if args.base_labels:
+                emit(camera, stem, "train", image, *base_boxes(image))
+                used += 1
+                continue
             result = model.predict(image, imgsz=640, conf=args.other_class_conf, verbose=False)[0]
             detections = [(int(cls), *map(float, xyxy)) for cls, xyxy in zip(result.boxes.cls.tolist(), result.boxes.xyxy.tolist()) if int(cls) != 0]
             filled = fill_other_boxes(detections, reviewed)
@@ -400,7 +449,7 @@ def main() -> None:
             used += 1
         (out_root / "partial_pending.json").write_text(json.dumps(partial_pending, indent=1, ensure_ascii=False), encoding="utf-8")
         mined_record = {"frames_used": used, "excluded": dict(excluded_reasons), "skipped_validation_sequence": skipped_val,
-                        "unanswered": unanswered, "boxes_reviewed": dict(reviewed_counts), "boxes_dennis_filled": dict(filled_counts),
+                        "unanswered": unanswered, "boxes_reviewed": dict(reviewed_counts), "boxes_base_filled": dict(filled_counts),
                         "other_class_conf": args.other_class_conf, "responses": str(args.mined_responses)}
 
     shutil.copy2(args.annotations, out_root / "annotations_snapshot.json")
@@ -429,6 +478,11 @@ def main() -> None:
         "tiny_person_pseudo": ({"boxes_added": tiny_added, "conf": args.tiny_person_conf,
                                 "max_effective_height": args.tiny_person_max_height}
                                if args.tiny_person_pseudo else None),
+        "base_labels": ({"thresholds_file": str(args.base_labels),
+                         "thresholds": {CLASS_NAMES[k]: v for k, v in base_thresholds.items()},
+                         "ignore_conf": base_ignore_conf,
+                         "boxes_before_mask": dict(base_counts), "gray_boxes": dict(base_gray_counts)}
+                        if args.base_labels else None),
         "pseudo_labels": args.pseudo_labels, "annotations_source": str(args.annotations), "box_issues": str(args.box_issues),
     }
     (out_root / "export_record.json").write_text(json.dumps(record, indent=1, ensure_ascii=False), encoding="utf-8")

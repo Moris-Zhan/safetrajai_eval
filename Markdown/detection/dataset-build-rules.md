@@ -7,11 +7,11 @@
 ## 1. 總流程
 
 1. 從原始影片取樣影格（第 2 節）。
-2. 用目前權重 `models/yolo/yolo11x_dennis.pt` 產生偽標籤，匯入 CVAT（task 3），由人工修正（第 3 節）。
+2. 用基準模型（當時的 `models/yolo/yolo11x_dennis.pt`，新工具改讀複本 `yolo11x_base.pt`）產生偽標籤，匯入 CVAT（task 3），由人工修正（第 3 節）。
 3. 套用遮罩與忽略區（第 4 節）。
 4. 補充 person 資料（第 6 節）與其他類別（第 7 節）。
 5. 依鏡頭切分訓練與驗證（第 8 節），匯出版本。
-6. 以固定訓練 epoch、最後一個 epoch 的權重，在公平的評估鏡頭上與 dennis 比較（第 8 節）。
+6. 以固定訓練 epoch、最後一個 epoch 的權重，在公平的評估鏡頭上與基準模型比較（第 8 節）。
 
 ## 2. 資料來源與取樣
 
@@ -19,7 +19,7 @@
 - pilot_v1：10 支影片、9 個鏡頭，每 1.5 秒取一幀，共 3,308 幀（偽標籤 67,545 個框）。
 - 評估鏡頭 C000025（附人工 GT `cctv_all8`）**永遠不進訓練資料**；smoke 測試會檢查。
 - C000026 納入訓練來源（v4），需要先補 ROI 與偵測遮罩並用網頁確認，再取樣。
-- 公平評估鏡頭是 C000012 與 C000056：dennis 沒看過（使用者確認）。dennis 很可能看過 C000025，所以 C000025 上的 baseline 偏高，只當參考。
+- 公平評估鏡頭是 C000012 與 C000056：基準模型沒看過（使用者確認）。基準模型很可能看過 C000025，所以 C000025 上的 baseline 偏高，只當參考。
 
 ## 3. 人工審查與修正規則
 
@@ -42,9 +42,9 @@
 
 ## 6. person 補充（挖掘與人工審查）
 
-目的：pilot_v1 的 person 很少（訓練只有 155 個框、約 90 個不同的人），微調後 person 的準確率比 dennis 低。
+目的：pilot_v1 的 person 很少（訓練只有 155 個框、約 90 個不同的人），微調後 person 的準確率比基準模型低。
 
-1. `mine_person_frames.py`：用 dennis 掃描原始影片，保留有 person 偵測（信心 ≥ 0.25）的影格；已在 manifest 的影格跳過；評估鏡頭（C000012、C000056、C000025）不讀。
+1. `mine_person_frames.py`：用基準模型掃描原始影片，保留有 person 偵測（信心 ≥ 0.25）的影格；已在 manifest 的影格跳過；評估鏡頭（C000012、C000056、C000025）不讀。
 2. `serve_person_review.py`：審查頁，每個框兩組設定。
    - **類別按鈕**：人／機車／car／其他（其他旁的下拉選 small_truck、bus、truck）。預設「人」。
    - **狀態下拉**：正常／誤檢／看不清／框不完整。預設「正常」。
@@ -65,12 +65,12 @@
 
 ## 7. 挖掘幀的其他類別
 
-挖掘幀只審查了 person 候選框。其他類別用 dennis 預測補上：信心 ≥ 0.5，且與已審查保留的框 IoU ≥ 0.5 的丟掉（人工審查優先）。這是偽標籤，信心低於 0.5 的物體在這些幀會被當成背景。挖掘幀只進訓練集，不進驗證集；驗證序列的影格一律跳過。
+挖掘幀只審查了 person 候選框。其他類別用基準模型預測補上：信心 ≥ 0.5，且與已審查保留的框 IoU ≥ 0.5 的丟掉（人工審查優先）。這是偽標籤，信心低於 0.5 的物體在這些幀會被當成背景。挖掘幀只進訓練集，不進驗證集；驗證序列的影格一律跳過。
 
 ### 防止 person 遺忘的匯出選項（v3 資料上的實驗，預設都關閉）
 
 - `--person-repeat N`：在版本資料夾寫 `train_repeat.txt`，含 person 框的訓練幀列 N 次，`data.yaml` 的 `train` 改指向它（絕對路徑）。影像檔本身不複製。
-- `--tiny-person-pseudo`：在 pilot 訓練幀補上 dennis 的 person 偽標籤（信心 ≥ `--tiny-person-conf`，預設 0.25；有效高度 ≤ `--tiny-person-max-height`，預設 32 像素）。與已保留的框或塗灰區域 IoU ≥ 0.5 的丟掉。這些框沒有人工審查，CVAT 審查時被刪掉的誤檢可能被加回來，所以只當實驗，結果要與 person 誤報數一起看。挖掘幀不套用（那些幀的 person 已人工審查）。
+- `--tiny-person-pseudo`：在 pilot 訓練幀補上基準模型的 person 偽標籤（信心 ≥ `--tiny-person-conf`，預設 0.25；有效高度 ≤ `--tiny-person-max-height`，預設 32 像素）。與已保留的框或塗灰區域 IoU ≥ 0.5 的丟掉。這些框沒有人工審查，CVAT 審查時被刪掉的誤檢可能被加回來，所以只當實驗，結果要與 person 誤報數一起看。挖掘幀不套用（那些幀的 person 已人工審查）。
 - 兩者的設定都記在 `export_record.json`（`person_repeat`、`tiny_person_pseudo`）。
 
 ### v3 雜訊底線與 person 遺忘實驗結果（2026-11-24，`runs/finetune/eval_v3c/results.json`）
@@ -79,7 +79,7 @@
 
 | 權重 | 整體 | person | car | scooter | small_truck | bus | truck |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dennis（未微調） | 0.428 | 0.476 | 0.889 | 0.658 | 0.194 | 0.255 | 0.094 |
+| 基準模型（未微調） | 0.428 | 0.476 | 0.889 | 0.658 | 0.194 | 0.255 | 0.094 |
 | v2_e0 | 0.523 | 0.334 | 0.876 | 0.659 | 0.550 | 0.516 | 0.202 |
 | v3_e0（seed 0） | 0.497 | 0.300 | 0.875 | 0.661 | 0.508 | 0.495 | 0.140 |
 | v3_s1（seed 1） | 0.524 | 0.369 | 0.882 | 0.672 | 0.512 | 0.543 | 0.168 |
@@ -88,7 +88,7 @@
 | v3_tiny_s1（seed 1，小 person 偽標籤） | 0.501 | 0.289 | 0.880 | 0.666 | 0.489 | 0.510 | 0.172 |
 
 - **雜訊底線**：只換 seed，整體分數就差 0.027，person 差 0.069。v2 與 v3 的差距（0.026）落在這個雜訊內，所以「v3 比 v2 差」不成立。之後比較變體時，整體差距小於約 0.03、person 差距小於約 0.07，單一 seed 都不能算有差，要用至少兩個 seed 比較。
-- **person 遺忘確實存在**：所有微調結果的 person 都在 0.30～0.37，明顯低於 dennis 的 0.476。
+- **person 遺忘確實存在**：所有微調結果的 person 都在 0.30～0.37，明顯低於基準模型的 0.476。
 - **rep3**：person 比 v3_e0 高 0.023，在雜訊內，整體分數沒有改善。沒有證據顯示有效。
 - **tiny**：兩個 seed 都沒有超出雜訊的改善。
   - 合併計算的 person：seed 0 是 0.351，seed 1 是 0.289；v3 兩個 seed 是 0.300 和 0.369。
@@ -101,7 +101,7 @@
 
   | 權重 | C000012 漏檢（其中小的） | C000012 誤報 | C000056 漏檢 | C000056 誤報 |
   | --- | --- | --- | --- | --- |
-  | dennis | 8（8） | 15 | 27 | 212 |
+  | 基準模型 | 8（8） | 15 | 27 | 212 |
   | v3_e0 | 41（40） | 3 | 45 | 28 |
   | v3_s1 | 33（32） | 50 | 42 | 25 |
   | v3_rep3 | 33（32） | 16 | 41 | 32 |
@@ -110,7 +110,7 @@
 
   - 遺忘的幾乎都是小 person：C000012 的 person 全是小目標。
   - 誤報數本身也受 seed 影響很大：v3 只換 seed，C000012 的誤報就從 3 變成 50。
-- **dennis 在 C000056 的 212 個 person 誤報抽查**（2026-11-25，`runs/cvat_review/fp_review_{sample.json,responses.jsonl}`）：
+- **基準模型在 C000056 的 212 個 person 誤報抽查**（2026-11-25，`runs/cvat_review/fp_review_{sample.json,responses.jsonl}`）：
   - 依信心分三層（< 0.25 有 79 個、0.25～0.5 有 95 個、≥ 0.5 有 38 個），每層隨機抽 17 個（seed 0）。使用者答了 48 題，結果依層大小加權。
   - **騎士一律算 scooter**（使用者裁決，2026-11-25；與 [`labeling-guide.md`](labeling-guide.md)「騎士不另外標 person」一致）。使用者原本把 11 個機車騎士判成「GT 漏標」，這些騎士的 GT 都有 scooter 框（IoU 0.81～0.99），所以改計為「其他類別」。照原作答，漏標比例會是 33%。
 
@@ -123,7 +123,7 @@
   | GT 已有框，只是框不合 | 1.2% |
 
   - 漏標比例 10% 低於事先定好的 30% 門檻，所以不需要補標驗證集的 person，person 遺忘的結論不變。樣本只有 48 題，這只能當粗估。
-  - 約四分之一的 dennis 誤報是「把騎士框成 person」，這是 dennis 和本專案 GT 慣例不同。微調後模型的 person 誤報變少，有一部分是學會了這個慣例，不能當成遺忘。遺忘的證據是小 person 的漏檢增加和 person AP 下降。
+  - 約四分之一的基準模型誤報是「把騎士框成 person」，這是基準模型和本專案 GT 慣例不同。微調後模型的 person 誤報變少，有一部分是學會了這個慣例，不能當成遺忘。遺忘的證據是小 person 的漏檢增加和 person AP 下降。
 - **結論**：person 幀 ×3 和小 person 偽標籤，在兩個 seed 的雜訊底線下都看不出效果，兩者都不採用。用目前 145 個 person 的驗證集，也分辨不出小幅改善。要處理小 person 遺忘，需要更多有人工標註的小 person，包括訓練和驗證；這比調整訓練取樣更直接。
 - rep3 與 tiny 訓練途中 segfault 過好幾次，都是從 last.pt 續跑完成，見第 10 節。
 
@@ -132,8 +132,8 @@
 - 以鏡頭／序列切分，不以影格隨機切：驗證 = C000012 + C000056（`export_training_set.py` 的預設）。
 - 評估協議：訓練固定 epoch，取**最後一個 epoch**，不用公平鏡頭挑 best.pt；回報 C000012 + C000056 合併的逐類別結果。
 - 注意 truck 樣本稀少（C000056 沒有 truck、C000012 只有 26 個），truck 的差異不可過度解讀。
-- C000025 只當參考，並註明 dennis 可能見過它。
-- 以資料版本為單位重新跑 dennis 與前一版的基準，因為驗證集的組成會變。
+- C000025 只當參考，並註明基準模型可能見過它。
+- 以資料版本為單位重新跑基準模型與前一版的基準，因為驗證集的組成會變。
 
 ## 9. 版本
 
@@ -161,17 +161,17 @@ python scripts/detection_data/train_finetune.py --export ft_v3 --name ft_v3_e0 \
 ```bash
 # 評估（last.pt；逐鏡頭與合併的逐類別 mAP，結果合併寫進 results.json）
 python scripts/detection_data/eval_finetune.py --export ft_v3 --out runs/finetune/eval_v3c \
-  dennis=models/yolo/yolo11x_dennis.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
+  base=models/yolo/yolo11x_base.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
 
 # 逐鏡頭、逐類別的 TP／FP／FN（信心門檻 0.15／0.25／0.5，FN 依有效高度 ≤ 32 px 拆分）
 python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 \
-  dennis=models/yolo/yolo11x_dennis.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
+  base=models/yolo/yolo11x_base.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
 
 # 誤報抽查：先輸出逐框誤報清單（最低信心門檻），再開分層抽樣的審查頁（連接埠 8771，權杖沿用 runs/cvat_review/server_token）
 python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 --dump-fp person \
-  dennis=models/yolo/yolo11x_dennis.pt
-python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_dennis_person.json --camera C000056
-python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_dennis_person.json --camera C000056 --summary
+  base=models/yolo/yolo11x_base.pt
+python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056
+python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056 --summary
 ```
 
 訓練當機（segfault）時，用同一個指令加 `--resume` 接續；`optimizer` 保持 auto 時，Ultralytics 會忽略 `lr0`，所以要明確指定 AdamW。

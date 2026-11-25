@@ -104,7 +104,7 @@ def test_uncorrected_partial_box_or_missed_person_excludes_the_frame() -> None:
     assert export.resolve_review(PERSONS, {"boxes": {"0": "person"}, "missed": True})[2] == "missed_person"
 
 
-def test_dennis_other_class_boxes_are_dropped_when_they_overlap_a_reviewed_box() -> None:
+def test_base_other_class_boxes_are_dropped_when_they_overlap_a_reviewed_box() -> None:
     reviewed = [(2, 0.0, 0.0, 10.0, 20.0)]
     detections = [(2, 1.0, 1.0, 10.0, 20.0), (1, 100.0, 0.0, 120.0, 20.0)]
     assert export.fill_other_boxes(detections, reviewed) == [(1, 100.0, 0.0, 120.0, 20.0)]
