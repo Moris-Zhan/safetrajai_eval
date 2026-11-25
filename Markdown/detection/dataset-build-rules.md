@@ -1,6 +1,6 @@
 # 偵測訓練資料集製作規則
 
-狀態：v3 為止的規則已定案（使用者 2026-11-23、2026-11-24 逐項回覆「都先照建議」或指定修改）。v4 為計畫，尚未執行。
+狀態：v3 為止的規則已定案（使用者 2026-11-23、2026-11-24 逐項回覆「都先照建議」或指定修改）。v4 為計畫，尚未執行；2026-11-25 起，之後的方向以 [`cctv-all8-finetune-plan.md`](cctv-all8-finetune-plan.md) 為準（目標：在 cctv_all8 上贏過 dennis）。
 
 用途：說明從原始影片到 YOLO 微調資料集（`dataset/detection/exports/<version>/`）的每個步驟與裁決規則，以及評估要怎麼做才公平。類別邊界（什麼算 car、scooter、small_truck…）另見 [`labeling-guide.md`](labeling-guide.md)，CVAT 操作見 [`cvat-operations.md`](cvat-operations.md)。
 
@@ -73,6 +73,60 @@
 - `--tiny-person-pseudo`：在 pilot 訓練幀補上 dennis 的 person 偽標籤（信心 ≥ `--tiny-person-conf`，預設 0.25；有效高度 ≤ `--tiny-person-max-height`，預設 32 像素）。與已保留的框或塗灰區域 IoU ≥ 0.5 的丟掉。這些框沒有人工審查，CVAT 審查時被刪掉的誤檢可能被加回來，所以只當實驗，結果要與 person 誤報數一起看。挖掘幀不套用（那些幀的 person 已人工審查）。
 - 兩者的設定都記在 `export_record.json`（`person_repeat`、`tiny_person_pseudo`）。
 
+### v3 雜訊底線與 person 遺忘實驗結果（2026-11-24，`runs/finetune/eval_v3c/results.json`）
+
+所有權重都用 last.pt 評估。驗證集是 ft_v3 的 816 幀，三份匯出的驗證影像完全相同。數字是 mAP50-95，C000012 與 C000056 合併計算：
+
+| 權重 | 整體 | person | car | scooter | small_truck | bus | truck |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dennis（未微調） | 0.428 | 0.476 | 0.889 | 0.658 | 0.194 | 0.255 | 0.094 |
+| v2_e0 | 0.523 | 0.334 | 0.876 | 0.659 | 0.550 | 0.516 | 0.202 |
+| v3_e0（seed 0） | 0.497 | 0.300 | 0.875 | 0.661 | 0.508 | 0.495 | 0.140 |
+| v3_s1（seed 1） | 0.524 | 0.369 | 0.882 | 0.672 | 0.512 | 0.543 | 0.168 |
+| v3_rep3（seed 0，person 幀 ×3） | 0.491 | 0.323 | 0.876 | 0.659 | 0.483 | 0.503 | 0.098 |
+| v3_tiny（seed 0，小 person 偽標籤） | 0.502 | 0.351 | 0.868 | 0.669 | 0.514 | 0.463 | 0.147 |
+| v3_tiny_s1（seed 1，小 person 偽標籤） | 0.501 | 0.289 | 0.880 | 0.666 | 0.489 | 0.510 | 0.172 |
+
+- **雜訊底線**：只換 seed，整體分數就差 0.027，person 差 0.069。v2 與 v3 的差距（0.026）落在這個雜訊內，所以「v3 比 v2 差」不成立。之後比較變體時，整體差距小於約 0.03、person 差距小於約 0.07，單一 seed 都不能算有差，要用至少兩個 seed 比較。
+- **person 遺忘確實存在**：所有微調結果的 person 都在 0.30～0.37，明顯低於 dennis 的 0.476。
+- **rep3**：person 比 v3_e0 高 0.023，在雜訊內，整體分數沒有改善。沒有證據顯示有效。
+- **tiny**：兩個 seed 都沒有超出雜訊的改善。
+  - 合併計算的 person：seed 0 是 0.351，seed 1 是 0.289；v3 兩個 seed 是 0.300 和 0.369。
+  - C000012 的 person：seed 0 曾到 0.337，但 seed 1 只有 0.165，低於 v3 的兩個 seed（0.184、0.229）。所以 seed 0 的改善是 seed 運氣。
+  - 偽標籤會增加 person 誤報，見下表。
+- **person 的漏檢與誤報**（`runs/finetune/errors_v3/errors.json`）：
+  - 信心門檻 0.15，與追蹤用的相同；IoU ≥ 0.5 才算配對。
+  - 「小」指換算到 640 輸入後高度 ≤ 32 px。
+  - 驗證集只有 145 個 person（C000012 有 49 個、C000056 有 96 個），所以 person 的 mAP 波動很大。
+
+  | 權重 | C000012 漏檢（其中小的） | C000012 誤報 | C000056 漏檢 | C000056 誤報 |
+  | --- | --- | --- | --- | --- |
+  | dennis | 8（8） | 15 | 27 | 212 |
+  | v3_e0 | 41（40） | 3 | 45 | 28 |
+  | v3_s1 | 33（32） | 50 | 42 | 25 |
+  | v3_rep3 | 33（32） | 16 | 41 | 32 |
+  | v3_tiny | 22（21） | 23 | 48 | 71 |
+  | v3_tiny_s1 | 33（32） | 24 | 43 | 43 |
+
+  - 遺忘的幾乎都是小 person：C000012 的 person 全是小目標。
+  - 誤報數本身也受 seed 影響很大：v3 只換 seed，C000012 的誤報就從 3 變成 50。
+- **dennis 在 C000056 的 212 個 person 誤報抽查**（2026-11-25，`runs/cvat_review/fp_review_{sample.json,responses.jsonl}`）：
+  - 依信心分三層（< 0.25 有 79 個、0.25～0.5 有 95 個、≥ 0.5 有 38 個），每層隨機抽 17 個（seed 0）。使用者答了 48 題，結果依層大小加權。
+  - **騎士一律算 scooter**（使用者裁決，2026-11-25；與 [`labeling-guide.md`](labeling-guide.md)「騎士不另外標 person」一致）。使用者原本把 11 個機車騎士判成「GT 漏標」，這些騎士的 GT 都有 scooter 框（IoU 0.81～0.99），所以改計為「其他類別」。照原作答，漏標比例會是 33%。
+
+  | 判定 | 加權比例 |
+  | --- | --- |
+  | GT 真的漏標 person | 10.0% |
+  | 真的誤報（不是道路使用者） | 62.3% |
+  | 騎士（GT 是 scooter 框） | 23.2% |
+  | 看不清 | 3.4% |
+  | GT 已有框，只是框不合 | 1.2% |
+
+  - 漏標比例 10% 低於事先定好的 30% 門檻，所以不需要補標驗證集的 person，person 遺忘的結論不變。樣本只有 48 題，這只能當粗估。
+  - 約四分之一的 dennis 誤報是「把騎士框成 person」，這是 dennis 和本專案 GT 慣例不同。微調後模型的 person 誤報變少，有一部分是學會了這個慣例，不能當成遺忘。遺忘的證據是小 person 的漏檢增加和 person AP 下降。
+- **結論**：person 幀 ×3 和小 person 偽標籤，在兩個 seed 的雜訊底線下都看不出效果，兩者都不採用。用目前 145 個 person 的驗證集，也分辨不出小幅改善。要處理小 person 遺忘，需要更多有人工標註的小 person，包括訓練和驗證；這比調整訓練取樣更直接。
+- rep3 與 tiny 訓練途中 segfault 過好幾次，都是從 last.pt 續跑完成，見第 10 節。
+
 ## 8. 切分與評估公平性
 
 - 以鏡頭／序列切分，不以影格隨機切：驗證 = C000012 + C000056（`export_training_set.py` 的預設）。
@@ -104,4 +158,29 @@ python scripts/detection_data/train_finetune.py --export ft_v3 --name ft_v3_e0 \
   --optimizer AdamW --lr0 0.0002 --workers 0 --epochs 50 --patience 50
 ```
 
-訓練當機（segfault）時，用同一個指令加 `--resume` 接續。`optimizer` 保持 auto 時 Ultralytics 會忽略 `lr0`，所以要明確指定 AdamW。
+```bash
+# 評估（last.pt；逐鏡頭與合併的逐類別 mAP，結果合併寫進 results.json）
+python scripts/detection_data/eval_finetune.py --export ft_v3 --out runs/finetune/eval_v3c \
+  dennis=models/yolo/yolo11x_dennis.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
+
+# 逐鏡頭、逐類別的 TP／FP／FN（信心門檻 0.15／0.25／0.5，FN 依有效高度 ≤ 32 px 拆分）
+python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 \
+  dennis=models/yolo/yolo11x_dennis.pt v3_e0=runs/finetune/ft_v3_e0/weights/last.pt
+
+# 誤報抽查：先輸出逐框誤報清單（最低信心門檻），再開分層抽樣的審查頁（連接埠 8771，權杖沿用 runs/cvat_review/server_token）
+python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 --dump-fp person \
+  dennis=models/yolo/yolo11x_dennis.pt
+python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_dennis_person.json --camera C000056
+python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_dennis_person.json --camera C000056 --summary
+```
+
+訓練當機（segfault）時，用同一個指令加 `--resume` 接續；`optimizer` 保持 auto 時，Ultralytics 會忽略 `lr0`，所以要明確指定 AdamW。
+
+segfault 從第一輪（2026-11-19）就存在。2026-11-24 重建 env 後變得很頻繁，每 2～15 分鐘一次。查到的情況：
+
+- 當掉時所在的執行緒每次不同：有時是主執行緒等待 GPU 的地方，有時是 autograd 反向傳播的執行緒。所以問題在原生程式碼，與 OpenCV 無關。
+- `CUDA_LAUNCH_BLOCKING=1` 無法避免。
+- nvidia-smi 看不到降頻或錯誤；這張卡沒有 ECC。
+- 根本原因還沒找到，可能是驅動 580、PyTorch 2.7.1 在 Blackwell 上的問題，或硬體。
+
+在原因查明以前，訓練要用有重試的續跑迴圈。評估前先確認 run 資料夾裡有 `train_record.json`，代表 50 個 epoch 都跑完。2026-11-24 的佇列曾在 rep3 和 tiny 沒跑完時就評估，那次的結果已經作廢重跑。

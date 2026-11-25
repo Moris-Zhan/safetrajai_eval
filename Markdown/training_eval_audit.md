@@ -90,6 +90,43 @@
   7. **新增帳本與腳本**：`reviewed_kept.csv`（已看過且保留的 track，排序與拼圖腳本會略過）、`box_issues.csv`（群框刪除與第二階段框問題，訓練切分要排除這些幀）、`acceptance_results.csv`；`rank_suspicion.py`（群框數與過大比排序，`--max-area` 小框掃描）、`static_clusters.py`（scooter 靜態群）、`build_review_montage.py`（`--include-reviewed`、`--tag`、`--rank-csv`）。目前 CVAT 約 12132 條 track。
   8. **第二階段量測結果（2026-11-19）**：`phase2_frames.py` 每個序列抽 10 幀共 100 幀，整幀連同現有框畫出；漏檢定義為短邊 ≥ 約 16 px、清楚可辨且沒有任何框覆蓋的人／車／機車（遮擋過半或陰影裡看不清的不算）。目前只目測 32／100 幀（C000011 看了 10 幀，其餘各 2～4 幀），粗估每鏡頭漏檢：C000043 約 5%、C000011 約 14%、C000085 約 15%、C000012 約 18%、C000048 約 25%、C000054 與 C000256 約 30%、C000056 約 35%、C000033 約 45%（`runs/cvat_review/phase2/results.csv`）；沒有看到明顯偏移的框。漏檢主要是天橋陰影下的暗色車、遠處車隊、停止線前的機車群，遠超 5% 門檻。用同一權重做整幀加 2×2 切塊推論（`recover_candidates.py`，信心 ≥ 0.10）找到 2479 個未覆蓋候選，信心 ≥ 0.5 的 664 個中隨機抽 40 個目測，精確率約 55%，誤檢多為路面標線、電線桿、招牌（紅色招牌被判成貨車，信心 0.88）、水泥分隔塊，無法自動收進；推到全部 3308 幀要人工確認約 2 萬個，不實際。**決定（使用者 2026-11-19「都先照建議」）**：不補框，改對各鏡頭「標註不可靠區域」做遮罩（訓練影像塗灰、區域內的框移除），區域由候選密度熱圖產生建議多邊形，再由使用者用選點器網頁確認；剩餘 68 幀不再目測，只記錄粗估與抽樣方式。**進度**：已用 `suggest_masks.py`（24×14 格，高信心候選占該格候選＋現有框的 ≥ 40% 且至少 2 個候選）為 9 個鏡頭產生 29 個建議多邊形（標記比例 C000085 6%～C000054 38%，`runs/cvat_review/phase2/masks_suggested/`）；疊圖顯示它會誤納入紅綠燈、標誌、招牌、路面標線（誤檢候選造成），也會蓋到已框好的車，所以只作起點。現有選點器沒有多多邊形載入與編輯功能，新增 `serve_masks.py`（連接埠 8768，權杖沿用 `runs/cvat_review/server_token`），使用者逐鏡頭修正後存到 `phase2/masks_confirmed/<camera>.json`。**已確認（2026-11-19 09:39～09:49）**：使用者用 `serve_masks.py` 逐鏡頭確認，存於 `runs/cvat_review/phase2/masks_confirmed/<camera>.json`，共 9 個鏡頭、29 個多邊形，遮罩面積占畫面比例（確認版，括號為建議版）：C000011 30%（15%）、C000012 8%（7%）、C000033 16%（27%）、C000043 10%（11%）、C000048 12%（27%）、C000054 23%（36%）、C000056 24%（33%）、C000085 7%（6%）、C000256 10%（12%）。**待辦**：訓練匯出時套用遮罩（塗灰、區域內的框移除）——匯出流程本身（輸出位置與格式、類別、train／val 切分、排除 `box_issues.csv` 的幀）尚未設計，確認版遮罩已複製到 `config/detection_masks/<camera>.json`（進版控，格式 `{camera,image_size,polygons,source,confirmed_at}`，多邊形是要遮掉的排除區，與 `config/roi/` 的保留區相反）。
   9. **訓練匯出與第二次網頁作業（2026-11-19）**：匯出腳本 `scripts/detection_data/export_training_set.py` 已完成並通過試跑（`ft_v1_trial`，不拿去訓練）：以 CVAT 快照產生 YOLO 資料，`box_issues.csv` 的群框刪除幀整幀排除（728／3308 幀），確認版遮罩塗灰（框有 50% 以上在遮罩內就丟棄，保留的框不被塗灰），依序列切分（驗證：C000012 與 C000054 的 20250629 序列）；試跑共 2580 幀（train 1801、val 779），丟棄遮罩內框 5517 個，train 框數 car 14239、scooter 8980、bus 480、truck 425、small_truck 358、person 174。第二次網頁作業（驗收複核）改為外觀分層抽樣：每類以 DINOv2 特徵分 20 群，每群隨機 1 題（共 120 題），結果按群大小加權（`build_acceptance_sample.py`、`serve_audit.py --sample`；舊的隨機 240 題抽樣存 `acceptance_sample_random240.json`）。使用者答完後，加權不同意率：person 13.0%（樣本小，另有 4 題看不出來、2 題未答）、car 6.7%、scooter 3.9%、bus 5.9%、small_truck 35.6%、truck 52.0%；使用者明確判給的 24 題已套用（刪除 7、改標 17，`corrections_acceptance_round1.csv`）。**truck／small_truck 界線**：兩個方向都有不一致，嘗試以框相對同位置轎車的大小比例量測，使用者判斷在 0.9～1.7 倍之間大量重疊、沒有可用門檻，而且外觀相近的車使用者自己的判斷也不一致，所以不重審。**決定（使用者 2026-11-19「都先照建議」）**：truck 與 small_truck 的界線標籤不一致約 30～50%，只在匯出記錄註明；Q8 驗收時這兩類與 bus 只當訊號，不納入「每類都不低於基準」的判定，另外多算一個合併 truck 與 small_truck 的 mAP 看這個大類有沒有進步。
+  10. **微調訓練與 v3 雜訊底線（2026-11-24）**：
+    - 起始權重是 `yolo11x_dennis.pt`，設定為 AdamW、lr0 0.0002、固定 50 epoch，取 last.pt。
+    - 評估在 C000012 + C000056 上進行，用 `scripts/detection_data/eval_finetune.py`。
+    - 詳細的逐類別表格、雜訊底線與 segfault 說明見 `Markdown/detection/dataset-build-rules.md` 第 7、10 節。
+
+    合併計算的 mAP50-95：
+
+    | 權重 | 整體 | person |
+    | --- | --- | --- |
+    | dennis（未微調） | 0.428 | 0.476 |
+    | v2 | 0.523 | 0.334 |
+    | v3，seed 0 | 0.497 | 0.300 |
+    | v3，seed 1 | 0.524 | 0.369 |
+
+    結論：
+    - **微調整體有效**：整體分數高於 dennis，主要來自 small_truck、bus、truck。
+    - **v2 與 v3 的差異在 seed 雜訊內**：只換 seed，整體就差 0.027。
+    - **person 有遺忘**：微調後的 person 都明顯低於 dennis。
+    - **兩個防遺忘的變體都不採用**：
+      - person 幀 ×3：person 0.323，在雜訊內。
+      - 小 person 偽標籤：兩個 seed 的 person 是 0.351 和 0.289。C000012 的改善只在 seed 0 出現（0.337），seed 1 只有 0.165。另外它會增加 person 誤報。
+    - 驗證集只有 145 個 person，分辨不出小幅改善。要處理小 person 遺忘，需要更多人工標註的小 person，這可以併入 ft_v4 的新取樣。
+    - 誤報和漏檢的量測用 `scripts/detection_data/count_detection_errors.py`。
+
+    - **C000056 person 誤報抽查（2026-11-25）**：212 個 dennis 誤報分三層、抽 51 題，答了 48 題，結果依層大小加權。
+      - 騎士一律算 scooter（使用者裁決）。依此，GT 真的漏標只有 10.0%，低於 30% 門檻，不需要補標驗證集。
+      - 23.2% 是 dennis 把騎士框成 person，屬於慣例差異；62.3% 是真的誤報。
+      - 細節見 `dataset-build-rules.md` 第 7 節。
+    - **之後的決定（2026-11-25，使用者「都照建議」）**：
+      - 以 ft_v3 的兩個 seed 為比較基準。
+      - 身分去重的 18 個不確定群，併到 v4 審查。
+      - car、scooter 的殘餘錯誤維持如實記錄，不再追。
+
+    尚未做：
+    - 訓練 segfault 的根本原因。
+    - ft_v4 的新取樣。
+    - 用 `cctv_all8` 的 det_eval 做驗收（「未來計畫」第 10 點）。
 - **尚未完成**：剩餘池覆核已完成 bus、truck、person、small_truck 全數，以及 car、scooter 的可疑度排序與小框抽查；其餘 car、scooter 未逐條看，殘餘錯誤率見上；稽核頁面中使用者選「看不出來」的 15 題與 2 題未答，依規則重判後多半維持原狀；第二次網頁作業已完成（見執行進度第 9 點）；「未來計畫」第 10 點（切分版本、訓練、對 `cctv_all8` 跑 det_eval 驗收比較）同樣沒動工。身分去重的 18 個不確定群尚未經人工確認。CVAT 容器與相關 staging／追蹤輸出檔案、`runs/cvat_review/` 底下的修正檔與稽核回覆只存在於本機、未提交版控（`ignore/`／`runs/` 慣例）。
 
 ## 未來計畫：以 `yolo11x_dennis.pt` 為起始模型精煉並製作偵測資料集
