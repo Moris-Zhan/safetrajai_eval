@@ -127,6 +127,7 @@
     - 訓練 segfault 的根本原因。
     - ft_v4 的新取樣。
     - 用 `cctv_all8` 的 det_eval 做驗收（「未來計畫」第 10 點）。
+    - **2026-11-25 起依 [`detection/finetune-plan.md`](detection/finetune-plan.md) 執行**（grilling Q1～Q10 確認）：保守微調、維持基準模型行為；偽標籤 ≥ 0.3 當標籤、0.1～0.3 塗灰；車輛類別改回基準模型判斷；遮罩縮小；驗收同時看 C000025（tune／holdout）與重做 GT 的公平鏡頭 C000012＋C000056。ft_v4 取樣併入該計畫的 E2（v5b）。
 - **尚未完成**：剩餘池覆核已完成 bus、truck、person、small_truck 全數，以及 car、scooter 的可疑度排序與小框抽查；其餘 car、scooter 未逐條看，殘餘錯誤率見上；稽核頁面中使用者選「看不出來」的 15 題與 2 題未答，依規則重判後多半維持原狀；第二次網頁作業已完成（見執行進度第 9 點）；「未來計畫」第 10 點（切分版本、訓練、對 `cctv_all8` 跑 det_eval 驗收比較）同樣沒動工。身分去重的 18 個不確定群尚未經人工確認。CVAT 容器與相關 staging／追蹤輸出檔案、`runs/cvat_review/` 底下的修正檔與稽核回覆只存在於本機、未提交版控（`ignore/`／`runs/` 慣例）。
 
 ## 未來計畫：以 `yolo11x_dennis.pt` 為起始模型精煉並製作偵測資料集

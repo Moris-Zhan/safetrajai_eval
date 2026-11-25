@@ -1,6 +1,6 @@
 # 偵測訓練資料集製作規則
 
-狀態：v3 為止的規則已定案（使用者 2026-11-23、2026-11-24 逐項回覆「都先照建議」或指定修改）。v4 為計畫，尚未執行；2026-11-25 起，之後的方向以 [`cctv-all8-finetune-plan.md`](cctv-all8-finetune-plan.md) 為準（目標：在 cctv_all8 上贏過 dennis）。
+狀態：v3 為止的規則已定案（使用者 2026-11-23、2026-11-24 逐項回覆「都先照建議」或指定修改）。v4 為計畫，尚未執行。2026-11-25 起，之後的資料製作與調教方向以 [`finetune-plan.md`](finetune-plan.md) 為準（目標：在 cctv_all8 與公平鏡頭上贏過基準模型；第 9 節 ft_v4 的方向由它取代）。
 
 用途：說明從原始影片到 YOLO 微調資料集（`dataset/detection/exports/<version>/`）的每個步驟與裁決規則，以及評估要怎麼做才公平。類別邊界（什麼算 car、scooter、small_truck…）另見 [`labeling-guide.md`](labeling-guide.md)，CVAT 操作見 [`cvat-operations.md`](cvat-operations.md)。
 
