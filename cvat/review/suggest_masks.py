@@ -17,7 +17,7 @@ Output: runs/cvat_review/phase2/masks_suggested/<camera>.json  ({"image_size":[w
         and <camera>.jpg (first sampled frame with the suggested regions shaded)
 
 Usage (conda env track_eval, needs cv2/numpy):
-    python scripts/cvat_review/suggest_masks.py --min-conf 0.5
+    python cvat/review/suggest_masks.py --min-conf 0.5
 """
 from __future__ import annotations
 

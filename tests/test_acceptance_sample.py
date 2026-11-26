@@ -12,8 +12,8 @@ def _load(name: str, relative: str):
     return module
 
 
-build = _load("build_acceptance_sample", "scripts/cvat_review/build_acceptance_sample.py")
-audit = _load("serve_audit_for_test", "scripts/cvat_review/serve_audit.py")
+build = _load("build_acceptance_sample", "cvat/review/build_acceptance_sample.py")
+audit = _load("serve_audit_for_test", "cvat/review/serve_audit.py")
 
 
 def test_each_cluster_gets_one_question_weighted_by_cluster_size() -> None:

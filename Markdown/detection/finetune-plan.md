@@ -118,6 +118,11 @@ Ultralytics val，數字是 mAP50-95：
   3. 另做一輪專門的「漏框」檢查。
 - **已知偏差**：用基準模型當底稿，GT 會稍微偏向基準模型。所以漏框檢查要特別仔細，報告時也要註明這一點。
 - 這是整個計畫中唯一需要大量人工的步驟。可以和第 4 節的 E0、E1 平行進行；驗收前一定要完成。
+- **進度（2026-11-26）**：使用者決定每個鏡頭 50 幀、共 100 幀，用重新部署的 CVAT 標註。
+  - `build_fair_val.py` 已抽好 100 幀；基準模型的底稿共 2,362 個框，其中 454 個 `low_conf`。
+  - CVAT task 1 已匯入底稿，等待人工修正與漏框檢查。
+  - 修正完後用 `export_fair_val.py` 匯出成 YOLO 標籤，再拿基準模型、E0f 與其 WiSE 版本比較。
+  - 工具與部署細節見 [`cvat-operations.md`](cvat-operations.md)。
 
 ## 4. 訓練與實驗順序（Q10）
 
@@ -138,6 +143,27 @@ Ultralytics val，數字是 mAP50-95：
 - E0 比基準模型低 0.05 以上時，先調訓練設定再往下做，例如 epoch 10／20、凍結更多層、lr 再降。
 - 如果這些都救不回來，改以 E3 的插值為主，並重新評估目標是否可行。
 
+### 4.1 E0 結果（2026-11-25，tune，Ultralytics val 640，mAP50-95）
+
+| 權重 | 全部 | person | car | scooter | small_truck | bus | truck |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 基準模型 | **0.872** | 0.824 | 0.872 | 0.785 | 0.896 | 0.893 | 0.963 |
+| E0 s0／s1（lr 1e-4，freeze 10，50 ep） | 0.784／0.781 | 0.730 | 0.804 | 0.689 | 0.834 | 0.751 | 0.895 |
+| E0b（10 ep） | 0.805 | 0.747 | 0.811 | 0.712 | 0.851 | 0.797 | 0.911 |
+| E0c（lr 1e-5） | 0.806 | 0.757 | 0.805 | 0.715 | 0.847 | 0.808 | 0.904 |
+| E0d（freeze 22，只訓練偵測頭） | 0.810 | 0.764 | 0.812 | 0.714 | 0.848 | 0.803 | 0.919 |
+| E0e（E0＋`--freeze-bn`） | 0.785 | 0.721 | 0.797 | 0.692 | 0.826 | 0.772 | 0.898 |
+| E0f（E0c＋`--freeze-bn`） | 0.811 | 0.759 | 0.816 | 0.718 | 0.845 | 0.817 | 0.912 |
+| E0f WiSE α 0.10／0.25／0.50 | 0.867／0.860／0.847 | | | | | | |
+| 診斷 D1（lr 0，1 ep，只有 BN 統計值漂移） | 0.848 | | | | | | |
+| 診斷 D3（lr 0，1 ep，BN 固定，只有偵測頭 bias 被 warmup 改動） | 0.853 | | | | | | |
+
+- 風格對齊有效：E0 比 v3（0.673）高約 0.11；兩個 seed 只差 0.003。
+- 但沒有任何訓練設定能回到停損線（基準模型 − 0.05）以內；固定 BN 統計值對完整訓練幾乎沒有幫助。
+- 權重完全沒訓練、只動到偵測頭的 bias，就掉了 0.019；WiSE 插值越接近基準模型分數越高，沒有任何 α 超過基準模型。
+- 判讀：基準模型訓練時看過 C000025（Q1），在 C000025 上的分數反映的是記憶。權重的任何移動都會失去這份記憶，用其他鏡頭的資料補不回來。所以「在 C000025 上贏過基準模型」以微調的方式很可能做不到；要判斷微調有沒有價值，需要公平鏡頭的 `fair_val`（第 3.6 節）。
+- 工具：`train_finetune.py` 新增 `--freeze-bn`、`--warmup-epochs`、`--warmup-bias-lr`；訓練佇列在第 1 個 epoch 前 crash 時改為從頭重跑。
+
 ## 5. 驗收
 
 指標一律用 det_eval（`track_eval.py`，stage2 的 `run_det_eval`，640 的 pipeline 設定），逐類別看 mAP50-95。
@@ -152,7 +178,7 @@ Ultralytics val，數字是 mAP50-95：
 
 ## 6. 工具待辦
 
-1. **改名（Q5）**：在 `scripts/detection_data/`、`scripts/cvat_review/`、`tests/test_export_training_set.py`、偵測相關文件、CLI help 和輸出欄位，把 dennis 改成 `base`／基準模型。
+1. **改名（Q5）**：在 `scripts/detection_data/`、`cvat/review/`、`tests/test_export_training_set.py`、偵測相關文件、CLI help 和輸出欄位，把 dennis 改成 `base`／基準模型。
    - 輸出欄位例如 `boxes_dennis_filled` → `boxes_base_filled`，讀取時仍接受舊鍵。
    - 工作目錄中還沒 commit 的 `export_training_set.py --dennis-labels`，一起改成 `--base-labels`。
    - 權重複製一份成 `models/yolo/yolo11x_base.pt`（單一檔案）。

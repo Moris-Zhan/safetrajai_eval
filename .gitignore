@@ -42,3 +42,7 @@ build/
 NEW_Module/
 graphify-out/
 tools/favorites install.v18.sh
+
+# CVAT 本體（上游 compose／原始碼、SDK venv）與 nuctl 執行檔 — 不進版控
+cvat/deploy/
+cvat/bin/

@@ -7,7 +7,7 @@ that Claude kept unchanged (judged genuine, or left ambiguous and never correcte
 Output: runs/cvat_review/audit_sample.json, read by serve_audit.py.
 
 Usage (plain python3, stdlib only):
-    python3 scripts/cvat_review/build_audit_sample.py --seed 0 --per-group 40
+    python3 cvat/review/build_audit_sample.py --seed 0 --per-group 40
 """
 from __future__ import annotations
 

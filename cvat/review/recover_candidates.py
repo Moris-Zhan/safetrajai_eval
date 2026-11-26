@@ -10,7 +10,7 @@ Output: runs/cvat_review/phase2/candidates.json and cand_NNN.jpg
         (existing boxes thin gray; candidates thick, colored by class, tagged with confidence)
 
 Usage (conda env track_eval, needs cv2/ultralytics):
-    python scripts/cvat_review/recover_candidates.py --conf 0.10
+    python cvat/review/recover_candidates.py --conf 0.10
 """
 from __future__ import annotations
 

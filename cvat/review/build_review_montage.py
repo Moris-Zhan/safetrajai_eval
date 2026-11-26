@@ -12,8 +12,8 @@ written as corrections CSVs.
 Output: runs/cvat_review/review_batches/<label>/<label>_NN.jpg and index.json
 
 Usage (conda env track_eval, needs cv2/numpy):
-    python scripts/cvat_review/build_review_montage.py --label bus
-    python scripts/cvat_review/build_review_montage.py --label small_truck --sample 200 --seed 0
+    python cvat/review/build_review_montage.py --label bus
+    python cvat/review/build_review_montage.py --label small_truck --sample 200 --seed 0
 """
 from __future__ import annotations
 

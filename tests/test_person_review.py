@@ -7,7 +7,7 @@ import pytest
 from safetrajai.paths import PROJECT_ROOT
 
 _spec = importlib.util.spec_from_file_location(
-    "serve_person_review", PROJECT_ROOT / "scripts" / "cvat_review" / "serve_person_review.py")
+    "serve_person_review", PROJECT_ROOT / "cvat" / "review" / "serve_person_review.py")
 review = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(review)
 

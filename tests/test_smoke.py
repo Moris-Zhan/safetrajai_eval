@@ -20,21 +20,26 @@ import safetrajai
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIRS = ("", "tracking", "grid_search", "reid", "collision")
 CONFIG_PATHS = sorted(p for d in CONFIG_DIRS for p in (REPO_ROOT / "config" / d).glob("*.yaml"))
-# scripts/cvat_nuclio/ holds nuclio function code (CVAT automatic-annotation handler):
+# cvat/nuclio/ holds nuclio function code (CVAT automatic-annotation handler):
 # it runs inside its own nuclio Docker container with its own sys.path/runtime, not in
 # this project's Python env, so importing it in-process (as a project CLI script) fails
 # on its local `from model_handler import ...` and isn't a meaningful check anyway.
-# scripts/cvat_review/fetch_task_annotations.py and apply_corrections.py both need
-# `cvat_sdk`, which only exists in ignore/cvat_deploy/cvat_client_venv (not the project's
+# cvat/review/fetch_task_annotations.py, apply_corrections.py, create_fair_val_task.py and
+# export_fair_val.py need
+# `cvat_sdk`, which only exists in cvat/deploy/cvat_client_venv (not the project's
 # track_eval env), by design (see each script's docstring); the other scripts in that
 # folder only need cv2/safetrajai/timm/sklearn and stay in the sweep.
 EXCLUDED_SCRIPTS = {
-    REPO_ROOT / "scripts" / "cvat_review" / "fetch_task_annotations.py",
-    REPO_ROOT / "scripts" / "cvat_review" / "apply_corrections.py",
+    REPO_ROOT / "cvat" / "review" / "fetch_task_annotations.py",
+    REPO_ROOT / "cvat" / "review" / "apply_corrections.py",
+    REPO_ROOT / "cvat" / "review" / "create_fair_val_task.py",
+    REPO_ROOT / "cvat" / "review" / "export_fair_val.py",
 }
+# cvat/ (CVAT tooling: review/, nuclio/) sits outside scripts/; its review scripts are swept too.
+# cvat/deploy/ is the gitignored upstream CVAT checkout and SDK venv, never project code.
 SCRIPTS = sorted(
-    p for p in (REPO_ROOT / "scripts").rglob("*.py")
-    if "cvat_nuclio" not in p.parts and p not in EXCLUDED_SCRIPTS
+    p for root in (REPO_ROOT / "scripts", REPO_ROOT / "cvat" / "review") for p in root.rglob("*.py")
+    if p not in EXCLUDED_SCRIPTS
 )
 BASE_COMMIT = (REPO_ROOT / "tests" / "golden" / "BASE_COMMIT").read_text().strip()
 
@@ -190,7 +195,7 @@ def test_tracker_override_bodies_unchanged(old_path: str, new_path: str, class_n
 
 def test_no_sys_path_mutation() -> None:
     pattern = re.compile(r"\bsys\.path\b")
-    roots = [REPO_ROOT / "scripts", REPO_ROOT / "utils"]
+    roots = [REPO_ROOT / "scripts", REPO_ROOT / "utils", REPO_ROOT / "cvat" / "review", REPO_ROOT / "cvat" / "nuclio"]
     sources = [
         p for root in roots for p in root.rglob("*.py") if "_vendor" not in p.parts
     ] + [REPO_ROOT / "track_eval.py"]

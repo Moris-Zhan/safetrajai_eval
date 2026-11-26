@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 把人工覆核／自動偵測出的 track 修正（刪除整條 track，或改標成另一個類別）套用到
-CVAT task 的標註，取代 scripts/cvat_review 產生的覆核候選名單人工一一在 CVAT UI 操作。
+CVAT task 的標註，取代 cvat/review 產生的覆核候選名單人工一一在 CVAT UI 操作。
 
 套用前一定先把目前的標註完整備份一份（含時間戳），套用後重新抓一次標註驗證結果。
 
 跟 fetch_task_annotations.py 一樣只需要 cvat_sdk，一定要用
-ignore/cvat_deploy/cvat_client_venv 的 python 執行：
+cvat/deploy/cvat_client_venv 的 python 執行：
 
-    ignore/cvat_deploy/cvat_client_venv/bin/python scripts/cvat_review/apply_corrections.py \
+    cvat/deploy/cvat_client_venv/bin/python cvat/review/apply_corrections.py \
         --task-id 3 --corrections runs/cvat_review/corrections.csv
 
 corrections.csv 欄位：track_id,action,new_label,reason

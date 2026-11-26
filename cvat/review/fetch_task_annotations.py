@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 把 CVAT task 的全部追蹤標註（track_id／label／每個關鍵幀的框／outside 標記）整份抓下來寫成 JSON，
-供 scripts/cvat_review/serve_review.py 產生覆核用網頁。
+供 cvat/review/serve_review.py 產生覆核用網頁。
 
-分成兩支腳本是因為裝 cvat_sdk 的 venv（ignore/cvat_deploy/cvat_client_venv）沒有 cv2，
+分成兩支腳本是因為裝 cvat_sdk 的 venv（cvat/deploy/cvat_client_venv）沒有 cv2，
 裝 cv2 的 conda env track_eval 沒有 cvat_sdk；這支只需要 cvat_sdk，不需要 safetrajai 套件。
 
 用法（一定要用 cvat_client_venv 的 python）：
-    ignore/cvat_deploy/cvat_client_venv/bin/python scripts/cvat_review/fetch_task_annotations.py \
+    cvat/deploy/cvat_client_venv/bin/python cvat/review/fetch_task_annotations.py \
         --task-id 3 --out runs/cvat_review/pilot_v1_annotations.json
 
 CVAT 連線資訊從環境變數或 repo 根目錄 .env 讀取（CVAT_URL／CVAT_USERNAME／CVAT_PASSWORD），

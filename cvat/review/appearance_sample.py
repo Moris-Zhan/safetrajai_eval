@@ -9,7 +9,7 @@
 的身分去重是兩種不同保證層級，使用者已在 2026-11-16 確認接受這個取捨）。
 
 用法（conda env track_eval，需要 cv2/numpy/torch/timm/scikit-learn）：
-    conda run -n track_eval python scripts/cvat_review/appearance_sample.py \
+    conda run -n track_eval python cvat/review/appearance_sample.py \
         --label small_truck --track-ids-csv runs/cvat_review/small_truck_singles.csv \
         --k 14 --out runs/cvat_review/small_truck_appearance_sample.csv
 """

@@ -1,6 +1,6 @@
 """README and the command index must mention every script and scenario config (spec readme-command-coverage).
 
-Only reads README.md, Markdown/command-index.md and the file names under scripts/ and config/;
+Only reads README.md, Markdown/command-index.md and the file names under scripts/, cvat/review/, cvat/nuclio/ and config/;
 never touches dataset/, models/, runs/.
 """
 
@@ -23,7 +23,8 @@ EXEMPT: Mapping[str, str] = {
 
 
 def entry_point_names() -> list[str]:
-    scripts = sorted(path.name for path in (REPO_ROOT / "scripts").rglob("*.py") if path.name != "__init__.py")
+    roots = (REPO_ROOT / "scripts", REPO_ROOT / "cvat" / "review", REPO_ROOT / "cvat" / "nuclio")  # not cvat/deploy (upstream)
+    scripts = sorted(path.name for root in roots for path in root.rglob("*.py") if path.name != "__init__.py")
     config_dirs = ("", "tracking", "grid_search", "reid", "collision")
     configs = sorted(path.name for d in config_dirs for path in (REPO_ROOT / "config" / d).glob("*.yaml"))
     return scripts + configs

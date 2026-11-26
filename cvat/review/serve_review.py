@@ -5,13 +5,13 @@ Markdown/training_eval_audit.md 的「人工覆核前的抽樣檢視」）的完
 做成網頁服務讓使用者從遠端瀏覽器逐 track 覆核（沿用 scripts/picker/serve_picker.py
 的部署模式：token 保護、頁面在請求時才產生、影像不離開這台主機）。
 
-前置：先用 ignore/cvat_deploy/cvat_client_venv 跑 fetch_task_annotations.py 產生
+前置：先用 cvat/deploy/cvat_client_venv 跑 fetch_task_annotations.py 產生
 runs/cvat_review/pilot_v1_annotations.json（這支 serve_review.py 只需要 cv2，
 用 conda env track_eval 執行即可，不需要 cvat_sdk）。
 
 用法：
-    python scripts/cvat_review/serve_review.py                      # 0.0.0.0:8766
-    python scripts/cvat_review/serve_review.py --host 127.0.0.1 --port 9001  # 配合 SSH 通道
+    python cvat/review/serve_review.py                      # 0.0.0.0:8766
+    python cvat/review/serve_review.py --host 127.0.0.1 --port 9001  # 配合 SSH 通道
 
 服務是純 HTTP：只在信任的網路（內網、VPN、SSH 通道或 kubectl port-forward）使用。
 """

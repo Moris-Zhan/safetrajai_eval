@@ -88,16 +88,27 @@ Homography 鏡頭設定（`config/homography/<camera>.yaml`）依下列順序操
 |---|---|
 | `scripts/detection_data/sample_and_pseudolabel.py` | Pilot 階段：對 `detection_source` 挑出的 10 個檔案依固定秒數間隔取樣，用 `yolo11x_dennis.pt` 產生偽標籤。只做取樣與偽標籤，不做人工覆核與資料集切分 |
 | `scripts/detection_data/track_pilot_videos.py` | 對同一份 10 支影片跑完整逐幀 class-aware 追蹤（沿用 `botsort_reid_timm.yaml`），輸出到 `runs/cvat_pilot_v1_tracking/`，供把 track ID 一起匯入 CVAT |
-| `scripts/cvat_nuclio/yolo11_detector/` | CVAT 自動標註用的 Nuclio 函式（`deploy.sh`、`function-gpu.yaml`）。`main.py` 與 `model_handler.py` 是函式本體，不是人會執行的 CLI |
+| `cvat/nuclio/yolo11_detector/` | CVAT 自動標註用的 Nuclio 函式（`cvat/nuclio/deploy.sh` 部署，nuctl 在 `cvat/bin/nuctl`；`function-gpu.yaml`）。`main.py` 與 `model_handler.py` 是函式本體，不是人會執行的 CLI |
 
-### 與 CVAT 往來（需要 `cvat_sdk`）
-
-`cvat_sdk` 裝在獨立 venv `ignore/cvat_deploy/cvat_client_venv`，不在 `track_eval`；這個 venv 沒有 cv2。連線資訊從環境變數或 `.env` 讀取（`CVAT_URL`、`CVAT_USERNAME`、`CVAT_PASSWORD`），不要把值寫進文件或回覆。
+### 調教評估與 fair_val（`track_eval` 環境，見 [`detection/finetune-plan.md`](detection/finetune-plan.md)）
 
 | 腳本 | 用途 |
 |---|---|
-| `scripts/cvat_review/fetch_task_annotations.py` | 把 CVAT task 的全部追蹤標註抓成 JSON（`runs/cvat_review/pilot_v1_annotations.json`），供覆核網頁使用 |
-| `scripts/cvat_review/apply_corrections.py` | 把 `corrections.csv`（欄位 `track_id,action,new_label,reason`；`delete` 或 `relabel`）套用回 CVAT。套用前一定先備份目前標註，套用後重新抓一次驗證 |
+| `scripts/detection_data/eval_finetune.py` | 在 export 的 val split 上比較多組權重，逐鏡頭與合併報告（評估規則見 `dataset-build-rules.md` 第 8 節） |
+| `scripts/detection_data/count_detection_errors.py` | 在 val split 上以固定信心門檻逐鏡頭、逐類別計算誤報與漏框；`--dump-fp` 輸出誤報清單給 `serve_fp_review.py` |
+| `scripts/detection_data/compare_label_style.py` | `style`：訓練標籤與 cctv_all8 GT 的風格距離關卡；`thresholds`：偽標籤門檻檢查 |
+| `scripts/detection_data/build_fair_val.py` | 從 C000012、C000056 驗證序列平均抽幀，產生基準模型底稿 `dataset/detection/fair_val/prefill.json`，建一次 |
+
+### 與 CVAT 往來（需要 `cvat_sdk`）
+
+`cvat_sdk` 裝在獨立 venv `cvat/deploy/cvat_client_venv`，不在 `track_eval`；這個 venv 沒有 cv2。連線資訊從環境變數或 `.env` 讀取（`CVAT_URL`、`CVAT_USERNAME`、`CVAT_PASSWORD`），不要把值寫進文件或回覆。
+
+| 腳本 | 用途 |
+|---|---|
+| `cvat/review/fetch_task_annotations.py` | 把 CVAT task 的全部追蹤標註抓成 JSON（`runs/cvat_review/pilot_v1_annotations.json`），供覆核網頁使用 |
+| `cvat/review/apply_corrections.py` | 把 `corrections.csv`（欄位 `track_id,action,new_label,reason`；`delete` 或 `relabel`）套用回 CVAT。套用前一定先備份目前標註，套用後重新抓一次驗證 |
+| `cvat/review/create_fair_val_task.py` | 建立 fair_val task、上傳影像並匯入底稿（矩形 shape，每類別有 `low_conf` 屬性），task id 寫入 `fair_val/cvat_task.json` |
+| `cvat/review/export_fair_val.py` | 把 fair_val task 目前的框匯出成 YOLO 標籤、`annotations_<UTC>.json` 快照與 `data.yaml`；可重複執行 |
 
 ### 覆核輔助（`track_eval` 環境）
 
@@ -105,22 +116,23 @@ Homography 鏡頭設定（`config/homography/<camera>.yaml`）依下列順序操
 
 | 腳本 | 用途 |
 |---|---|
-| `scripts/cvat_review/dedup_clusters.py` | 把同一個實體物件被拆成多條破碎 track 的狀況合併成一群（同鏡頭、位置、尺寸、幾乎靜止、DINOv2 外觀高度相似），一群只需看一條代表 |
-| `scripts/cvat_review/appearance_sample.py` | 無法去重合併的獨立 track，以 DINOv2 外觀分成 K 群各抽一條代表。群內其餘 track 不是同一物件，代表的判決**不能**安全套用到整群 |
-| `scripts/cvat_review/reid_outlier_scan.py` | 以 DINOv2 外觀掃描某類別，找出與已確認正確的參考 track 差異很大的候選，只供排序優先序，不自動改標籤 |
-| `scripts/cvat_review/static_clusters.py` | 找出同一鏡頭同一位置反覆出現的 track（目前只支援 scooter，強烈暗示靜態誤判，例如樹葉、路標）。**不適用 car**：停放的車是真實存在的 |
-| `scripts/cvat_review/rank_suspicion.py` | 對 car／scooter 的大量未覆核 track 依可疑程度排序（群組框、過大框兩條規則），只決定覆核先後，不判定對錯 |
-| `scripts/cvat_review/build_review_montage.py` | 為某類別尚未覆核的 track 產生覆核拼貼圖，`index.json` 對應拼貼格與 track_id |
-| `scripts/cvat_review/build_audit_sample.py` | 抽出供使用者驗收的固定種子樣本（Claude 自行判決並已套用的修正，加上維持不變的外觀代表），寫成 `runs/cvat_review/audit_sample.json` |
+| `cvat/review/dedup_clusters.py` | 把同一個實體物件被拆成多條破碎 track 的狀況合併成一群（同鏡頭、位置、尺寸、幾乎靜止、DINOv2 外觀高度相似），一群只需看一條代表 |
+| `cvat/review/appearance_sample.py` | 無法去重合併的獨立 track，以 DINOv2 外觀分成 K 群各抽一條代表。群內其餘 track 不是同一物件，代表的判決**不能**安全套用到整群 |
+| `cvat/review/reid_outlier_scan.py` | 以 DINOv2 外觀掃描某類別，找出與已確認正確的參考 track 差異很大的候選，只供排序優先序，不自動改標籤 |
+| `cvat/review/static_clusters.py` | 找出同一鏡頭同一位置反覆出現的 track（目前只支援 scooter，強烈暗示靜態誤判，例如樹葉、路標）。**不適用 car**：停放的車是真實存在的 |
+| `cvat/review/rank_suspicion.py` | 對 car／scooter 的大量未覆核 track 依可疑程度排序（群組框、過大框兩條規則），只決定覆核先後，不判定對錯 |
+| `cvat/review/build_review_montage.py` | 為某類別尚未覆核的 track 產生覆核拼貼圖，`index.json` 對應拼貼格與 track_id |
+| `cvat/review/build_audit_sample.py` | 抽出供使用者驗收的固定種子樣本（Claude 自行判決並已套用的修正，加上維持不變的外觀代表），寫成 `runs/cvat_review/audit_sample.json` |
 
 ### 覆核網頁服務
 
-兩者都需要存取權杖，頁面在請求時才產生，影像不離開這台主機，部署模式沿用 `serve_picker.py`。
+都需要存取權杖，頁面在請求時才產生，影像不離開這台主機，部署模式沿用 `serve_picker.py`。
 
 | 腳本 | 預設埠 | 用途 |
 |---|---|---|
-| `scripts/cvat_review/serve_review.py` | 8766 | 逐 track 覆核指定類別（預設 small_truck、bus）的完整追蹤標註 |
-| `scripts/cvat_review/serve_audit.py` | 8767 | 驗收 Claude 自己的判決；回答寫入 `runs/cvat_review/audit_responses.jsonl`，`/summary` 報告各樣本群的不一致率與 5% 門檻 |
+| `cvat/review/serve_review.py` | 8766 | 逐 track 覆核指定類別（預設 small_truck、bus）的完整追蹤標註 |
+| `cvat/review/serve_audit.py` | 8767 | 驗收 Claude 自己的判決；回答寫入 `runs/cvat_review/audit_responses.jsonl`，`/summary` 報告各樣本群的不一致率與 5% 門檻 |
+| `cvat/review/serve_fp_review.py` | 8771 | 抽查 `count_detection_errors.py --dump-fp` 的誤報：真的錯，還是 GT 漏標 |
 
 ## 測試
 

@@ -170,8 +170,8 @@ python scripts/detection_data/count_detection_errors.py --export ft_v3 --out run
 # 誤報抽查：先輸出逐框誤報清單（最低信心門檻），再開分層抽樣的審查頁（連接埠 8771，權杖沿用 runs/cvat_review/server_token）
 python scripts/detection_data/count_detection_errors.py --export ft_v3 --out runs/finetune/errors_v3 --dump-fp person \
   base=models/yolo/yolo11x_base.pt
-python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056
-python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056 --summary
+python cvat/review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056
+python cvat/review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056 --summary
 ```
 
 訓練當機（segfault）時，用同一個指令加 `--resume` 接續；`optimizer` 保持 auto 時，Ultralytics 會忽略 `lr0`，所以要明確指定 AdamW。

@@ -18,7 +18,7 @@ Output: runs/cvat_review/suspicion_<label>.csv with columns
 (batch is 0-based, 100 tracks per batch)
 
 Usage (plain python3, stdlib only):
-    python3 scripts/cvat_review/rank_suspicion.py --label car
+    python3 cvat/review/rank_suspicion.py --label car
 """
 from __future__ import annotations
 

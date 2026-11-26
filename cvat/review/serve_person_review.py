@@ -7,7 +7,7 @@ A box can be corrected by dragging a new rectangle (stored as `corrections`, ori
 Answers are appended to runs/cvat_review/person_review_responses.jsonl (latest answer per frame wins).
 
 Run with the conda env track_eval (needs cv2):
-    python scripts/cvat_review/serve_person_review.py --host 0.0.0.0 --port 8770
+    python cvat/review/serve_person_review.py --host 0.0.0.0 --port 8770
 """
 from __future__ import annotations
 

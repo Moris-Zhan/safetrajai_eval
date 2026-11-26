@@ -9,7 +9,7 @@ disagreement rate per sample group against the 5% threshold.
 
 Deployment follows serve_review.py: token required, pages built on request, images stay on this host.
 Run with the conda env track_eval (needs cv2):
-    python scripts/cvat_review/serve_audit.py --host 0.0.0.0 --port 8767
+    python cvat/review/serve_audit.py --host 0.0.0.0 --port 8767
 """
 from __future__ import annotations
 

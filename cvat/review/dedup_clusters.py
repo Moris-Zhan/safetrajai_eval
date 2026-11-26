@@ -7,7 +7,7 @@
 Markdown/training_eval_audit.md）。
 
 只分群，不自動改標籤／刪除：群集結果要先給人工看過代表 track、確認真的是同一個
-實體物件，才能套用到整群（見 scripts/cvat_review/apply_corrections.py）。
+實體物件，才能套用到整群（見 cvat/review/apply_corrections.py）。
 
 判定條件（缺一不可，任何一項不符合就不成立群集，整群打散回單條）：
   1. 同一鏡頭。
@@ -19,7 +19,7 @@ Markdown/training_eval_audit.md）。
   5. 群內兩兩 DINOv2 外觀相似度平均 >= --min-appearance-similarity。
 
 用法（conda env track_eval，需要 cv2/numpy/torch/timm）：
-    conda run -n track_eval python scripts/cvat_review/dedup_clusters.py \
+    conda run -n track_eval python cvat/review/dedup_clusters.py \
         --label small_truck --exclude-ids 7697,9932,... \
         --clusters-out runs/cvat_review/small_truck_clusters.csv \
         --singles-out runs/cvat_review/small_truck_singles.csv

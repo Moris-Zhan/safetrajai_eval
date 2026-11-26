@@ -16,7 +16,7 @@ Output:
       cluster of size >= MIN_SIZE, 100 per batch, for build_review_montage.py --rank-csv)
 
 Usage (plain python3, stdlib only):
-    python3 scripts/cvat_review/static_clusters.py --label scooter
+    python3 cvat/review/static_clusters.py --label scooter
 """
 from __future__ import annotations
 

@@ -13,7 +13,7 @@ Output: runs/cvat_review/acceptance_sample.json (read by serve_audit.py --sample
         runs/cvat_review/acceptance_embeddings.npz (cache, so reruns skip the feature extraction)
 
 Usage (conda env track_eval, needs cv2/torch/timm/scikit-learn):
-    conda run -n track_eval python scripts/cvat_review/build_acceptance_sample.py --clusters 20
+    conda run -n track_eval python cvat/review/build_acceptance_sample.py --clusters 20
 """
 from __future__ import annotations
 

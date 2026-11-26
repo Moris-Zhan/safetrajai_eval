@@ -11,7 +11,7 @@ runs/cvat_review/phase2/masks_confirmed/<camera>.json; nothing is written to CVA
 Deployment follows serve_audit.py: token required (runs/cvat_review/server_token), pages built on
 request, images stay on this host, plain HTTP so use it on a trusted network or an SSH tunnel.
 Run with the conda env track_eval (needs cv2):
-    python scripts/cvat_review/serve_masks.py --host 0.0.0.0 --port 8768
+    python cvat/review/serve_masks.py --host 0.0.0.0 --port 8768
 """
 from __future__ import annotations
 

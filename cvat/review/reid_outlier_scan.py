@@ -10,7 +10,7 @@ DINOv2 嵌入向量平均成一個 track 向量，再跟每條參考 track 的�
 相似度，取最大值；最大相似度低的 track 排在候選名單前面。
 
 用法（conda env track_eval，需要 cv2/numpy/torch/timm）：
-    conda run -n track_eval python scripts/cvat_review/reid_outlier_scan.py \
+    conda run -n track_eval python cvat/review/reid_outlier_scan.py \
         --label small_truck --reference-ids 7697,9932,... --exclude-ids 3329,3871,...
         --out runs/cvat_review/small_truck_outliers.csv
 """

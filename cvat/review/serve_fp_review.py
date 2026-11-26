@@ -17,8 +17,8 @@ Answers are appended to --responses (latest answer per item wins). The ground tr
 --summary prints per-stratum counts and the rate of each verdict weighted by stratum size.
 
 Run with the conda env track_eval (needs cv2):
-    python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056
-    python scripts/cvat_review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056 --summary
+    python cvat/review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056
+    python cvat/review/serve_fp_review.py --fp runs/finetune/errors_v3/fp_base_person.json --camera C000056 --summary
 """
 from __future__ import annotations
 

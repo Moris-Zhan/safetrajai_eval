@@ -13,7 +13,7 @@ can be written back by name.
 Output: runs/cvat_review/phase2/frame_NN.jpg and sample.json
 
 Usage (conda env track_eval, needs cv2):
-    python scripts/cvat_review/phase2_frames.py --seed 0
+    python cvat/review/phase2_frames.py --seed 0
 """
 from __future__ import annotations
 
